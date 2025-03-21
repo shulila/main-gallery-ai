@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ImageCard } from './ImageCard';
 import { Button } from "@/components/ui/button";
-import { Grid, Columns, Calendar, Filter, ChevronDown } from 'lucide-react';
+import { Grid, Columns, Calendar, Filter, ChevronDown, ImageIcon } from 'lucide-react';
 
 // Mock data for our gallery
 const mockImages = [
@@ -15,7 +15,7 @@ const mockImages = [
     model: 'V6',
     prompt: 'A cosmic landscape with nebulas and floating islands, vibrant colors, surreal atmosphere',
     createdAt: '2023-12-01T12:30:00Z',
-    status: 'Public',
+    status: 'Public' as const,
     aspectRatio: '1:1',
     jobId: 'mj-123456789',
     seed: '12345678'
@@ -28,7 +28,7 @@ const mockImages = [
     model: 'DALL·E 3',
     prompt: 'Cyberpunk city at night with neon lights, flying cars, and tall skyscrapers',
     createdAt: '2023-12-10T09:15:00Z',
-    status: 'Private',
+    status: 'Private' as const,
     aspectRatio: '16:9',
     jobId: 'dalle-987654321',
     seed: '87654321'
@@ -41,7 +41,7 @@ const mockImages = [
     model: 'SDXL',
     prompt: 'Magical forest with glowing plants and mystical creatures, fantasy art style',
     createdAt: '2023-12-15T16:45:00Z',
-    status: 'Public',
+    status: 'Public' as const,
     aspectRatio: '3:2',
     jobId: 'sd-456789123',
     seed: '45678912'
@@ -54,7 +54,7 @@ const mockImages = [
     model: 'Gen-2',
     prompt: 'Abstract flowing forms with dynamic movement, vibrant colors on black background',
     createdAt: '2023-12-18T14:20:00Z',
-    status: 'Draft',
+    status: 'Draft' as const,
     aspectRatio: '1:1',
     jobId: 'rw-234567891',
     seed: '23456789',
@@ -68,7 +68,7 @@ const mockImages = [
     model: 'Pika 1.0',
     prompt: 'Deep ocean scene with bioluminescent creatures and underwater structures',
     createdAt: '2023-12-20T11:10:00Z',
-    status: 'Public',
+    status: 'Public' as const,
     aspectRatio: '4:3',
     jobId: 'pk-345678912',
     seed: '34567891',
@@ -82,13 +82,14 @@ const mockImages = [
     model: 'V6',
     prompt: 'Futuristic architectural structure with organic forms, glass and steel materials',
     createdAt: '2023-12-22T10:30:00Z',
-    status: 'Private',
+    status: 'Private' as const,
     aspectRatio: '16:9',
     jobId: 'mj-456789123',
     seed: '45678912'
   }
 ];
 
+// Type definitions to match ImageCard component expectations
 type ViewMode = 'grid' | 'columns';
 type SortOption = 'newest' | 'oldest' | 'platform';
 type FilterOption = 'all' | 'midjourney' | 'dalle' | 'stable-diffusion' | 'runway' | 'pika';
@@ -242,7 +243,7 @@ const GalleryView = () => {
         {images.length === 0 && !isLoading && (
           <div className="text-center py-16">
             <div className="mb-4 text-muted-foreground">
-              <Image className="h-16 w-16 mx-auto opacity-30" />
+              <ImageIcon className="h-16 w-16 mx-auto opacity-30" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No images found</h3>
             <p className="text-muted-foreground mb-6">Try adjusting your filters or connect more platforms.</p>
