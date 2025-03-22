@@ -3,9 +3,9 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/components/ui/use-toast';
 
-// Replace these with your actual Supabase credentials
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-supabase-url.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-supabase-anon-key';
+// Updated with actual Supabase credentials
+const supabaseUrl = 'https://ovhriawcqvcpagcaidlb.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U';
 
 // Create a single Supabase client instance to be used throughout the app
 const supabase = createClient(supabaseUrl, supabaseAnonKey);

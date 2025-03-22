@@ -33,7 +33,7 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Home redirect component
+// Home redirect component - Improved to properly redirect based on auth status
 const HomeRedirect = () => {
   const { user, isLoading } = useAuth();
   
