@@ -1,0 +1,68 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Main Gallery</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <img src="icons/icon48.png" alt="Main Gallery Logo">
+        <h1>MainGallery</h1>
+      </div>
+    </div>
+    
+    <div id="not-logged-in" class="state">
+      <p>Please log in to your Main Gallery account to connect platforms.</p>
+      <button id="login-btn" class="primary-btn">Log In</button>
+    </div>
+    
+    <div id="not-platform-page" class="state hidden">
+      <p>Visit a supported AI platform gallery to connect it to your Main Gallery.</p>
+      <div class="platforms">
+        <p>Supported platforms:</p>
+        <ul>
+          <li>Midjourney</li>
+          <li>DALL·E</li>
+          <li>Stable Diffusion</li>
+          <li>Runway</li>
+          <li>Pika</li>
+        </ul>
+      </div>
+    </div>
+    
+    <div id="ready-to-connect" class="state hidden">
+      <div class="platform-info">
+        <img id="platform-icon" src="" alt="Platform Icon">
+        <div>
+          <h2 id="platform-name">Platform</h2>
+          <p id="platform-status">Ready to connect</p>
+        </div>
+      </div>
+      <button id="connect-btn" class="primary-btn">Add to Main Gallery</button>
+    </div>
+    
+    <div id="already-connected" class="state hidden">
+      <div class="platform-info connected">
+        <img id="connected-platform-icon" src="" alt="Platform Icon">
+        <div>
+          <h2 id="connected-platform-name">Platform</h2>
+          <p class="connected-status">✓ Connected</p>
+        </div>
+      </div>
+      <button id="disconnect-btn" class="secondary-btn">Disconnect</button>
+      <button id="view-gallery-btn" class="primary-btn">View in Main Gallery</button>
+    </div>
+    
+    <div id="connecting" class="state hidden">
+      <div class="loading-spinner"></div>
+      <p>Connecting to <span id="connecting-platform-name">platform</span>...</p>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

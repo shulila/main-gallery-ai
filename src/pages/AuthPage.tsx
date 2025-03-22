@@ -2,18 +2,18 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
-import GalleryView from '@/components/GalleryView';
+import Auth from '@/components/Auth';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/contexts/AuthContext';
 
-const Gallery = () => {
+const AuthPage = () => {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   
-  // Redirect to auth page if not logged in
+  // Redirect to gallery if already logged in
   useEffect(() => {
-    if (!isLoading && !user) {
-      navigate('/auth');
+    if (user && !isLoading) {
+      navigate('/gallery');
     }
   }, [user, isLoading, navigate]);
 
@@ -22,27 +22,17 @@ const Gallery = () => {
     window.scrollTo(0, 0);
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null; // Will redirect via the useEffect
-  }
-
   return (
     <div className="min-h-screen">
       <Navbar />
-      <main className="pt-24">
-        <GalleryView />
+      <main className="pt-24 py-16">
+        <div className="container mx-auto px-4">
+          <Auth mode="page" />
+        </div>
       </main>
       <Footer />
     </div>
   );
 };
 
-export default Gallery;
+export default AuthPage;
