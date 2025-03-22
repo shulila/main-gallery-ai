@@ -7,7 +7,9 @@
   "permissions": [
     "activeTab",
     "storage",
-    "identity"
+    "identity",
+    "notifications",
+    "webNavigation"
   ],
   "host_permissions": [
     "https://*.midjourney.com/*",
@@ -34,6 +36,7 @@
     }
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   }
 }

@@ -162,25 +162,27 @@ async function getAuthToken() {
 }
 
 // Listen for auth state changes from the website
-chrome.webNavigation.onCompleted.addListener(details => {
-  if (details.url.startsWith('https://maingallery.app/auth/callback')) {
-    // Extract token from URL
-    const url = new URL(details.url);
-    const token = url.searchParams.get('token');
-    
-    if (token) {
-      // Store the token
-      chrome.storage.sync.set({ main_gallery_auth_token: token }, () => {
-        console.log('Authentication token saved');
-        
-        // Notify any open popup to update UI
-        chrome.runtime.sendMessage({
-          action: 'updateUI'
+if (chrome.webNavigation) {
+  chrome.webNavigation.onCompleted.addListener(details => {
+    if (details.url.startsWith('https://maingallery.app/auth/callback')) {
+      // Extract token from URL
+      const url = new URL(details.url);
+      const token = url.searchParams.get('token');
+      
+      if (token) {
+        // Store the token
+        chrome.storage.sync.set({ main_gallery_auth_token: token }, () => {
+          console.log('Authentication token saved');
+          
+          // Notify any open popup to update UI
+          chrome.runtime.sendMessage({
+            action: 'updateUI'
+          });
+          
+          // Close the auth tab
+          chrome.tabs.remove(details.tabId);
         });
-        
-        // Close the auth tab
-        chrome.tabs.remove(details.tabId);
-      });
+      }
     }
-  }
-}, { url: [{ urlPrefix: 'https://maingallery.app/auth/callback' }] });
+  }, { url: [{ urlPrefix: 'https://maingallery.app/auth/callback' }] });
+}
