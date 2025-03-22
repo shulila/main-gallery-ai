@@ -3,11 +3,16 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/components/ui/use-toast';
 
-// Replace with your Supabase URL and anon key
-const supabaseUrl = 'https://your-supabase-url.supabase.co';
-const supabaseAnonKey = 'your-supabase-anon-key';
+// Replace these with your actual Supabase credentials
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-supabase-url.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-supabase-anon-key';
 
+// Create a single Supabase client instance to be used throughout the app
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// For debugging purposes
+console.log('Supabase URL:', supabaseUrl);
+console.log('Supabase client initialized');
 
 type AuthContextType = {
   session: Session | null;
@@ -62,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       setIsLoading(true);
+      console.log('Attempting to sign in with:', email);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
@@ -73,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: "Welcome back!",
       });
     } catch (error: any) {
+      console.error('Login error:', error);
       toast({
         title: "Login failed",
         description: error.message || "Please check your credentials and try again",

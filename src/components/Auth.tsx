@@ -1,7 +1,5 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createClient } from '@supabase/supabase-js';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,12 +10,7 @@ import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-
-// Replace with your Supabase URL and anon key
-const supabaseUrl = 'https://your-supabase-url.supabase.co';
-const supabaseAnonKey = 'your-supabase-anon-key';
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { useAuth } from '@/contexts/AuthContext';
 
 // Form schemas
 const loginSchema = z.object({
@@ -39,6 +32,7 @@ const Auth = ({ mode = 'modal', redirectTo = '/gallery' }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('login');
   const [loading, setLoading] = useState(false);
+  const { signIn, signUp } = useAuth();
   
   const loginForm = useForm({
     resolver: zodResolver(loginSchema),
@@ -61,26 +55,11 @@ const Auth = ({ mode = 'modal', redirectTo = '/gallery' }) => {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: values.email,
-        password: values.password,
-      });
-
-      if (error) throw error;
-      
-      toast({
-        title: "Login successful",
-        description: "Welcome back!",
-      });
-      
-      // Redirect to gallery page after successful login
+      await signIn(values.email, values.password);
       navigate(redirectTo);
     } catch (error) {
-      toast({
-        title: "Login failed",
-        description: error.message || "Please check your credentials and try again",
-        variant: "destructive",
-      });
+      console.error('Login handler error:', error);
+      // Error is already handled by the signIn function
     } finally {
       setLoading(false);
     }
@@ -90,26 +69,12 @@ const Auth = ({ mode = 'modal', redirectTo = '/gallery' }) => {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password,
-      });
-
-      if (error) throw error;
-      
-      toast({
-        title: "Sign up successful",
-        description: "Please check your email to confirm your account",
-      });
-      
+      await signUp(values.email, values.password);
       // Optional: switch to login tab after signup
       setActiveTab('login');
     } catch (error) {
-      toast({
-        title: "Sign up failed",
-        description: error.message || "Please check your information and try again",
-        variant: "destructive",
-      });
+      console.error('Signup handler error:', error);
+      // Error is already handled by the signUp function
     } finally {
       setLoading(false);
     }

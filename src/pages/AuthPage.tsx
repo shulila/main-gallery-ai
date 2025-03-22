@@ -27,7 +27,7 @@ const AuthPage = () => {
       <Navbar />
       <main className="pt-24 py-16">
         <div className="container mx-auto px-4">
-          <Auth mode="page" />
+          <Auth mode="page" redirectTo="/gallery" />
         </div>
       </main>
       <Footer />
