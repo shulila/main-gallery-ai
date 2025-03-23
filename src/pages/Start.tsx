@@ -34,7 +34,7 @@ const Start = () => {
                 setActiveStep(user ? 3 : 2);
                 
                 // Check if pin prompt has been shown before
-                if (window.chrome && window.chrome.storage) {
+                if (window.chrome && window.chrome.storage && window.chrome.storage.local) {
                   window.chrome.storage.local.get(['pin_prompt_shown'], (result) => {
                     if (!result.pin_prompt_shown && !hasShownPinPrompt) {
                       toast({
