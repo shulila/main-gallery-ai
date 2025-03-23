@@ -20,13 +20,13 @@ const Footer = () => {
               {brandConfig.tagline}. Connect all your favorite platforms and manage your entire collection in one place.
             </p>
             <div className="flex space-x-4">
-              <a href={brandConfig.social.github} className="text-foreground/60 hover:text-primary transition-colors">
+              <a href={brandConfig.social.github} target="_blank" rel="noopener noreferrer" className="text-foreground/60 hover:text-primary transition-colors">
                 <Github className="h-5 w-5" />
               </a>
-              <a href={brandConfig.social.twitter} className="text-foreground/60 hover:text-primary transition-colors">
+              <a href={brandConfig.social.twitter} target="_blank" rel="noopener noreferrer" className="text-foreground/60 hover:text-primary transition-colors">
                 <Twitter className="h-5 w-5" />
               </a>
-              <a href={brandConfig.social.linkedin} className="text-foreground/60 hover:text-primary transition-colors">
+              <a href={brandConfig.social.linkedin} target="_blank" rel="noopener noreferrer" className="text-foreground/60 hover:text-primary transition-colors">
                 <Linkedin className="h-5 w-5" />
               </a>
             </div>
@@ -47,7 +47,7 @@ const Footer = () => {
                   <Link to={brandConfig.routes.platforms} className="text-foreground/70 hover:text-primary text-sm transition-colors">Platforms</Link>
                 </li>
                 <li>
-                  <a href="#" className="text-foreground/70 hover:text-primary text-sm transition-colors">Chrome Extension</a>
+                  <Link to="/start" className="text-foreground/70 hover:text-primary text-sm transition-colors">Chrome Extension</Link>
                 </li>
               </ul>
             </div>
@@ -55,16 +55,16 @@ const Footer = () => {
               <h3 className="font-semibold mb-4">Resources</h3>
               <ul className="space-y-3">
                 <li>
-                  <a href="#" className="text-foreground/70 hover:text-primary text-sm transition-colors">Documentation</a>
+                  <Link to="/docs" className="text-foreground/70 hover:text-primary text-sm transition-colors">Documentation</Link>
                 </li>
                 <li>
-                  <a href="#" className="text-foreground/70 hover:text-primary text-sm transition-colors">API Reference</a>
+                  <Link to="/api" className="text-foreground/70 hover:text-primary text-sm transition-colors">API Reference</Link>
                 </li>
                 <li>
-                  <a href="#" className="text-foreground/70 hover:text-primary text-sm transition-colors">Changelog</a>
+                  <Link to="/changelog" className="text-foreground/70 hover:text-primary text-sm transition-colors">Changelog</Link>
                 </li>
                 <li>
-                  <a href="#" className="text-foreground/70 hover:text-primary text-sm transition-colors">Status</a>
+                  <Link to="/status" className="text-foreground/70 hover:text-primary text-sm transition-colors">Status</Link>
                 </li>
               </ul>
             </div>
@@ -72,16 +72,16 @@ const Footer = () => {
               <h3 className="font-semibold mb-4">Company</h3>
               <ul className="space-y-3">
                 <li>
-                  <a href="#" className="text-foreground/70 hover:text-primary text-sm transition-colors">About</a>
+                  <Link to="/about" className="text-foreground/70 hover:text-primary text-sm transition-colors">About</Link>
                 </li>
                 <li>
-                  <a href="#" className="text-foreground/70 hover:text-primary text-sm transition-colors">Blog</a>
+                  <Link to="/blog" className="text-foreground/70 hover:text-primary text-sm transition-colors">Blog</Link>
                 </li>
                 <li>
-                  <a href="#" className="text-foreground/70 hover:text-primary text-sm transition-colors">Privacy Policy</a>
+                  <Link to="/privacy" className="text-foreground/70 hover:text-primary text-sm transition-colors">Privacy Policy</Link>
                 </li>
                 <li>
-                  <a href="#" className="text-foreground/70 hover:text-primary text-sm transition-colors">Terms of Service</a>
+                  <Link to="/terms" className="text-foreground/70 hover:text-primary text-sm transition-colors">Terms of Service</Link>
                 </li>
               </ul>
             </div>
@@ -91,9 +91,9 @@ const Footer = () => {
         <div className="border-t border-border/50 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between text-sm text-foreground/60">
           <p>© {new Date().getFullYear()} {brandConfig.name}. All rights reserved.</p>
           <div className="flex space-x-6 mt-4 md:mt-0">
-            <a href="#" className="hover:text-primary transition-colors">Privacy</a>
-            <a href="#" className="hover:text-primary transition-colors">Terms</a>
-            <a href="#" className="hover:text-primary transition-colors">Cookies</a>
+            <Link to="/privacy" className="hover:text-primary transition-colors">Privacy</Link>
+            <Link to="/terms" className="hover:text-primary transition-colors">Terms</Link>
+            <Link to="/cookies" className="hover:text-primary transition-colors">Cookies</Link>
           </div>
         </div>
       </div>

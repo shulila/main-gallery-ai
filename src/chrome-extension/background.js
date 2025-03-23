@@ -11,7 +11,7 @@ chrome.runtime.onInstalled.addListener(details => {
       // Use a simple notification without custom icons to avoid loading issues
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Use chrome.runtime.getURL for proper path resolution
+        iconUrl: 'icons/icon128.png', // Use relative path instead of chrome.runtime.getURL
         title: 'Pin MainGallery Extension',
         message: 'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
       });
@@ -93,7 +93,7 @@ async function handlePlatformConnected(platformId) {
     console.warn('Creating notification for platform connected');
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Use runtime.getURL for proper path resolution
+      iconUrl: 'icons/icon128.png', // Use relative path instead of chrome.runtime.getURL
       title: 'Platform Connected',
       message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
     });
@@ -115,7 +115,7 @@ async function handlePlatformDisconnected(platformId) {
     console.warn('Creating notification for platform disconnected');
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Use runtime.getURL for proper path resolution
+      iconUrl: 'icons/icon128.png', // Use relative path instead of chrome.runtime.getURL
       title: 'Platform Disconnected',
       message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
     });
@@ -161,7 +161,7 @@ async function handleAddToGallery(data) {
       console.warn('Creating notification for add to gallery');
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Use runtime.getURL for proper path resolution
+        iconUrl: 'icons/icon128.png', // Use relative path instead of chrome.runtime.getURL
         title: 'Added to Main Gallery',
         message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
       });

@@ -20,7 +20,6 @@ const Start = () => {
   const { toast } = useToast();
   const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
-  const [hasShownPinPrompt, setHasShownPinPrompt] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   // Scroll to top on page load
@@ -39,22 +38,6 @@ const Start = () => {
               if (response && response.installed) {
                 setIsExtensionInstalled(true);
                 setActiveStep(user ? 3 : 2);
-                
-                // Check if pin prompt has been shown before
-                if (window.chrome && window.chrome.storage && window.chrome.storage.local) {
-                  window.chrome.storage.local.get(['pin_prompt_shown'], (result) => {
-                    if (!result.pin_prompt_shown && !hasShownPinPrompt) {
-                      toast({
-                        title: "Pin the extension",
-                        description: "Click the puzzle icon 🧩 and pin MainGallery to your toolbar for easy access",
-                      });
-                      setHasShownPinPrompt(true);
-                      if (window.chrome.storage && window.chrome.storage.local) {
-                        window.chrome.storage.local.set({ pin_prompt_shown: true });
-                      }
-                    }
-                  });
-                }
               } 
             }
           );
@@ -70,7 +53,7 @@ const Start = () => {
       checkExtension();
     }, 500);
 
-  }, [user, toast, hasShownPinPrompt]);
+  }, [user, toast]);
 
   // Handle manual step progression
   useEffect(() => {
@@ -199,7 +182,7 @@ const Start = () => {
             
             {activeStep === 2 && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-semibold">2. Install the Chrome Extension</h2>
+                <h2 className="text-2xl font-semibold">2. Chrome Extension</h2>
                 <p className="text-muted-foreground">
                   Our Chrome extension makes it easy to save your AI creations with a single click 
                   directly from platforms like Midjourney, DALL·E, and others.

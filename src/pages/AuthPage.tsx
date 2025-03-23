@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import Auth from '@/components/Auth';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/contexts/AuthContext';
+import { AlertCircle } from 'lucide-react';
 
 const AuthPage = () => {
   const { user, isLoading } = useAuth();

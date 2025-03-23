@@ -64,6 +64,18 @@ const AppRoutes = () => {
       <Route path="/features/:slug" element={<FeatureDetail />} />
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/start" element={<Start />} />
+      
+      {/* Placeholder routes for footer links */}
+      <Route path="/docs" element={<NotFound />} />
+      <Route path="/api" element={<NotFound />} />
+      <Route path="/changelog" element={<NotFound />} />
+      <Route path="/status" element={<NotFound />} />
+      <Route path="/about" element={<NotFound />} />
+      <Route path="/blog" element={<NotFound />} />
+      <Route path="/privacy" element={<NotFound />} />
+      <Route path="/terms" element={<NotFound />} />
+      <Route path="/cookies" element={<NotFound />} />
+      
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
