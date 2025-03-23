@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -13,6 +14,7 @@ const Start = () => {
   const { toast } = useToast();
   const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
+  const [hasShownPinPrompt, setHasShownPinPrompt] = useState(false);
 
   // Scroll to top on page load
   useEffect(() => {
@@ -30,6 +32,18 @@ const Start = () => {
               if (response && response.installed) {
                 setIsExtensionInstalled(true);
                 setActiveStep(user ? 3 : 2);
+                
+                // Check if pin prompt has been shown before
+                chrome.storage.local.get(['pin_prompt_shown'], (result) => {
+                  if (!result.pin_prompt_shown && !hasShownPinPrompt) {
+                    toast({
+                      title: "Pin the extension",
+                      description: "Click the puzzle icon 🧩 and pin MainGallery to your toolbar for easy access",
+                    });
+                    setHasShownPinPrompt(true);
+                    chrome.storage.local.set({ pin_prompt_shown: true });
+                  }
+                });
               }
             }
           );
@@ -45,7 +59,7 @@ const Start = () => {
       checkExtension();
     }, 500);
 
-  }, [user]);
+  }, [user, toast, hasShownPinPrompt]);
 
   // Handle manual step progression
   useEffect(() => {
@@ -69,6 +83,10 @@ const Start = () => {
 
   const handleGoPlatforms = () => {
     navigate('/platforms');
+  };
+
+  const handleGoToGallery = () => {
+    navigate('/gallery');
   };
 
   // Renders a step with appropriate styling based on active state
@@ -206,17 +224,16 @@ const Start = () => {
                   </ul>
                 </div>
                 
-                <div className="flex justify-center pt-4">
+                <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
                   <Button onClick={handleGoPlatforms}>
                     Manage Platforms
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
-                </div>
-                
-                <div className="pt-4 text-sm text-center">
-                  <a href="/gallery" className="text-primary hover:underline flex items-center justify-center">
-                    Go to my gallery <ExternalLink className="ml-1 h-3 w-3" />
-                  </a>
+                  
+                  <Button variant="outline" onClick={handleGoToGallery}>
+                    Go to My Gallery
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             )}

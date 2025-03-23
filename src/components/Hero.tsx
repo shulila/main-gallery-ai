@@ -1,4 +1,3 @@
-
 import { ArrowRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
@@ -10,11 +9,8 @@ const Hero = () => {
   const { user } = useAuth();
 
   const handleGetStarted = () => {
-    if (user) {
-      navigate(brandConfig.routes.gallery);
-    } else {
-      navigate(brandConfig.routes.auth);
-    }
+    // Navigate to the start page instead of directly to auth or gallery
+    navigate('/start');
   };
 
   const handleHowItWorks = () => {

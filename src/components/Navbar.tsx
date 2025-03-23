@@ -99,17 +99,26 @@ const Navbar = () => {
           
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            {/* Only show Home for non-logged in users */}
+            {/* Only show Home and How It Works for non-logged in users */}
             {!user && (
-              <Link 
-                to={brandConfig.routes.home} 
-                className={`text-sm font-medium transition-colors hover:text-primary ${
-                  isActive(brandConfig.routes.home) ? 'text-primary' : 'text-foreground/80'
-                }`}
-                onClick={handleHomeClick}
-              >
-                Home
-              </Link>
+              <>
+                <Link 
+                  to={brandConfig.routes.home} 
+                  className={`text-sm font-medium transition-colors hover:text-primary ${
+                    isActive(brandConfig.routes.home) ? 'text-primary' : 'text-foreground/80'
+                  }`}
+                  onClick={handleHomeClick}
+                >
+                  Home
+                </Link>
+                <a 
+                  href="#how-it-works"
+                  className="text-sm font-medium transition-colors hover:text-primary text-foreground/80"
+                  onClick={handleHowItWorksClick}
+                >
+                  How It Works
+                </a>
+              </>
             )}
             {user && (
               <Link to={brandConfig.routes.gallery} className={`text-sm font-medium transition-colors hover:text-primary ${
@@ -127,16 +136,6 @@ const Navbar = () => {
             >
               Platforms
             </Link>
-            {/* Only show How It Works for non-logged in users */}
-            {!user && (
-              <a 
-                href="#how-it-works"
-                className="text-sm font-medium transition-colors hover:text-primary text-foreground/80"
-                onClick={handleHowItWorksClick}
-              >
-                How It Works
-              </a>
-            )}
           </nav>
           
           {/* Authentication Buttons */}
@@ -201,19 +200,32 @@ const Navbar = () => {
         <div className="md:hidden bg-background border-t border-border/50 py-4 animate-fade-in">
           <div className="container mx-auto px-4">
             <nav className="flex flex-col space-y-4">
-              {/* Only show Home for non-logged in users in mobile menu too */}
+              {/* Only show Home and How It Works for non-logged in users in mobile menu too */}
               {!user && (
-                <Link 
-                  to={brandConfig.routes.home}
-                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                  onClick={(e) => {
-                    setIsMobileMenuOpen(false);
-                    handleHomeClick(e);
-                  }}
-                >
-                  <ImageIcon size={18} />
-                  <span>Home</span>
-                </Link>
+                <>
+                  <Link 
+                    to={brandConfig.routes.home}
+                    className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
+                    onClick={(e) => {
+                      setIsMobileMenuOpen(false);
+                      handleHomeClick(e);
+                    }}
+                  >
+                    <ImageIcon size={18} />
+                    <span>Home</span>
+                  </Link>
+                  <a 
+                    href="#how-it-works"
+                    className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
+                    onClick={(e) => {
+                      setIsMobileMenuOpen(false);
+                      handleHowItWorksClick(e);
+                    }}
+                  >
+                    <ImageIcon size={18} />
+                    <span>How It Works</span>
+                  </a>
+                </>
               )}
               {user && (
                 <Link 
@@ -236,20 +248,6 @@ const Navbar = () => {
                 <User size={18} />
                 <span>Platforms</span>
               </Link>
-              {/* Only show How It Works for non-logged in users */}
-              {!user && (
-                <a 
-                  href="#how-it-works"
-                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                  onClick={(e) => {
-                    setIsMobileMenuOpen(false);
-                    handleHowItWorksClick(e);
-                  }}
-                >
-                  <ImageIcon size={18} />
-                  <span>How It Works</span>
-                </a>
-              )}
               <div className="pt-4 mt-4 border-t border-border/50 flex flex-col space-y-2">
                 {user ? (
                   <Button 

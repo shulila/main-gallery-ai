@@ -131,6 +131,10 @@ async function connectPlatform(platform) {
       platform: platform.id
     });
     
+    // Show connected status as a small badge/notification
+    showToast('✓ Connected to ' + platform.name);
+    
+    // Update UI to show the connect status
     updateUI();
   } catch (error) {
     console.error('Error connecting platform:', error);
@@ -168,6 +172,9 @@ async function openGallery() {
     } else {
       chrome.tabs.create({ url: GALLERY_URL });
     }
+    
+    // Close the popup after navigating
+    window.close();
   } catch (error) {
     console.error('Error opening gallery:', error);
   }
@@ -202,27 +209,33 @@ function checkFirstTimeUser() {
         firstTimeTip.classList.remove('hidden');
       }
       
-      // Show the pin extension tip too
-      if (pinExtensionTip) {
-        pinExtensionTip.classList.remove('hidden');
-      }
+      // Show the pin extension tip only once
+      chrome.storage.local.get(['pin_prompt_shown'], function(pinResult) {
+        if (!pinResult.pin_prompt_shown && pinExtensionTip) {
+          pinExtensionTip.classList.remove('hidden');
+          promptPinExtension();
+          chrome.storage.local.set({ pin_prompt_shown: true });
+        }
+      });
       
       chrome.storage.local.set({ popup_opened_before: true });
-      
-      // Prompt to pin the extension
-      promptPinExtension();
     }
   });
 }
 
 // Function to prompt user to pin the extension
 function promptPinExtension() {
-  if (pinExtensionTip) {
-    pinExtensionTip.classList.remove('hidden');
-  }
-  
-  // Also show a toast notification
-  showToast('📌 Tip: Pin this extension for quick access');
+  chrome.storage.local.get(['pin_prompt_shown'], function(result) {
+    if (!result.pin_prompt_shown && pinExtensionTip) {
+      pinExtensionTip.classList.remove('hidden');
+      
+      // Also show a toast notification
+      showToast('📌 Tip: Pin this extension for quick access');
+      
+      // Mark as shown
+      chrome.storage.local.set({ pin_prompt_shown: true });
+    }
+  });
 }
 
 // Show toast notification
