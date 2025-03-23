@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -34,16 +34,23 @@ const Auth = ({
 }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
   
-  // Set the active tab based on initialTab prop
+  // Set the active tab based on initialTab prop or query parameter
   useEffect(() => {
-    if (initialTab) {
+    // Check URL query parameters for tab
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
+    
+    if (tabParam === 'login' || tabParam === 'signup') {
+      setActiveTab(tabParam);
+    } else if (initialTab) {
       setActiveTab(initialTab);
     }
-  }, [initialTab]);
+  }, [initialTab, location.search]);
   
   const loginForm = useForm({
     resolver: zodResolver(loginSchema),
@@ -67,7 +74,24 @@ const Auth = ({
     
     try {
       await signIn(values.email, values.password);
-      navigate(redirectTo);
+      // Get redirect URL from query parameters if it exists
+      const searchParams = new URLSearchParams(location.search);
+      const redirectParam = searchParams.get('redirect');
+      
+      // Navigate to the appropriate page
+      if (redirectParam) {
+        // Check if it's an external URL (like a chrome-extension:// URL)
+        if (redirectParam.startsWith('chrome-extension://') || 
+            redirectParam.startsWith('http://') || 
+            redirectParam.startsWith('https://')) {
+          window.location.href = redirectParam;
+        } else {
+          // For internal routes
+          navigate(redirectParam);
+        }
+      } else {
+        navigate(redirectTo);
+      }
     } catch (error) {
       console.error('Login handler error:', error);
       // Error is already handled by the signIn function
@@ -83,6 +107,10 @@ const Auth = ({
       await signUp(values.email, values.password);
       // Optional: switch to login tab after signup
       setActiveTab('login');
+      toast({
+        title: "Account created",
+        description: "Please log in to continue",
+      });
     } catch (error) {
       console.error('Signup handler error:', error);
       // Error is already handled by the signUp function

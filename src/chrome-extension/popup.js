@@ -175,7 +175,8 @@ async function openGallery() {
 
 function getAuthUrlWithRedirect(currentUrl) {
   if (!currentUrl) return AUTH_URL;
-  return `${AUTH_URL}?redirect=${encodeURIComponent(currentUrl)}`;
+  const encodedRedirect = encodeURIComponent(currentUrl);
+  return `${AUTH_URL}?redirect=${encodedRedirect}&tab=login`;
 }
 
 async function openAuthPage() {
@@ -187,7 +188,8 @@ async function openAuthPage() {
       redirectUrl = tab.url;
     }
     
-    chrome.tabs.create({ url: getAuthUrlWithRedirect(redirectUrl) });
+    const authUrl = getAuthUrlWithRedirect(redirectUrl);
+    chrome.tabs.create({ url: authUrl });
   } catch (error) {
     console.error('Error opening auth page:', error);
   }
@@ -218,6 +220,9 @@ function promptPinExtension() {
   if (pinExtensionTip) {
     pinExtensionTip.classList.remove('hidden');
   }
+  
+  // Also show a toast notification
+  showToast('📌 Tip: Pin this extension for quick access');
 }
 
 // Show toast notification

@@ -5,7 +5,16 @@ const DUMMY_API_URL = 'https://dummyapi.io/collect';
 
 // Listen for extension installation/update
 chrome.runtime.onInstalled.addListener(details => {
-  // Removed automatic tab opening on install
+  // Show a notification to pin the extension on install
+  if (details.reason === 'install') {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'Pin MainGallery Extension',
+      message: 'Click the puzzle piece icon in your toolbar and pin MainGallery for easy access!'
+    });
+  }
+  
   console.log('Extension installed:', details.reason);
 });
 
@@ -29,6 +38,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .then(result => sendResponse(result))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true; // Will respond asynchronously
+      
+    case 'openGallery':
+      openGallery();
+      break;
+      
+    case 'openAuthPage':
+      openAuthPage(message.redirectUrl);
+      break;
+      
+    case 'isInstalled':
+      // Simple ping to check if extension is installed
+      sendResponse({ installed: true });
+      break;
   }
   
   // Return true to indicate we'll respond asynchronously
@@ -42,8 +64,8 @@ async function handlePlatformConnection(platformId) {
   // Check if user is logged in to Main Gallery
   const loggedIn = await isLoggedIn();
   if (!loggedIn) {
-    // Instead of opening a tab, we'll just log this for now
-    console.log('User not logged in, authentication required');
+    // Open auth page with redirect back to current page
+    openAuthPage();
     return;
   }
   
@@ -124,6 +146,41 @@ async function handleAddToGallery(data) {
     console.error('Error in API call:', error);
     return { success: false, error: error.message };
   }
+}
+
+// Open gallery in new tab or focus existing gallery tab
+async function openGallery() {
+  try {
+    const mainGalleryUrl = 'https://main-gallery-hub.lovable.app/gallery';
+    
+    // Find any existing gallery tabs
+    const existingTabs = await chrome.tabs.query({ url: mainGalleryUrl + '*' });
+    
+    if (existingTabs.length > 0) {
+      // Focus the first existing gallery tab
+      await chrome.tabs.update(existingTabs[0].id, { active: true });
+      
+      // Focus the window that contains the tab
+      await chrome.windows.update(existingTabs[0].windowId, { focused: true });
+    } else {
+      // Open a new gallery tab
+      await chrome.tabs.create({ url: mainGalleryUrl });
+    }
+  } catch (error) {
+    console.error('Error opening gallery:', error);
+  }
+}
+
+// Open auth page with redirect
+function openAuthPage(redirectUrl) {
+  const baseAuthUrl = 'https://main-gallery-hub.lovable.app/auth';
+  
+  let authUrl = baseAuthUrl + '?tab=login';
+  if (redirectUrl) {
+    authUrl += `&redirect=${encodeURIComponent(redirectUrl)}`;
+  }
+  
+  chrome.tabs.create({ url: authUrl });
 }
 
 // Helper functions

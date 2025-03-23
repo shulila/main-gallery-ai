@@ -11,7 +11,7 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Get the tab from query parameters
+  // Get parameters from query string
   const queryParams = new URLSearchParams(location.search);
   const tabParam = queryParams.get('tab');
   const redirectParam = queryParams.get('redirect');
@@ -31,6 +31,7 @@ const AuthPage = () => {
           navigate(redirectParam);
         }
       } else {
+        // Default redirect to gallery
         navigate('/gallery');
       }
     }

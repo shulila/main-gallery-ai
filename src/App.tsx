@@ -12,6 +12,7 @@ import Platforms from "./pages/Platforms";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import FeatureDetail from "./pages/FeatureDetail";
+import Start from "./pages/Start";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,7 @@ const AppRoutes = () => {
       <Route path="/platforms" element={<ProtectedRoute><Platforms /></ProtectedRoute>} />
       <Route path="/features/:slug" element={<FeatureDetail />} />
       <Route path="/auth" element={<AuthPage />} />
+      <Route path="/start" element={<Start />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
