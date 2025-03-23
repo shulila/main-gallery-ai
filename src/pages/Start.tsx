@@ -1,8 +1,7 @@
-
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -11,51 +10,60 @@ import {
   CheckCircle, 
   ArrowRight, 
   ExternalLink,
-  Info
+  Info,
+  Download
 } from 'lucide-react';
 
 const Start = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [showSuccess, setShowSuccess] = useState(false);
+  
+  const searchParams = new URLSearchParams(location.search);
+  const tabParam = searchParams.get('tab');
 
-  // Scroll to top on page load
+  useEffect(() => {
+    if (tabParam === 'extension') {
+      setActiveStep(2);
+    }
+  }, [tabParam]);
+
   useEffect(() => {
     window.scrollTo(0, 0);
     
-    // Check if extension is installed (simple detection)
     const checkExtension = () => {
-      // Check if chrome object exists in window
       if (window.chrome && 'runtime' in window.chrome) {
         try {
+          console.warn('Attempting to check if extension is installed...');
           window.chrome.runtime.sendMessage(
             "chrome-extension-id", // Replace with your actual extension ID when published
             { action: "isInstalled" },
             (response) => {
               if (response && response.installed) {
+                console.warn('Extension is installed!');
                 setIsExtensionInstalled(true);
                 setActiveStep(user ? 3 : 2);
-              } 
+              } else {
+                console.warn('Extension check returned but not installed');
+              }
             }
           );
         } catch (e) {
-          // Extension not installed or cannot communicate - this is normal for most users
           console.log("Extension not detected:", e);
         }
       }
     };
 
-    // Check for extension
     setTimeout(() => {
       checkExtension();
     }, 500);
 
-  }, [user, toast]);
+  }, [user, tabParam]);
 
-  // Handle manual step progression
   useEffect(() => {
     if (user && activeStep < 3) {
       setActiveStep(3);
@@ -74,15 +82,6 @@ const Start = () => {
     navigate('/gallery');
   };
   
-  const handleConnectionComplete = () => {
-    setShowSuccess(true);
-    
-    setTimeout(() => {
-      navigate('/gallery');
-    }, 2000);
-  };
-
-  // Renders a step with appropriate styling based on active state
   const StepIndicator = ({ number, isActive, isComplete }) => (
     <div 
       className={`flex items-center justify-center w-10 h-10 rounded-full border-2 
@@ -116,21 +115,20 @@ const Start = () => {
             </div>
           )}
           
-          {/* Steps Progress */}
           <div className="mb-12">
             <div className="flex items-center justify-center">
               <div className="flex items-center">
                 <StepIndicator 
                   number={1} 
                   isActive={activeStep === 1} 
-                  isComplete={activeStep > 1 || isExtensionInstalled} 
+                  isComplete={activeStep > 1 || user} 
                 />
-                <div className={`w-20 h-1 ${activeStep > 1 || isExtensionInstalled ? 'bg-primary' : 'bg-muted-foreground/20'}`}></div>
+                <div className={`w-20 h-1 ${activeStep > 1 || user ? 'bg-primary' : 'bg-muted-foreground/20'}`}></div>
                 
                 <StepIndicator 
                   number={2} 
                   isActive={activeStep === 2} 
-                  isComplete={activeStep > 2 || user} 
+                  isComplete={activeStep > 2} 
                 />
                 <div className={`w-20 h-1 ${activeStep > 2 ? 'bg-primary' : 'bg-muted-foreground/20'}`}></div>
                 
@@ -143,7 +141,6 @@ const Start = () => {
             </div>
           </div>
           
-          {/* Step Content */}
           <div className="bg-card border rounded-xl p-8 shadow-sm">
             {activeStep === 1 && (
               <div className="space-y-6">
@@ -205,7 +202,7 @@ const Start = () => {
                     </div>
                   ) : (
                     <div className="text-center max-w-md">
-                      <div className="bg-muted/50 p-4 rounded-lg border mb-4">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800 mb-4">
                         <div className="flex items-center gap-2 mb-2">
                           <Info className="h-4 w-4 text-blue-500" />
                           <span className="font-medium">Coming Soon</span>
@@ -218,7 +215,7 @@ const Start = () => {
                       </div>
                       
                       <Button onClick={() => setActiveStep(3)} className="bg-blue-500 hover:bg-blue-600">
-                        Continue <ArrowRight className="ml-2 h-4 w-4" />
+                        Continue Without Extension <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </div>
                   )}

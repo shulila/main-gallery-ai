@@ -6,11 +6,18 @@ import {
   Zap,
   Lock,
   Image as ImageIcon,
-  Laptop
+  Laptop,
+  Info
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
 import { brandConfig } from '@/config/brandConfig';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const PlatformIntegration = () => {
   const navigate = useNavigate();
@@ -83,7 +90,7 @@ const PlatformIntegration = () => {
   ];
 
   const handleGetStarted = () => {
-    navigate(brandConfig.routes.auth);
+    navigate('/start');
   };
 
   return (
@@ -121,13 +128,25 @@ const PlatformIntegration = () => {
         
         {/* CTA button */}
         <div className="text-center mb-20">
-          <Button 
-            size="lg" 
-            className="rounded-full px-8 shadow-md hover:shadow-xl transition-all"
-            onClick={handleGetStarted}
-          >
-            Get Started
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  size="lg" 
+                  className="rounded-full px-8 shadow-md hover:shadow-xl transition-all"
+                  onClick={handleGetStarted}
+                >
+                  Get Started
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex items-center">
+                  <Info className="h-4 w-4 mr-2 text-blue-500" />
+                  <p>Create an account and connect platforms</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <p className="text-sm text-foreground/60 mt-4">Free, lightweight, and secure</p>
         </div>
         

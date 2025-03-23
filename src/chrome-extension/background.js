@@ -8,10 +8,10 @@ chrome.runtime.onInstalled.addListener(details => {
   // Show a notification to pin the extension on install
   if (details.reason === 'install') {
     try {
-      // Use a simple notification without custom icons to avoid loading issues
+      console.warn('Creating installation notification');
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: 'icons/icon128.png', // Use relative path instead of chrome.runtime.getURL
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
         title: 'Pin MainGallery Extension',
         message: 'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
       });
@@ -88,12 +88,15 @@ async function handlePlatformConnected(platformId) {
   // Instead of making an API call to a non-existent domain, just log the action
   console.log(`Would notify API about connection for platform: ${platformId}`);
   
-  // Show success notification with simplified approach to avoid image loading issues
+  // Show success notification with proper icon path
   try {
     console.warn('Creating notification for platform connected');
+    const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+    console.warn('Using icon path:', iconUrl);
+    
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icons/icon128.png', // Use relative path instead of chrome.runtime.getURL
+      iconUrl: iconUrl,
       title: 'Platform Connected',
       message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
     });
@@ -110,12 +113,15 @@ async function handlePlatformDisconnected(platformId) {
   // Instead of making an API call, just log the action
   console.log(`Would notify API about disconnection for platform: ${platformId}`);
   
-  // Show success notification with simplified approach
+  // Show success notification with proper icon path
   try {
     console.warn('Creating notification for platform disconnected');
+    const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+    console.warn('Using icon path:', iconUrl);
+    
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icons/icon128.png', // Use relative path instead of chrome.runtime.getURL
+      iconUrl: iconUrl,
       title: 'Platform Disconnected',
       message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
     });
@@ -156,12 +162,15 @@ async function handleAddToGallery(data) {
     const responseData = await response.json();
     console.log('API response:', responseData);
     
-    // Show notification with simplified approach
+    // Show notification with proper icon path
     try {
       console.warn('Creating notification for add to gallery');
+      const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+      console.warn('Using icon path:', iconUrl);
+      
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: 'icons/icon128.png', // Use relative path instead of chrome.runtime.getURL
+        iconUrl: iconUrl,
         title: 'Added to Main Gallery',
         message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
       });

@@ -1,7 +1,13 @@
 
-import { ArrowRight, Zap, Globe, Lock, Image, Copy, Download } from 'lucide-react';
+import { ArrowRight, Zap, Globe, Lock, Image, Copy, Download, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { brandConfig } from '@/config/brandConfig';
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const Features = () => {
   const navigate = useNavigate();
@@ -50,9 +56,8 @@ const Features = () => {
   };
 
   const handleInstallExtension = () => {
-    // This would normally lead to the Chrome Web Store
-    // For now, just navigate to the platforms page
-    navigate(brandConfig.routes.platforms);
+    // Navigate to start page with extension tab query parameter
+    navigate('/start?tab=extension');
   };
 
   return (
@@ -97,13 +102,25 @@ const Features = () => {
               <h3 className="text-2xl font-bold mb-2">Ready to centralize your AI art?</h3>
               <p className="text-foreground/80">Get started with {brandConfig.name} in just a few clicks.</p>
             </div>
-            <button 
-              onClick={handleInstallExtension}
-              className="inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground px-8 py-3 font-medium hover:bg-primary/90 transition-colors"
-            >
-              Install Chrome Extension
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button 
+                    onClick={handleInstallExtension}
+                    className="inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground px-8 py-3 font-medium hover:bg-primary/90 transition-colors"
+                  >
+                    Install Chrome Extension
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="flex items-center">
+                    <Info className="h-4 w-4 mr-2 text-blue-500" />
+                    <p>Coming soon to Chrome Web Store</p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </div>
