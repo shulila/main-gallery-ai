@@ -46,6 +46,7 @@ const connectBtn = document.getElementById('connect-btn');
 const disconnectBtn = document.getElementById('disconnect-btn');
 const viewGalleryBtn = document.getElementById('view-gallery-btn');
 const viewMyGalleryBtns = document.querySelectorAll('#view-my-gallery-btn');
+const firstTimeTip = document.getElementById('first-time-tip');
 
 const platformNameElem = document.getElementById('platform-name');
 const platformIconElem = document.getElementById('platform-icon');
@@ -55,6 +56,7 @@ const connectingPlatformNameElem = document.getElementById('connecting-platform-
 
 // Constants
 const GALLERY_URL = 'https://main-gallery-hub.lovable.app/gallery';
+const AUTH_URL = 'https://main-gallery-hub.lovable.app/auth';
 
 // Helper functions
 function hideAllStates() {
@@ -93,16 +95,13 @@ function isLoggedIn() {
   });
 }
 
-async function connectPlatform(platform) {
+function connectPlatform(platform) {
   showState(states.connecting);
   connectingPlatformNameElem.textContent = platform.name;
   
   try {
-    // This is a placeholder for the actual connection logic
-    // In a real implementation, we would use OAuth, API tokens, etc.
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulating API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
-    // Store the token (this would be a real token in production)
     const tokenData = {
       token: 'sample_token_for_' + platform.id,
       connectedAt: new Date().toISOString()
@@ -114,7 +113,6 @@ async function connectPlatform(platform) {
       chrome.storage.sync.set(data, resolve);
     });
     
-    // Send message to background script to notify of connection
     chrome.runtime.sendMessage({
       action: 'platformConnected',
       platform: platform.id
@@ -128,7 +126,7 @@ async function connectPlatform(platform) {
   }
 }
 
-async function disconnectPlatform(platform) {
+function disconnectPlatform(platform) {
   try {
     await new Promise(resolve => {
       const data = {};
@@ -136,7 +134,6 @@ async function disconnectPlatform(platform) {
       chrome.storage.sync.remove(platform.tokenStorageKey, resolve);
     });
     
-    // Send message to background script to notify of disconnection
     chrome.runtime.sendMessage({
       action: 'platformDisconnected',
       platform: platform.id
@@ -149,17 +146,13 @@ async function disconnectPlatform(platform) {
   }
 }
 
-// Function to open the user's gallery
 async function openGallery() {
   try {
-    // Check if gallery tab is already open
     const tabs = await chrome.tabs.query({ url: GALLERY_URL });
     
     if (tabs.length > 0) {
-      // Gallery tab is already open, switch to it
       chrome.tabs.update(tabs[0].id, { active: true });
     } else {
-      // Open a new gallery tab
       chrome.tabs.create({ url: GALLERY_URL });
     }
   } catch (error) {
@@ -167,48 +160,71 @@ async function openGallery() {
   }
 }
 
-// Main UI update function
+async function openAuthPage() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    let redirectUrl = '';
+    
+    if (tab && tab.url) {
+      const platform = detectPlatform(tab.url);
+      if (platform) {
+        redirectUrl = `?redirect=${encodeURIComponent(tab.url)}`;
+      }
+    }
+    
+    chrome.tabs.create({ url: `${AUTH_URL}${redirectUrl}` });
+  } catch (error) {
+    console.error('Error opening auth page:', error);
+  }
+}
+
+function checkFirstTimeUser() {
+  chrome.storage.local.get(['popup_opened_before'], function(result) {
+    if (!result.popup_opened_before) {
+      if (firstTimeTip) {
+        firstTimeTip.classList.remove('hidden');
+      }
+      
+      chrome.storage.local.set({ popup_opened_before: true });
+    }
+  });
+}
+
 async function updateUI() {
-  // Get the current tab URL
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tab.url;
   
-  // Check if user is logged in to Main Gallery
   const loggedIn = await isLoggedIn();
   if (!loggedIn) {
     showState(states.notLoggedIn);
     return;
   }
   
-  // Detect the platform from the URL
   const platform = detectPlatform(url);
   if (!platform) {
     showState(states.notPlatformPage);
     return;
   }
   
-  // Check if the platform is already connected
   const connected = await isConnected(platform.id);
   
   if (connected) {
-    // Show the already connected state
     connectedPlatformNameElem.textContent = platform.name;
     connectedPlatformIconElem.src = platform.icon;
     showState(states.alreadyConnected);
   } else {
-    // Show the ready to connect state
     platformNameElem.textContent = platform.name;
     platformIconElem.src = platform.icon;
     showState(states.readyToConnect);
   }
+  
+  checkFirstTimeUser();
 }
 
-// Event Listeners
 document.addEventListener('DOMContentLoaded', updateUI);
 
 loginBtn.addEventListener('click', () => {
-  // Instead of opening a tab, just log the action
-  console.log('Login button clicked');
+  openAuthPage();
 });
 
 connectBtn.addEventListener('click', async () => {
@@ -228,18 +244,15 @@ disconnectBtn.addEventListener('click', async () => {
 });
 
 viewGalleryBtn.addEventListener('click', () => {
-  // Instead of opening a tab, just log the action
-  console.log('View gallery button clicked');
+  openGallery();
 });
 
-// Add event listeners for all "Go to My Gallery" buttons
 viewMyGalleryBtns.forEach(button => {
   button.addEventListener('click', () => {
     openGallery();
   });
 });
 
-// Listen for messages from background script
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'updateUI') {
     updateUI();
