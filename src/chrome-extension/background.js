@@ -8,16 +8,24 @@ chrome.runtime.onInstalled.addListener(details => {
   // Show a notification to pin the extension on install
   if (details.reason === 'install') {
     try {
-      console.warn('Creating installation notification');
-      // Ensure we're using the correct icon path
+      console.log('Creating installation notification');
+      // Get absolute URL for icon
       const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+      console.log('Using icon URL:', iconUrl);
+      
       chrome.notifications.create({
         type: 'basic',
         iconUrl: iconUrl,
         title: 'Pin MainGallery Extension',
         message: 'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
+      }, (notificationId) => {
+        // Check for errors after creating notification
+        if (chrome.runtime.lastError) {
+          console.error('Notification creation error:', chrome.runtime.lastError);
+        } else {
+          console.log('Notification created with ID:', notificationId);
+        }
       });
-      console.log('Installation notification shown successfully');
     } catch (error) {
       console.error('Failed to show notification:', error);
       // Continue without showing notification
@@ -92,18 +100,24 @@ async function handlePlatformConnected(platformId) {
   
   // Show success notification with proper icon path
   try {
-    console.warn('Creating notification for platform connected');
-    // Ensure we're using the correct icon path with chrome.runtime.getURL
+    console.log('Creating platform connected notification');
+    // Get absolute URL for icon
     const iconUrl = chrome.runtime.getURL('icons/icon128.png');
-    console.warn('Using icon path:', iconUrl);
+    console.log('Using icon URL:', iconUrl);
     
     chrome.notifications.create({
       type: 'basic',
       iconUrl: iconUrl,
       title: 'Platform Connected',
       message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
+    }, (notificationId) => {
+      // Check for errors after creating notification
+      if (chrome.runtime.lastError) {
+        console.error('Notification creation error:', chrome.runtime.lastError);
+      } else {
+        console.log('Notification created with ID:', notificationId);
+      }
     });
-    console.warn('Notification created successfully');
   } catch (error) {
     console.error('Failed to show notification:', error);
     // Continue without showing notification
@@ -118,18 +132,24 @@ async function handlePlatformDisconnected(platformId) {
   
   // Show success notification with proper icon path
   try {
-    console.warn('Creating notification for platform disconnected');
-    // Ensure we're using the correct icon path with chrome.runtime.getURL
+    console.log('Creating platform disconnected notification');
+    // Get absolute URL for icon
     const iconUrl = chrome.runtime.getURL('icons/icon128.png');
-    console.warn('Using icon path:', iconUrl);
+    console.log('Using icon URL:', iconUrl);
     
     chrome.notifications.create({
       type: 'basic',
       iconUrl: iconUrl,
       title: 'Platform Disconnected',
       message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
+    }, (notificationId) => {
+      // Check for errors after creating notification
+      if (chrome.runtime.lastError) {
+        console.error('Notification creation error:', chrome.runtime.lastError);
+      } else {
+        console.log('Notification created with ID:', notificationId);
+      }
     });
-    console.warn('Notification created successfully');
   } catch (error) {
     console.error('Failed to show notification:', error);
     // Continue without showing notification
@@ -168,18 +188,24 @@ async function handleAddToGallery(data) {
     
     // Show notification with proper icon path
     try {
-      console.warn('Creating notification for add to gallery');
-      // Ensure we're using the correct icon path with chrome.runtime.getURL
+      console.log('Creating add to gallery notification');
+      // Get absolute URL for icon
       const iconUrl = chrome.runtime.getURL('icons/icon128.png');
-      console.warn('Using icon path:', iconUrl);
+      console.log('Using icon URL:', iconUrl);
       
       chrome.notifications.create({
         type: 'basic',
         iconUrl: iconUrl,
         title: 'Added to Main Gallery',
         message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
+      }, (notificationId) => {
+        // Check for errors after creating notification
+        if (chrome.runtime.lastError) {
+          console.error('Notification creation error:', chrome.runtime.lastError);
+        } else {
+          console.log('Notification created with ID:', notificationId);
+        }
       });
-      console.warn('Notification created successfully');
     } catch (error) {
       console.error('Failed to show notification:', error);
       // Continue without showing notification

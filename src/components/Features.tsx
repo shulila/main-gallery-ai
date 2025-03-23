@@ -1,5 +1,5 @@
 
-import { ArrowRight, Zap, Globe, Lock, Image, Copy, Download, Info } from 'lucide-react';
+import { ArrowRight, Zap, Globe, Lock, Image, Copy, Download, Info, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { brandConfig } from '@/config/brandConfig';
 import { 
@@ -105,18 +105,28 @@ const Features = () => {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button 
-                    onClick={handleInstallExtension}
-                    className="inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground px-8 py-3 font-medium hover:bg-primary/90 transition-colors"
-                  >
-                    Install Chrome Extension
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </button>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <button 
+                      onClick={handleInstallExtension}
+                      className="inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground px-8 py-3 font-medium hover:bg-primary/90 transition-colors"
+                    >
+                      Get Started
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </button>
+                    
+                    <button 
+                      disabled
+                      className="inline-flex items-center justify-center rounded-full bg-blue-100 text-blue-500 px-8 py-3 font-medium opacity-70 cursor-not-allowed"
+                    >
+                      <Clock className="mr-2 h-4 w-4" />
+                      Extension Coming Soon
+                    </button>
+                  </div>
                 </TooltipTrigger>
                 <TooltipContent>
                   <div className="flex items-center">
-                    <Info className="h-4 w-4 mr-2 text-blue-500" />
-                    <p>Coming soon to Chrome Web Store</p>
+                    <Clock className="h-4 w-4 mr-2 text-blue-500" />
+                    <p>Chrome Extension coming soon</p>
                   </div>
                 </TooltipContent>
               </Tooltip>
