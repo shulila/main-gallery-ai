@@ -1,4 +1,3 @@
-
 // Platform detection patterns
 const PLATFORMS = {
   midjourney: {
@@ -46,12 +45,16 @@ const loginBtn = document.getElementById('login-btn');
 const connectBtn = document.getElementById('connect-btn');
 const disconnectBtn = document.getElementById('disconnect-btn');
 const viewGalleryBtn = document.getElementById('view-gallery-btn');
+const viewMyGalleryBtns = document.querySelectorAll('#view-my-gallery-btn');
 
 const platformNameElem = document.getElementById('platform-name');
 const platformIconElem = document.getElementById('platform-icon');
 const connectedPlatformNameElem = document.getElementById('connected-platform-name');
 const connectedPlatformIconElem = document.getElementById('connected-platform-icon');
 const connectingPlatformNameElem = document.getElementById('connecting-platform-name');
+
+// Constants
+const GALLERY_URL = 'https://main-gallery-hub.lovable.app/gallery';
 
 // Helper functions
 function hideAllStates() {
@@ -146,6 +149,24 @@ async function disconnectPlatform(platform) {
   }
 }
 
+// Function to open the user's gallery
+async function openGallery() {
+  try {
+    // Check if gallery tab is already open
+    const tabs = await chrome.tabs.query({ url: GALLERY_URL });
+    
+    if (tabs.length > 0) {
+      // Gallery tab is already open, switch to it
+      chrome.tabs.update(tabs[0].id, { active: true });
+    } else {
+      // Open a new gallery tab
+      chrome.tabs.create({ url: GALLERY_URL });
+    }
+  } catch (error) {
+    console.error('Error opening gallery:', error);
+  }
+}
+
 // Main UI update function
 async function updateUI() {
   // Get the current tab URL
@@ -209,6 +230,13 @@ disconnectBtn.addEventListener('click', async () => {
 viewGalleryBtn.addEventListener('click', () => {
   // Instead of opening a tab, just log the action
   console.log('View gallery button clicked');
+});
+
+// Add event listeners for all "Go to My Gallery" buttons
+viewMyGalleryBtns.forEach(button => {
+  button.addEventListener('click', () => {
+    openGallery();
+  });
 });
 
 // Listen for messages from background script
