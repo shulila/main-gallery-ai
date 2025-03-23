@@ -4,31 +4,38 @@ const MAIN_GALLERY_API_URL = 'https://maingallery.app/api';
 const DUMMY_API_URL = 'https://dummyapi.io/collect';
 
 // Listen for extension installation/update
-chrome.runtime.onInstalled.addListener(details => {
+chrome.runtime.onInstalled.addListener(function(details) {
   // Show a notification to pin the extension on install
   if (details.reason === 'install') {
     try {
       console.log('Creating installation notification');
       
-      // Get absolute URL for icon - ensure this is correct
+      // Create a unique ID for this notification
+      const notificationId = 'installation-' + Date.now();
+      
+      // Get absolute URL for icon using runtime.getURL()
       const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       console.log('Using icon URL for notification:', iconUrl);
       
-      // Create notification with proper error handling
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: iconUrl,
-        title: 'Pin MainGallery Extension',
-        message: 'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
-      }, function(notificationId) {
-        if (chrome.runtime.lastError) {
-          console.error('Notification creation error:', chrome.runtime.lastError.message);
-        } else {
-          console.log('Notification created with ID:', notificationId);
+      // Create notification with proper error handling and notification ID
+      chrome.notifications.create(
+        notificationId,
+        {
+          type: 'basic',
+          iconUrl: iconUrl,
+          title: 'Pin MainGallery Extension',
+          message: 'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
+        },
+        function(createdId) {
+          if (chrome.runtime.lastError) {
+            console.error('Notification creation error:', chrome.runtime.lastError.message);
+          } else {
+            console.log('Notification created with ID:', createdId);
+          }
         }
-      });
+      );
     } catch (error) {
-      console.error('Failed to show notification:', error.message);
+      console.error('Failed to show notification:', error);
       // Continue without showing notification
     }
   }
@@ -37,7 +44,7 @@ chrome.runtime.onInstalled.addListener(details => {
 });
 
 // Handle messages from popup and content scripts
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   console.log('Received message:', message.action);
   
   switch (message.action) {
@@ -78,22 +85,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Main functions
-async function handlePlatformConnection(platformId) {
+function handlePlatformConnection(platformId) {
   console.log(`Starting connection process for ${platformId}`);
   
   // Check if user is logged in to Main Gallery
-  const loggedIn = await isLoggedIn();
-  if (!loggedIn) {
-    // Open auth page with redirect back to current page
-    openAuthPage();
-    return;
-  }
-  
-  // Open popup to handle connection
-  chrome.action.openPopup();
+  isLoggedIn().then(function(loggedIn) {
+    if (!loggedIn) {
+      // Open auth page with redirect back to current page
+      openAuthPage();
+      return;
+    }
+    
+    // Open popup to handle connection
+    if (chrome.action && chrome.action.openPopup) {
+      chrome.action.openPopup();
+    }
+  });
 }
 
-async function handlePlatformConnected(platformId) {
+function handlePlatformConnected(platformId) {
   console.log(`Platform ${platformId} connected successfully`);
   
   // Instead of making an API call to a non-existent domain, just log the action
@@ -103,30 +113,37 @@ async function handlePlatformConnected(platformId) {
   try {
     console.log('Creating platform connected notification');
     
+    // Create a unique ID for this notification
+    const notificationId = 'platform-connected-' + Date.now();
+    
     // Get absolute URL for icon
     const iconUrl = chrome.runtime.getURL('icons/icon128.png');
     console.log('Using icon URL for connected notification:', iconUrl);
     
-    // Create notification with proper error handling
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: iconUrl,
-      title: 'Platform Connected',
-      message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
-    }, function(notificationId) {
-      if (chrome.runtime.lastError) {
-        console.error('Notification creation error:', chrome.runtime.lastError.message);
-      } else {
-        console.log('Notification created with ID:', notificationId);
+    // Create notification with proper error handling and notification ID
+    chrome.notifications.create(
+      notificationId,
+      {
+        type: 'basic',
+        iconUrl: iconUrl,
+        title: 'Platform Connected',
+        message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
+      },
+      function(createdId) {
+        if (chrome.runtime.lastError) {
+          console.error('Notification creation error:', chrome.runtime.lastError.message);
+        } else {
+          console.log('Notification created with ID:', createdId);
+        }
       }
-    });
+    );
   } catch (error) {
-    console.error('Failed to show notification:', error.message);
+    console.error('Failed to show notification:', error);
     // Continue without showing notification
   }
 }
 
-async function handlePlatformDisconnected(platformId) {
+function handlePlatformDisconnected(platformId) {
   console.log(`Platform ${platformId} disconnected`);
   
   // Instead of making an API call, just log the action
@@ -136,30 +153,37 @@ async function handlePlatformDisconnected(platformId) {
   try {
     console.log('Creating platform disconnected notification');
     
+    // Create a unique ID for this notification
+    const notificationId = 'platform-disconnected-' + Date.now();
+    
     // Get absolute URL for icon
     const iconUrl = chrome.runtime.getURL('icons/icon128.png');
     console.log('Using icon URL for disconnected notification:', iconUrl);
     
-    // Create notification with proper error handling
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: iconUrl,
-      title: 'Platform Disconnected',
-      message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
-    }, function(notificationId) {
-      if (chrome.runtime.lastError) {
-        console.error('Notification creation error:', chrome.runtime.lastError.message);
-      } else {
-        console.log('Notification created with ID:', notificationId);
+    // Create notification with proper error handling and notification ID
+    chrome.notifications.create(
+      notificationId,
+      {
+        type: 'basic',
+        iconUrl: iconUrl,
+        title: 'Platform Disconnected',
+        message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
+      },
+      function(createdId) {
+        if (chrome.runtime.lastError) {
+          console.error('Notification creation error:', chrome.runtime.lastError.message);
+        } else {
+          console.log('Notification created with ID:', createdId);
+        }
       }
-    });
+    );
   } catch (error) {
-    console.error('Failed to show notification:', error.message);
+    console.error('Failed to show notification:', error);
     // Continue without showing notification
   }
 }
 
-// New function to handle adding gallery data
+// Function to handle adding gallery data
 async function handleAddToGallery(data) {
   console.log('Adding to gallery:', data);
   
@@ -193,25 +217,32 @@ async function handleAddToGallery(data) {
     try {
       console.log('Creating add to gallery notification');
       
+      // Create a unique ID for this notification
+      const notificationId = 'added-to-gallery-' + Date.now();
+      
       // Get absolute URL for icon
       const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       console.log('Using icon URL for gallery notification:', iconUrl);
       
-      // Create notification with proper error handling
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: iconUrl,
-        title: 'Added to Main Gallery',
-        message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
-      }, function(notificationId) {
-        if (chrome.runtime.lastError) {
-          console.error('Notification creation error:', chrome.runtime.lastError.message);
-        } else {
-          console.log('Notification created with ID:', notificationId);
+      // Create notification with proper error handling and notification ID
+      chrome.notifications.create(
+        notificationId,
+        {
+          type: 'basic',
+          iconUrl: iconUrl,
+          title: 'Added to Main Gallery',
+          message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
+        },
+        function(createdId) {
+          if (chrome.runtime.lastError) {
+            console.error('Notification creation error:', chrome.runtime.lastError.message);
+          } else {
+            console.log('Notification created with ID:', createdId);
+          }
         }
-      });
+      );
     } catch (error) {
-      console.error('Failed to show notification:', error.message);
+      console.error('Failed to show notification:', error);
       // Continue without showing notification
     }
     
@@ -223,23 +254,35 @@ async function handleAddToGallery(data) {
 }
 
 // Open gallery in new tab or focus existing gallery tab
-async function openGallery() {
+function openGallery() {
   try {
     const mainGalleryUrl = 'https://main-gallery-hub.lovable.app/gallery';
     
     // Find any existing gallery tabs
-    const existingTabs = await chrome.tabs.query({ url: mainGalleryUrl + '*' });
-    
-    if (existingTabs.length > 0) {
-      // Focus the first existing gallery tab
-      await chrome.tabs.update(existingTabs[0].id, { active: true });
-      
-      // Focus the window that contains the tab
-      await chrome.windows.update(existingTabs[0].windowId, { focused: true });
-    } else {
-      // Open a new gallery tab
-      await chrome.tabs.create({ url: mainGalleryUrl });
-    }
+    chrome.tabs.query({ url: mainGalleryUrl + '*' }, function(existingTabs) {
+      if (existingTabs.length > 0) {
+        // Focus the first existing gallery tab
+        chrome.tabs.update(existingTabs[0].id, { active: true }, function() {
+          if (chrome.runtime.lastError) {
+            console.error('Error updating tab:', chrome.runtime.lastError);
+          }
+          
+          // Focus the window that contains the tab
+          chrome.windows.update(existingTabs[0].windowId, { focused: true }, function() {
+            if (chrome.runtime.lastError) {
+              console.error('Error updating window:', chrome.runtime.lastError);
+            }
+          });
+        });
+      } else {
+        // Open a new gallery tab
+        chrome.tabs.create({ url: mainGalleryUrl }, function() {
+          if (chrome.runtime.lastError) {
+            console.error('Error creating tab:', chrome.runtime.lastError);
+          }
+        });
+      }
+    });
   } catch (error) {
     console.error('Error opening gallery:', error);
   }
@@ -253,7 +296,11 @@ function openAuthPage(redirectUrl) {
     authUrl += `&redirect=${encodeURIComponent(redirectUrl)}`;
   }
   
-  chrome.tabs.create({ url: authUrl });
+  chrome.tabs.create({ url: authUrl }, function() {
+    if (chrome.runtime.lastError) {
+      console.error('Error opening auth page:', chrome.runtime.lastError);
+    }
+  });
 }
 
 // Helper functions
@@ -270,17 +317,17 @@ function getPlatformName(platformId) {
   return platformNames[platformId] || platformId;
 }
 
-async function isLoggedIn() {
-  return new Promise(resolve => {
-    chrome.storage.sync.get(['main_gallery_auth_token'], result => {
+function isLoggedIn() {
+  return new Promise(function(resolve) {
+    chrome.storage.sync.get(['main_gallery_auth_token'], function(result) {
       resolve(!!result.main_gallery_auth_token);
     });
   });
 }
 
-async function getAuthToken() {
-  return new Promise(resolve => {
-    chrome.storage.sync.get(['main_gallery_auth_token'], result => {
+function getAuthToken() {
+  return new Promise(function(resolve) {
+    chrome.storage.sync.get(['main_gallery_auth_token'], function(result) {
       resolve(result.main_gallery_auth_token || null);
     });
   });
@@ -288,7 +335,7 @@ async function getAuthToken() {
 
 // Check for non-existent webNavigation API before using it
 if (chrome.webNavigation) {
-  chrome.webNavigation.onCompleted.addListener(details => {
+  chrome.webNavigation.onCompleted.addListener(function(details) {
     if (details.url.startsWith('https://maingallery.app/auth/callback')) {
       // Extract token from URL
       const url = new URL(details.url);
@@ -296,7 +343,7 @@ if (chrome.webNavigation) {
       
       if (token) {
         // Store the token
-        chrome.storage.sync.set({ main_gallery_auth_token: token }, () => {
+        chrome.storage.sync.set({ main_gallery_auth_token: token }, function() {
           console.log('Authentication token saved');
           
           // Notify any open popup to update UI
@@ -305,7 +352,11 @@ if (chrome.webNavigation) {
           });
           
           // Close the auth tab
-          chrome.tabs.remove(details.tabId);
+          chrome.tabs.remove(details.tabId, function() {
+            if (chrome.runtime.lastError) {
+              console.error('Error closing tab:', chrome.runtime.lastError);
+            }
+          });
         });
       }
     }

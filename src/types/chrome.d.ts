@@ -21,6 +21,7 @@ interface Chrome {
   };
   notifications?: {
     create: (
+      notificationId: string | undefined,
       options: {
         type: string;
         iconUrl: string;
@@ -29,6 +30,8 @@ interface Chrome {
       },
       callback?: (notificationId: string) => void
     ) => void;
+    clear: (notificationId: string, callback?: (wasCleared: boolean) => void) => void;
+    getAll: (callback: (notifications: { [key: string]: any }) => void) => void;
   };
   tabs?: {
     query: (queryInfo: any, callback: (result: any[]) => void) => void;
