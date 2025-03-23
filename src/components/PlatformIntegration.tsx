@@ -9,8 +9,12 @@ import {
   Laptop
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import { useNavigate } from 'react-router-dom';
+import { brandConfig } from '@/config/brandConfig';
 
 const PlatformIntegration = () => {
+  const navigate = useNavigate();
+  
   const supportedPlatforms = [
     {
       name: 'Midjourney',
@@ -78,6 +82,10 @@ const PlatformIntegration = () => {
     }
   ];
 
+  const handleGetStarted = () => {
+    navigate(brandConfig.routes.auth);
+  };
+
   return (
     <section id="platforms" className="py-20">
       <div className="container mx-auto px-4">
@@ -113,8 +121,12 @@ const PlatformIntegration = () => {
         
         {/* CTA button */}
         <div className="text-center mb-20">
-          <Button size="lg" className="rounded-full px-8 shadow-md hover:shadow-xl transition-all">
-            Install Chrome Extension
+          <Button 
+            size="lg" 
+            className="rounded-full px-8 shadow-md hover:shadow-xl transition-all"
+            onClick={handleGetStarted}
+          >
+            Get Started
           </Button>
           <p className="text-sm text-foreground/60 mt-4">Free, lightweight, and secure</p>
         </div>
@@ -149,12 +161,14 @@ const PlatformIntegration = () => {
                 </div>
               </div>
               <p className="text-foreground/70 text-sm mb-4">{platform.description}</p>
-              <a 
-                href="#" 
-                className="text-primary text-sm font-medium flex items-center hover:underline"
+              <Button 
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={handleGetStarted}
               >
-                Learn more <ExternalLink className="h-3 w-3 ml-1" />
-              </a>
+                Connect
+              </Button>
             </div>
           ))}
         </div>

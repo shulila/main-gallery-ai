@@ -21,7 +21,15 @@ const AuthPage = () => {
     if (user && !isLoading) {
       // If there's a redirect parameter, go there
       if (redirectParam) {
-        window.location.href = redirectParam;
+        // Check if it's an external URL (like a chrome-extension:// URL)
+        if (redirectParam.startsWith('chrome-extension://') || 
+            redirectParam.startsWith('http://') || 
+            redirectParam.startsWith('https://')) {
+          window.location.href = redirectParam;
+        } else {
+          // For internal routes
+          navigate(redirectParam);
+        }
       } else {
         navigate('/gallery');
       }

@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Menu, X, User, Image as ImageIcon, Home, LogOut } from "lucide-react";
+import { Menu, X, User, Image as ImageIcon, LogOut } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
 import { brandConfig } from '@/config/brandConfig';
 import {
@@ -99,20 +99,23 @@ const Navbar = () => {
           
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <Link 
-              to={brandConfig.routes.home} 
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                isActive(brandConfig.routes.home) ? 'text-primary' : 'text-foreground/80'
-              }`}
-              onClick={handleHomeClick}
-            >
-              Home
-            </Link>
+            {/* Only show Home for non-logged in users */}
+            {!user && (
+              <Link 
+                to={brandConfig.routes.home} 
+                className={`text-sm font-medium transition-colors hover:text-primary ${
+                  isActive(brandConfig.routes.home) ? 'text-primary' : 'text-foreground/80'
+                }`}
+                onClick={handleHomeClick}
+              >
+                Home
+              </Link>
+            )}
             {user && (
               <Link to={brandConfig.routes.gallery} className={`text-sm font-medium transition-colors hover:text-primary ${
                 isActive(brandConfig.routes.gallery) ? 'text-primary' : 'text-foreground/80'
               }`}>
-                Gallery
+                My Gallery
               </Link>
             )}
             <Link 
@@ -198,17 +201,20 @@ const Navbar = () => {
         <div className="md:hidden bg-background border-t border-border/50 py-4 animate-fade-in">
           <div className="container mx-auto px-4">
             <nav className="flex flex-col space-y-4">
-              <Link 
-                to={brandConfig.routes.home}
-                className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                onClick={(e) => {
-                  setIsMobileMenuOpen(false);
-                  handleHomeClick(e);
-                }}
-              >
-                <Home size={18} />
-                <span>Home</span>
-              </Link>
+              {/* Only show Home for non-logged in users in mobile menu too */}
+              {!user && (
+                <Link 
+                  to={brandConfig.routes.home}
+                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
+                  onClick={(e) => {
+                    setIsMobileMenuOpen(false);
+                    handleHomeClick(e);
+                  }}
+                >
+                  <ImageIcon size={18} />
+                  <span>Home</span>
+                </Link>
+              )}
               {user && (
                 <Link 
                   to={brandConfig.routes.gallery}
@@ -216,7 +222,7 @@ const Navbar = () => {
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   <ImageIcon size={18} />
-                  <span>Gallery</span>
+                  <span>My Gallery</span>
                 </Link>
               )}
               <Link 
@@ -240,7 +246,7 @@ const Navbar = () => {
                     handleHowItWorksClick(e);
                   }}
                 >
-                  <Home size={18} />
+                  <ImageIcon size={18} />
                   <span>How It Works</span>
                 </a>
               )}
