@@ -1,4 +1,3 @@
-
 // This script runs in the context of the AI platform websites
 
 // Platform-specific selectors and logic
@@ -55,11 +54,76 @@ function injectGalleryButton() {
   
   console.log(`MainGallery: Detected ${platform} gallery`);
   
-  // Check if button already exists
-  if (document.querySelector('.main-gallery-connect-btn')) {
+  // Check if button or status indicator already exists
+  if (document.querySelector('.main-gallery-connect-btn') || 
+      document.querySelector('.main-gallery-status-indicator')) {
     return;
   }
+
+  // Check if platform is already connected
+  checkPlatformConnection(platform).then(isConnected => {
+    if (isConnected) {
+      // If already connected, show status indicator instead of button
+      injectStatusIndicator(platform);
+    } else {
+      // If not connected, inject the button
+      injectConnectButton(platform);
+    }
+  });
+}
+
+// Inject status indicator when platform is already connected
+function injectStatusIndicator(platform) {
+  const indicator = document.createElement('div');
+  indicator.className = 'main-gallery-status-indicator';
+  indicator.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Connected to Main Gallery</span>
+  `;
   
+  // Style the indicator
+  const style = document.createElement('style');
+  style.textContent = `
+    .main-gallery-status-indicator {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background-color: #10b981;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      opacity: 0.9;
+    }
+    .main-gallery-status-indicator svg {
+      width: 16px;
+      height: 16px;
+    }
+  `;
+  
+  document.head.appendChild(style);
+  document.body.appendChild(indicator);
+  
+  // Auto-hide after 10 seconds
+  setTimeout(() => {
+    indicator.style.opacity = '0';
+    indicator.style.transition = 'opacity 0.5s ease';
+    setTimeout(() => indicator.remove(), 500);
+  }, 10000);
+}
+
+// Inject the connect button
+function injectConnectButton(platform) {
   // Create floating action button
   const button = document.createElement('button');
   button.className = 'main-gallery-connect-btn';
@@ -135,12 +199,18 @@ function injectGalleryButton() {
   button.addEventListener('click', async () => {
     console.log("Clicked Add to Main Gallery");
     
-    // Check authentication (simulated for now)
+    // Check authentication
     const isAuthenticated = await checkUserAuthentication();
     
     if (!isAuthenticated) {
       showToast("Please log in to add to Main Gallery");
       button.classList.add('error');
+      
+      // Open authentication page after a brief delay
+      setTimeout(() => {
+        openAuthPage();
+      }, 1000);
+      
       setTimeout(() => {
         button.classList.remove('error');
       }, 3000);
@@ -191,6 +261,24 @@ function injectGalleryButton() {
   });
 }
 
+// Open authentication page with redirect to current page
+function openAuthPage() {
+  const currentUrl = encodeURIComponent(window.location.href);
+  chrome.runtime.sendMessage({
+    action: 'openAuthPage',
+    redirectUrl: currentUrl
+  });
+}
+
+// Check if platform is already connected
+async function checkPlatformConnection(platformId) {
+  return new Promise(resolve => {
+    chrome.storage.sync.get([PLATFORMS[platformId]?.tokenStorageKey], result => {
+      resolve(!!result[PLATFORMS[platformId]?.tokenStorageKey]);
+    });
+  });
+}
+
 // Show toast notification
 function showToast(message) {
   // Remove any existing toasts
@@ -219,7 +307,7 @@ function showToast(message) {
   }, 3000);
 }
 
-// Simulate authentication check
+// Check user authentication status
 async function checkUserAuthentication() {
   return new Promise(resolve => {
     chrome.storage.sync.get(['main_gallery_auth_token'], result => {
@@ -295,9 +383,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     
     // Implement gallery scanning logic here
-    // This would extract images, prompts, and metadata
-    
     sendResponse({ success: true, platform });
+  } else if (message.action === 'platformConnected' || message.action === 'platformDisconnected') {
+    // Refresh the UI when platform connection status changes
+    const platform = detectPlatform();
+    if (platform) {
+      setTimeout(() => {
+        // Remove existing button or indicator
+        const existingButton = document.querySelector('.main-gallery-connect-btn');
+        const existingIndicator = document.querySelector('.main-gallery-status-indicator');
+        
+        if (existingButton) existingButton.remove();
+        if (existingIndicator) existingIndicator.remove();
+        
+        // Re-inject based on current state
+        injectGalleryButton();
+      }, 500);
+    }
   }
   
   return true; // Indicate async response

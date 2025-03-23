@@ -1,3 +1,4 @@
+
 // Platform detection patterns
 const PLATFORMS = {
   midjourney: {
@@ -35,6 +36,7 @@ const PLATFORMS = {
 // DOM elements
 const states = {
   notLoggedIn: document.getElementById('not-logged-in'),
+  loggedInMessage: document.getElementById('logged-in-message'),
   notPlatformPage: document.getElementById('not-platform-page'),
   readyToConnect: document.getElementById('ready-to-connect'),
   alreadyConnected: document.getElementById('already-connected'),
@@ -148,7 +150,7 @@ function disconnectPlatform(platform) {
 
 async function openGallery() {
   try {
-    const tabs = await chrome.tabs.query({ url: GALLERY_URL });
+    const tabs = await chrome.tabs.query({ url: GALLERY_URL + '*' });
     
     if (tabs.length > 0) {
       chrome.tabs.update(tabs[0].id, { active: true });
@@ -195,27 +197,35 @@ async function updateUI() {
   const url = tab.url;
   
   const loggedIn = await isLoggedIn();
+  
   if (!loggedIn) {
     showState(states.notLoggedIn);
     return;
-  }
-  
-  const platform = detectPlatform(url);
-  if (!platform) {
-    showState(states.notPlatformPage);
-    return;
-  }
-  
-  const connected = await isConnected(platform.id);
-  
-  if (connected) {
-    connectedPlatformNameElem.textContent = platform.name;
-    connectedPlatformIconElem.src = platform.icon;
-    showState(states.alreadyConnected);
   } else {
-    platformNameElem.textContent = platform.name;
-    platformIconElem.src = platform.icon;
-    showState(states.readyToConnect);
+    // If user is logged in, show appropriate state based on the current page
+    const platform = detectPlatform(url);
+    
+    if (!platform) {
+      // Show logged in message and then not platform page
+      states.loggedInMessage.classList.remove('hidden');
+      
+      setTimeout(() => {
+        showState(states.notPlatformPage);
+      }, 1000);
+      return;
+    }
+    
+    const connected = await isConnected(platform.id);
+    
+    if (connected) {
+      connectedPlatformNameElem.textContent = platform.name;
+      connectedPlatformIconElem.src = platform.icon;
+      showState(states.alreadyConnected);
+    } else {
+      platformNameElem.textContent = platform.name;
+      platformIconElem.src = platform.icon;
+      showState(states.readyToConnect);
+    }
   }
   
   checkFirstTimeUser();

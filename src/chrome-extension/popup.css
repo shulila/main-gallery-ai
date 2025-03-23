@@ -183,3 +183,11 @@ button {
 #connecting {
   text-align: center;
 }
+
+.success-message {
+  display: flex;
+  align-items: center;
+  color: var(--success-color);
+  font-weight: 500;
+  padding: 8px 0;
+}
