@@ -1,3 +1,4 @@
+
 :root {
   --primary-color: #7c3aed;
   --background-color: #ffffff;
@@ -5,6 +6,7 @@
   --border-color: #e5e7eb;
   --success-color: #10b981;
   --error-color: #ef4444;
+  --button-blue: #0077ED;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -136,12 +138,12 @@ button {
 }
 
 .primary-btn {
-  background-color: var(--primary-color);
+  background-color: var(--button-blue);
   color: white;
 }
 
 .primary-btn:hover {
-  background-color: #6d28d9;
+  background-color: #0062c4;
 }
 
 .secondary-btn {
@@ -157,7 +159,7 @@ button {
   width: 24px;
   height: 24px;
   border: 3px solid rgba(0, 0, 0, 0.1);
-  border-top: 3px solid var(--primary-color);
+  border-top: 3px solid var(--button-blue);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 12px auto;

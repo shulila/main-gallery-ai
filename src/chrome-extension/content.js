@@ -1,3 +1,4 @@
+
 // This script runs in the context of the AI platform websites
 
 // Platform-specific selectors and logic
@@ -146,7 +147,7 @@ function injectConnectButton(platform) {
       display: flex;
       align-items: center;
       gap: 8px;
-      background-color: #7c3aed;
+      background-color: #0077ED;
       color: white;
       border: none;
       border-radius: 20px;
@@ -158,7 +159,7 @@ function injectConnectButton(platform) {
       transition: all 0.2s;
     }
     .main-gallery-connect-btn:hover {
-      background-color: #6d28d9;
+      background-color: #0062c4;
       transform: translateY(-2px);
     }
     .main-gallery-connect-btn svg {
@@ -273,8 +274,8 @@ function openAuthPage() {
 // Check if platform is already connected
 async function checkPlatformConnection(platformId) {
   return new Promise(resolve => {
-    chrome.storage.sync.get([PLATFORMS[platformId]?.tokenStorageKey], result => {
-      resolve(!!result[PLATFORMS[platformId]?.tokenStorageKey]);
+    chrome.storage.sync.get([`${platformId}_token`], result => {
+      resolve(!!result[`${platformId}_token`]);
     });
   });
 }

@@ -97,7 +97,7 @@ function isLoggedIn() {
   });
 }
 
-function connectPlatform(platform) {
+async function connectPlatform(platform) {
   showState(states.connecting);
   connectingPlatformNameElem.textContent = platform.name;
   
@@ -128,7 +128,7 @@ function connectPlatform(platform) {
   }
 }
 
-function disconnectPlatform(platform) {
+async function disconnectPlatform(platform) {
   try {
     await new Promise(resolve => {
       const data = {};
