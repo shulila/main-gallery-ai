@@ -1,3 +1,4 @@
+
 // This script runs in the context of the AI platform websites
 
 // Platform-specific selectors and logic
@@ -100,19 +101,157 @@ function injectGalleryButton() {
       width: 20px;
       height: 20px;
     }
+    .main-gallery-connect-btn.success {
+      background-color: #10b981;
+    }
+    .main-gallery-connect-btn.error {
+      background-color: #ef4444;
+    }
+    .main-gallery-toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: #1f2937;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      z-index: 10001;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transform: translateY(-10px);
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+    .main-gallery-toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
   `;
   
   document.head.appendChild(style);
   document.body.appendChild(button);
   
   // Add click event
-  button.addEventListener('click', () => {
+  button.addEventListener('click', async () => {
     console.log("Clicked Add to Main Gallery");
-    chrome.runtime.sendMessage({ 
-      action: 'initiatePlatformConnection',
-      platform: platform
+    
+    // Check authentication (simulated for now)
+    const isAuthenticated = await checkUserAuthentication();
+    
+    if (!isAuthenticated) {
+      showToast("Please log in to add to Main Gallery");
+      button.classList.add('error');
+      setTimeout(() => {
+        button.classList.remove('error');
+      }, 3000);
+      return;
+    }
+    
+    // Get current page data
+    const pageData = collectPageData(platform);
+    
+    // Send data to background script to make API call
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'addToGallery',
+        data: pageData
+      });
+      
+      if (response && response.success) {
+        // Update UI to show success
+        const originalText = button.innerHTML;
+        button.classList.add('success');
+        button.innerHTML = `
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Added to Gallery
+        `;
+        
+        // Show toast notification
+        showToast("Successfully added to Main Gallery");
+        
+        // Revert button after 3 seconds
+        setTimeout(() => {
+          button.innerHTML = originalText;
+          button.classList.remove('success');
+        }, 3000);
+      } else {
+        throw new Error(response.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('Error adding to gallery:', error);
+      button.classList.add('error');
+      showToast("Failed to add to Main Gallery");
+      
+      setTimeout(() => {
+        button.classList.remove('error');
+      }, 3000);
+    }
+  });
+}
+
+// Show toast notification
+function showToast(message) {
+  // Remove any existing toasts
+  const existingToast = document.querySelector('.main-gallery-toast');
+  if (existingToast) {
+    existingToast.remove();
+  }
+  
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.className = 'main-gallery-toast';
+  toast.textContent = message;
+  
+  // Add to document
+  document.body.appendChild(toast);
+  
+  // Trigger animation
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+  
+  // Auto hide after 3 seconds
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// Simulate authentication check
+async function checkUserAuthentication() {
+  return new Promise(resolve => {
+    chrome.storage.sync.get(['main_gallery_auth_token'], result => {
+      resolve(!!result.main_gallery_auth_token);
     });
   });
+}
+
+// Collect data from the current page
+function collectPageData(platformId) {
+  const url = window.location.href;
+  const title = document.title;
+  const platformConfig = PLATFORM_CONFIGS[platformId];
+  const data = {
+    url,
+    title,
+    platformId,
+    timestamp: new Date().toISOString(),
+    metadata: {}
+  };
+  
+  // Try to extract platform-specific metadata if available
+  if (platformConfig && platformConfig.metadataSelectors) {
+    for (const [key, selector] of Object.entries(platformConfig.metadataSelectors)) {
+      const element = document.querySelector(selector);
+      if (element) {
+        data.metadata[key] = element.textContent.trim();
+      }
+    }
+  }
+  
+  return data;
 }
 
 function detectPlatform() {
@@ -160,4 +299,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     sendResponse({ success: true, platform });
   }
+  
+  return true; // Indicate async response
 });

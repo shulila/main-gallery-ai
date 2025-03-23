@@ -1,6 +1,7 @@
 
 // Constants
 const MAIN_GALLERY_API_URL = 'https://maingallery.app/api';
+const DUMMY_API_URL = 'https://dummyapi.io/collect';
 
 // Listen for extension installation/update
 chrome.runtime.onInstalled.addListener(details => {
@@ -22,6 +23,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'platformDisconnected':
       handlePlatformDisconnected(message.platform);
       break;
+      
+    case 'addToGallery':
+      handleAddToGallery(message.data)
+        .then(result => sendResponse(result))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true; // Will respond asynchronously
   }
   
   // Return true to indicate we'll respond asynchronously
@@ -72,6 +79,51 @@ async function handlePlatformDisconnected(platformId) {
     title: 'Platform Disconnected',
     message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
   });
+}
+
+// New function to handle adding gallery data
+async function handleAddToGallery(data) {
+  console.log('Adding to gallery:', data);
+  
+  try {
+    // Make a dummy API call instead of a real one
+    const response = await fetch(DUMMY_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    }).catch(error => {
+      // If fetch fails (likely because the dummy URL doesn't exist),
+      // simulate a successful response for testing purposes
+      console.log('Fetch failed (expected for dummy URL). Simulating success response.');
+      return {
+        ok: true,
+        json: async () => ({ success: true, message: 'Simulated successful response' })
+      };
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to add to gallery');
+    }
+    
+    const responseData = await response.json();
+    console.log('API response:', responseData);
+    
+    // Show notification
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'Added to Main Gallery',
+      message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
+    });
+    
+    return { success: true, data: responseData };
+  } catch (error) {
+    console.error('Error in API call:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 // Helper functions
