@@ -34,16 +34,18 @@ const Start = () => {
                 setActiveStep(user ? 3 : 2);
                 
                 // Check if pin prompt has been shown before
-                chrome.storage.local.get(['pin_prompt_shown'], (result) => {
-                  if (!result.pin_prompt_shown && !hasShownPinPrompt) {
-                    toast({
-                      title: "Pin the extension",
-                      description: "Click the puzzle icon 🧩 and pin MainGallery to your toolbar for easy access",
-                    });
-                    setHasShownPinPrompt(true);
-                    chrome.storage.local.set({ pin_prompt_shown: true });
-                  }
-                });
+                if (window.chrome && window.chrome.storage) {
+                  window.chrome.storage.local.get(['pin_prompt_shown'], (result) => {
+                    if (!result.pin_prompt_shown && !hasShownPinPrompt) {
+                      toast({
+                        title: "Pin the extension",
+                        description: "Click the puzzle icon 🧩 and pin MainGallery to your toolbar for easy access",
+                      });
+                      setHasShownPinPrompt(true);
+                      window.chrome.storage.local.set({ pin_prompt_shown: true });
+                    }
+                  });
+                }
               }
             }
           );
