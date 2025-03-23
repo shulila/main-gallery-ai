@@ -7,7 +7,8 @@ import {
   Lock,
   Image as ImageIcon,
   Laptop,
-  Info
+  Info,
+  Clock
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
@@ -56,8 +57,8 @@ const PlatformIntegration = () => {
     {
       name: 'Leonardo.ai',
       logo: 'https://camo.githubusercontent.com/75c5c5cc02eb5b8b3569b9155f97d25d3ad5bf4a0c0a058d026ceaa0091be0d4/68747470733a2f2f63646e2e737461727463646e2e636f2f6c6f676f732f6c656f6e6172646f2d61692f6c656f6e6172646f2d61692e737667',
-      status: 'Coming Soon',
-      description: 'Support for Leonardo.ai is coming soon'
+      status: 'Ready',
+      description: 'Integration with Leonardo.ai is now available'
     }
   ];
 
@@ -129,23 +130,45 @@ const PlatformIntegration = () => {
         {/* CTA button */}
         <div className="text-center mb-20">
           <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  size="lg" 
-                  className="rounded-full px-8 shadow-md hover:shadow-xl transition-all"
-                  onClick={handleGetStarted}
-                >
-                  Get Started
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <div className="flex items-center">
-                  <Info className="h-4 w-4 mr-2 text-blue-500" />
-                  <p>Create an account and connect platforms</p>
-                </div>
-              </TooltipContent>
-            </Tooltip>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    size="lg" 
+                    className="rounded-full px-8 shadow-md hover:shadow-xl transition-all"
+                    onClick={handleGetStarted}
+                  >
+                    Get Started
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="flex items-center">
+                    <Info className="h-4 w-4 mr-2 text-blue-500" />
+                    <p>Create an account and connect platforms</p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    size="lg" 
+                    variant="outline"
+                    className="rounded-full px-8 opacity-70 cursor-not-allowed"
+                    disabled
+                  >
+                    <Clock className="mr-2 h-4 w-4" />
+                    Extension Coming Soon
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="flex items-center">
+                    <Clock className="h-4 w-4 mr-2 text-blue-500" />
+                    <p>Chrome Extension will be available soon!</p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </TooltipProvider>
           <p className="text-sm text-foreground/60 mt-4">Free, lightweight, and secure</p>
         </div>

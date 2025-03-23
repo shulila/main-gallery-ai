@@ -3,6 +3,9 @@ interface Chrome {
   runtime: {
     sendMessage: (extensionId: string, message: any, callback?: (response: any) => void) => void;
     getURL: (path: string) => string;
+    lastError?: {
+      message: string;
+    };
   };
   storage?: {
     local: {
@@ -17,12 +20,15 @@ interface Chrome {
     };
   };
   notifications?: {
-    create: (options: {
-      type: string;
-      iconUrl: string;
-      title: string;
-      message: string;
-    }) => void;
+    create: (
+      options: {
+        type: string;
+        iconUrl: string;
+        title: string;
+        message: string;
+      },
+      callback?: (notificationId: string) => void
+    ) => void;
   };
   tabs?: {
     query: (queryInfo: any, callback: (result: any[]) => void) => void;

@@ -55,9 +55,9 @@ const Features = () => {
     navigate(`/features/${featureSlug}`);
   };
 
-  const handleInstallExtension = () => {
-    // Navigate to start page with extension tab query parameter
-    navigate('/start?tab=extension');
+  const handleGetStarted = () => {
+    // Navigate to start page
+    navigate('/start');
   };
 
   return (
@@ -103,17 +103,27 @@ const Features = () => {
               <p className="text-foreground/80">Get started with {brandConfig.name} in just a few clicks.</p>
             </div>
             <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <button 
-                      onClick={handleInstallExtension}
+                      onClick={handleGetStarted}
                       className="inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground px-8 py-3 font-medium hover:bg-primary/90 transition-colors"
                     >
                       Get Started
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </button>
-                    
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="flex items-center">
+                      <Info className="h-4 w-4 mr-2 text-blue-500" />
+                      <p>Create an account and connect platforms</p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+                
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <button 
                       disabled
                       className="inline-flex items-center justify-center rounded-full bg-blue-100 text-blue-500 px-8 py-3 font-medium opacity-70 cursor-not-allowed"
@@ -121,15 +131,15 @@ const Features = () => {
                       <Clock className="mr-2 h-4 w-4" />
                       Extension Coming Soon
                     </button>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="flex items-center">
-                    <Clock className="h-4 w-4 mr-2 text-blue-500" />
-                    <p>Chrome Extension coming soon</p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="flex items-center">
+                      <Clock className="h-4 w-4 mr-2 text-blue-500" />
+                      <p>Our Chrome Extension will be available soon!</p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </TooltipProvider>
           </div>
         </div>
