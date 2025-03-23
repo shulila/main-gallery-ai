@@ -1,8 +1,8 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,12 +27,23 @@ const signupSchema = z.object({
   path: ["confirmPassword"],
 });
 
-const Auth = ({ mode = 'modal', redirectTo = '/gallery' }) => {
+const Auth = ({ 
+  mode = 'modal', 
+  redirectTo = '/gallery', 
+  initialTab = 'login' 
+}) => {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('login');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
   const { signIn, signUp } = useAuth();
+  
+  // Set the active tab based on initialTab prop
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   
   const loginForm = useForm({
     resolver: zodResolver(loginSchema),

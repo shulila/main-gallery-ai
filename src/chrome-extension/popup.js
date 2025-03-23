@@ -61,8 +61,9 @@ const loginBtn = document.getElementById('login-btn');
 const connectBtn = document.getElementById('connect-btn');
 const disconnectBtn = document.getElementById('disconnect-btn');
 const viewGalleryBtn = document.getElementById('view-gallery-btn');
-const viewMyGalleryBtns = document.querySelectorAll('#view-my-gallery-btn');
+const viewMyGalleryBtns = document.querySelectorAll('.view-my-gallery-btn');
 const firstTimeTip = document.getElementById('first-time-tip');
+const pinExtensionTip = document.getElementById('pin-extension-tip');
 
 const platformNameElem = document.getElementById('platform-name');
 const platformIconElem = document.getElementById('platform-icon');
@@ -133,7 +134,7 @@ async function connectPlatform(platform) {
     updateUI();
   } catch (error) {
     console.error('Error connecting platform:', error);
-    alert('Failed to connect. Please try again.');
+    showToast('Failed to connect. Please try again.');
     updateUI();
   }
 }
@@ -154,7 +155,7 @@ async function disconnectPlatform(platform) {
     updateUI();
   } catch (error) {
     console.error('Error disconnecting platform:', error);
-    alert('Failed to disconnect. Please try again.');
+    showToast('Failed to disconnect. Please try again.');
   }
 }
 
@@ -199,9 +200,52 @@ function checkFirstTimeUser() {
         firstTimeTip.classList.remove('hidden');
       }
       
+      // Show the pin extension tip too
+      if (pinExtensionTip) {
+        pinExtensionTip.classList.remove('hidden');
+      }
+      
       chrome.storage.local.set({ popup_opened_before: true });
+      
+      // Prompt to pin the extension
+      promptPinExtension();
     }
   });
+}
+
+// Function to prompt user to pin the extension
+function promptPinExtension() {
+  if (pinExtensionTip) {
+    pinExtensionTip.classList.remove('hidden');
+  }
+}
+
+// Show toast notification
+function showToast(message) {
+  // Remove any existing toasts
+  const existingToast = document.querySelector('.main-gallery-toast');
+  if (existingToast) {
+    existingToast.remove();
+  }
+  
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.className = 'main-gallery-toast';
+  toast.textContent = message;
+  
+  // Add to document
+  document.body.appendChild(toast);
+  
+  // Trigger animation
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+  
+  // Auto hide after 3 seconds
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
 async function updateUI() {

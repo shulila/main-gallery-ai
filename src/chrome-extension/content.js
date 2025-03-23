@@ -7,6 +7,10 @@ const BRAND_BLUE = '#0077ED';
 // Platform-specific selectors and logic
 const PLATFORM_CONFIGS = {
   midjourney: {
+    name: 'Midjourney',
+    icon: 'icons/midjourney.png',
+    urlPatterns: [/midjourney\.com/, /discord\.com\/channels.*midjourney/],
+    tokenStorageKey: 'midjourney_token',
     galleryDetectionSelectors: ['.feed', '.gallery', '.grid'],
     imageSelectors: ['.image-grid', '.image-item', '.artwork'],
     metadataSelectors: {
@@ -16,6 +20,10 @@ const PLATFORM_CONFIGS = {
     }
   },
   dalle: {
+    name: 'DALL·E',
+    icon: 'icons/dalle.png',
+    urlPatterns: [/openai\.com/],
+    tokenStorageKey: 'dalle_token',
     galleryDetectionSelectors: ['.generated-images', '.gallery-view'],
     imageSelectors: ['.image-tile', '.image-card'],
     metadataSelectors: {
@@ -24,6 +32,10 @@ const PLATFORM_CONFIGS = {
     }
   },
   stableDiffusion: {
+    name: 'Stable Diffusion',
+    icon: 'icons/stablediffusion.png',
+    urlPatterns: [/dreamstudio\.ai/, /stability\.ai/],
+    tokenStorageKey: 'sd_token',
     galleryDetectionSelectors: ['.gallery-grid', '.image-gallery'],
     imageSelectors: ['.image-card', '.image-item'],
     metadataSelectors: {
@@ -33,6 +45,10 @@ const PLATFORM_CONFIGS = {
     }
   },
   runway: {
+    name: 'Runway',
+    icon: 'icons/runway.png',
+    urlPatterns: [/runwayml\.com/],
+    tokenStorageKey: 'runway_token',
     galleryDetectionSelectors: ['.gallery', '.creations-list'],
     imageSelectors: ['.creation-card', '.video-card', '.image-card'],
     metadataSelectors: {
@@ -41,6 +57,10 @@ const PLATFORM_CONFIGS = {
     }
   },
   pika: {
+    name: 'Pika',
+    icon: 'icons/pika.png',
+    urlPatterns: [/pika\.art/],
+    tokenStorageKey: 'pika_token',
     galleryDetectionSelectors: ['.creations-grid', '.gallery'],
     imageSelectors: ['.video-card', '.creation-item'],
     metadataSelectors: {
@@ -56,7 +76,7 @@ function injectGalleryButton() {
   const platform = detectPlatform();
   if (!platform) return;
   
-  console.log(`MainGallery: Detected ${platform} gallery`);
+  console.log(`MainGallery: Detected ${platform.name} gallery`);
   
   // Check if button or status indicator already exists
   if (document.querySelector('.main-gallery-connect-btn') || 
@@ -84,7 +104,7 @@ function injectGalleryButton() {
     } 
     // Case 2: Logged in to Main Gallery but not Platform
     else if (isMainGalleryLoggedIn && !isPlatformLoggedIn) {
-      showToast(`Please log in to ${getPlatformName(platform)} first to connect your gallery`);
+      showToast(`Please log in to ${platform.name} first to connect your gallery`);
     }
     // Case 3: Logged in to Platform but not Main Gallery
     else if (!isMainGalleryLoggedIn && isPlatformLoggedIn) {
@@ -97,22 +117,11 @@ function injectGalleryButton() {
   });
 }
 
-// Get platform display name
-function getPlatformName(platformId) {
-  switch(platformId) {
-    case 'midjourney': return 'Midjourney';
-    case 'dalle': return 'DALL·E';
-    case 'stableDiffusion': return 'Stable Diffusion';
-    case 'runway': return 'Runway';
-    case 'pika': return 'Pika';
-    default: return 'the platform';
-  }
-}
-
 // Inject status indicator when platform is already connected
 function injectStatusIndicator(platform) {
   const indicator = document.createElement('div');
   indicator.className = 'main-gallery-status-indicator';
+  indicator.title = `This gallery is already connected to MainGallery`;
   indicator.innerHTML = `
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -141,6 +150,11 @@ function injectStatusIndicator(platform) {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       opacity: 0.9;
+      cursor: pointer;
+      transition: opacity 0.3s ease;
+    }
+    .main-gallery-status-indicator:hover {
+      opacity: 1;
     }
     .main-gallery-status-indicator svg {
       width: 16px;
@@ -151,12 +165,33 @@ function injectStatusIndicator(platform) {
   document.head.appendChild(style);
   document.body.appendChild(indicator);
   
+  // Add hover behavior
+  indicator.addEventListener('mouseenter', () => {
+    indicator.style.opacity = '1';
+  });
+  
+  indicator.addEventListener('mouseleave', () => {
+    indicator.style.opacity = '0.9';
+  });
+  
+  // Add click behavior to go to gallery
+  indicator.addEventListener('click', () => {
+    openGallery();
+  });
+  
   // Auto-hide after 10 seconds
   setTimeout(() => {
     indicator.style.opacity = '0';
     indicator.style.transition = 'opacity 0.5s ease';
     setTimeout(() => indicator.remove(), 500);
   }, 10000);
+}
+
+// Function to open the gallery in a new tab
+function openGallery() {
+  chrome.runtime.sendMessage({
+    action: 'openGallery'
+  });
 }
 
 // Inject the connect button
@@ -305,8 +340,9 @@ function injectConnectButton(platform, isEnabled) {
         
         // Revert button after 3 seconds
         setTimeout(() => {
-          button.innerHTML = originalText;
-          button.classList.remove('success');
+          // Replace button with status indicator
+          button.remove();
+          injectStatusIndicator(platform);
         }, 3000);
       } else {
         throw new Error(response.error || 'Unknown error');
@@ -335,14 +371,14 @@ function openAuthPage() {
 // Check if platform is already connected
 async function checkPlatformConnection(platformId) {
   return new Promise(resolve => {
-    chrome.storage.sync.get([`${platformId}_token`], result => {
-      resolve(!!result[`${platformId}_token`]);
+    chrome.storage.sync.get([PLATFORM_CONFIGS[platformId].tokenStorageKey], result => {
+      resolve(!!result[PLATFORM_CONFIGS[platformId].tokenStorageKey]);
     });
   });
 }
 
 // Check if user is logged into the platform (simplified mock implementation)
-async function checkPlatformLogin(platformId) {
+async function checkPlatformLogin(platform) {
   // This is a simplified implementation that assumes the user is logged in
   // In a real implementation, you would check for platform-specific indicators
   // of a logged-in state (cookies, DOM elements, etc.)
@@ -387,21 +423,20 @@ async function checkUserAuthentication() {
 }
 
 // Collect data from the current page
-function collectPageData(platformId) {
+function collectPageData(platform) {
   const url = window.location.href;
   const title = document.title;
-  const platformConfig = PLATFORM_CONFIGS[platformId];
   const data = {
     url,
     title,
-    platformId,
+    platformId: platform.id,
     timestamp: new Date().toISOString(),
     metadata: {}
   };
   
   // Try to extract platform-specific metadata if available
-  if (platformConfig && platformConfig.metadataSelectors) {
-    for (const [key, selector] of Object.entries(platformConfig.metadataSelectors)) {
+  if (platform.metadataSelectors) {
+    for (const [key, selector] of Object.entries(platform.metadataSelectors)) {
       const element = document.querySelector(selector);
       if (element) {
         data.metadata[key] = element.textContent.trim();
@@ -415,16 +450,12 @@ function collectPageData(platformId) {
 function detectPlatform() {
   const url = window.location.href;
   
-  if (url.includes('midjourney.com') || (url.includes('discord.com') && url.includes('midjourney'))) {
-    return 'midjourney';
-  } else if (url.includes('openai.com')) {
-    return 'dalle';
-  } else if (url.includes('dreamstudio.ai') || url.includes('stability.ai')) {
-    return 'stableDiffusion';
-  } else if (url.includes('runwayml.com')) {
-    return 'runway';
-  } else if (url.includes('pika.art')) {
-    return 'pika';
+  for (const [id, platform] of Object.entries(PLATFORM_CONFIGS)) {
+    for (const pattern of platform.urlPatterns) {
+      if (pattern.test(url)) {
+        return { id, ...platform };
+      }
+    }
   }
   
   return null;
