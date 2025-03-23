@@ -6,7 +6,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { Chrome, CheckCircle, ArrowRight, ExternalLink } from 'lucide-react';
+import { 
+  Chrome, 
+  CheckCircle, 
+  ArrowRight, 
+  ExternalLink, 
+  Download, 
+  Info 
+} from 'lucide-react';
 
 const Start = () => {
   const { user } = useAuth();
@@ -15,6 +22,8 @@ const Start = () => {
   const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [hasShownPinPrompt, setHasShownPinPrompt] = useState(false);
+  const [showDevOptions, setShowDevOptions] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   // Scroll to top on page load
   useEffect(() => {
@@ -46,13 +55,30 @@ const Start = () => {
                     }
                   });
                 }
+              } else {
+                // Show developer options if we're in development mode
+                if (import.meta.env.DEV) {
+                  setShowDevOptions(true);
+                }
               }
             }
           );
         } catch (e) {
           // Extension not installed or cannot communicate
           console.log("Extension not detected:", e);
+          
+          // Show developer options if we're in development mode
+          if (import.meta.env.DEV) {
+            setShowDevOptions(true);
+          }
         }
+      } else {
+        // Chrome API not available, likely not in Chrome browser
+        toast({
+          title: "Browser compatibility",
+          description: "MainGallery works best with Google Chrome. Some features may not be available in your current browser.",
+          variant: "destructive"
+        });
       }
     };
 
@@ -71,12 +97,29 @@ const Start = () => {
   }, [user, activeStep]);
 
   const handleInstallExtension = () => {
-    window.open('https://chrome.google.com/webstore/detail/main-gallery/example', '_blank');
-    
-    toast({
-      title: "Installing extension",
-      description: "After installation, please refresh this page",
-    });
+    if (showDevOptions) {
+      // For development, show toast with dev instructions
+      toast({
+        title: "Developer Mode",
+        description: "Please download the extension ZIP and load it as unpacked extension in Chrome",
+      });
+      
+      // Offer direct download link (this would be to a hosted ZIP file in production)
+      const downloadLink = document.createElement('a');
+      downloadLink.href = '/maingallery-extension.zip'; // This would be a real downloadable ZIP in production
+      downloadLink.download = 'maingallery-extension.zip';
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    } else {
+      // For production, redirect to Chrome Web Store
+      window.open('https://chrome.google.com/webstore/detail/main-gallery/example', '_blank');
+      
+      toast({
+        title: "Installing extension",
+        description: "After installation, please refresh this page",
+      });
+    }
   };
 
   const handleAuthClick = () => {
@@ -89,6 +132,14 @@ const Start = () => {
 
   const handleGoToGallery = () => {
     navigate('/gallery');
+  };
+  
+  const handleConnectionComplete = () => {
+    setShowSuccess(true);
+    
+    setTimeout(() => {
+      navigate('/gallery');
+    }, 2000);
   };
 
   // Renders a step with appropriate styling based on active state
@@ -112,6 +163,18 @@ const Start = () => {
           <p className="text-center text-muted-foreground mb-12">
             Follow these simple steps to connect your AI platforms and build your gallery
           </p>
+          
+          {showSuccess && (
+            <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+              <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-xl flex flex-col items-center animate-in fade-in-90 slide-in-from-bottom-10 duration-300">
+                <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center mb-4">
+                  <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-300" />
+                </div>
+                <h2 className="text-xl font-semibold mb-2">You're all set!</h2>
+                <p className="text-muted-foreground mb-4">Redirecting to your gallery...</p>
+              </div>
+            </div>
+          )}
           
           {/* Steps Progress */}
           <div className="mb-12">
@@ -162,6 +225,27 @@ const Start = () => {
                         <span className="font-medium">Extension installed!</span>
                       </div>
                       <Button onClick={() => setActiveStep(2)}>Continue <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                    </div>
+                  ) : showDevOptions ? (
+                    <div className="flex flex-col items-center gap-4">
+                      <Button onClick={handleInstallExtension} className="px-6">
+                        <Download className="mr-2 h-4 w-4" />
+                        Download Extension ZIP
+                      </Button>
+                      <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg max-w-md">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Info className="h-4 w-4" />
+                          <span className="font-medium">Developer Mode</span>
+                        </div>
+                        <ol className="list-decimal pl-5 space-y-1">
+                          <li>Download the extension ZIP</li>
+                          <li>Unzip the file to a folder</li>
+                          <li>In Chrome, go to chrome://extensions/</li>
+                          <li>Enable "Developer mode" (top-right)</li>
+                          <li>Click "Load unpacked" and select the folder</li>
+                          <li>Refresh this page after installation</li>
+                        </ol>
+                      </div>
                     </div>
                   ) : (
                     <Button onClick={handleInstallExtension} className="px-6">
@@ -236,6 +320,18 @@ const Start = () => {
                     Go to My Gallery
                     <ExternalLink className="ml-2 h-4 w-4" />
                   </Button>
+                  
+                  {/* For demo purposes, added a "simulate connection" button */}
+                  {import.meta.env.DEV && (
+                    <Button 
+                      variant="outline" 
+                      onClick={handleConnectionComplete}
+                      className="mt-4 sm:mt-0 border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+                    >
+                      Simulate Connection Complete
+                      <CheckCircle className="ml-2 h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             )}

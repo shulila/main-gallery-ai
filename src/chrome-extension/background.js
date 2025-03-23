@@ -7,12 +7,17 @@ const DUMMY_API_URL = 'https://dummyapi.io/collect';
 chrome.runtime.onInstalled.addListener(details => {
   // Show a notification to pin the extension on install
   if (details.reason === 'install') {
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'Pin MainGallery Extension',
-      message: 'Click the puzzle piece icon in your toolbar and pin MainGallery for easy access!'
-    });
+    try {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        title: 'Pin MainGallery Extension',
+        message: 'Click the puzzle piece icon in your toolbar and pin MainGallery for easy access!'
+      });
+    } catch (error) {
+      console.error('Failed to show notification:', error);
+      // Continue without showing notification
+    }
   }
   
   console.log('Extension installed:', details.reason);
@@ -80,12 +85,17 @@ async function handlePlatformConnected(platformId) {
   console.log(`Would notify API about connection for platform: ${platformId}`);
   
   // Show success notification
-  chrome.notifications.create({
-    type: 'basic',
-    iconUrl: 'icons/icon128.png',
-    title: 'Platform Connected',
-    message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
-  });
+  try {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      title: 'Platform Connected',
+      message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
+    });
+  } catch (error) {
+    console.error('Failed to show notification:', error);
+    // Continue without showing notification
+  }
 }
 
 async function handlePlatformDisconnected(platformId) {
@@ -95,12 +105,17 @@ async function handlePlatformDisconnected(platformId) {
   console.log(`Would notify API about disconnection for platform: ${platformId}`);
   
   // Show success notification
-  chrome.notifications.create({
-    type: 'basic',
-    iconUrl: 'icons/icon128.png',
-    title: 'Platform Disconnected',
-    message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
-  });
+  try {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      title: 'Platform Disconnected',
+      message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
+    });
+  } catch (error) {
+    console.error('Failed to show notification:', error);
+    // Continue without showing notification
+  }
 }
 
 // New function to handle adding gallery data
@@ -134,12 +149,17 @@ async function handleAddToGallery(data) {
     console.log('API response:', responseData);
     
     // Show notification
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'Added to Main Gallery',
-      message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
-    });
+    try {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        title: 'Added to Main Gallery',
+        message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
+      });
+    } catch (error) {
+      console.error('Failed to show notification:', error);
+      // Continue without showing notification
+    }
     
     return { success: true, data: responseData };
   } catch (error) {

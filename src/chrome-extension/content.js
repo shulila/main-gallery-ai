@@ -1,4 +1,3 @@
-
 // This script runs in the context of the AI platform websites
 
 // Update the button color to match the brand
@@ -425,7 +424,7 @@ async function checkUserAuthentication() {
 // Collect data from the current page
 function collectPageData(platform) {
   const url = window.location.href;
-  const title = document.title;
+  const title = document.title || 'AI Creation';
   const data = {
     url,
     title,
@@ -437,9 +436,14 @@ function collectPageData(platform) {
   // Try to extract platform-specific metadata if available
   if (platform.metadataSelectors) {
     for (const [key, selector] of Object.entries(platform.metadataSelectors)) {
-      const element = document.querySelector(selector);
-      if (element) {
-        data.metadata[key] = element.textContent.trim();
+      try {
+        const element = document.querySelector(selector);
+        if (element) {
+          data.metadata[key] = element.textContent.trim();
+        }
+      } catch (error) {
+        console.error(`Error extracting ${key} metadata:`, error);
+        // Continue with other metadata
       }
     }
   }
