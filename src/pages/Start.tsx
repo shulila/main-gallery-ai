@@ -22,7 +22,7 @@ const Start = () => {
   const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [hasShownPinPrompt, setHasShownPinPrompt] = useState(false);
-  const [showDevOptions, setShowDevOptions] = useState(false);
+  const [showManualInstall, setShowManualInstall] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   // Scroll to top on page load
@@ -51,26 +51,22 @@ const Start = () => {
                         description: "Click the puzzle icon 🧩 and pin MainGallery to your toolbar for easy access",
                       });
                       setHasShownPinPrompt(true);
-                      window.chrome.storage.local.set({ pin_prompt_shown: true });
+                      if (window.chrome.storage && window.chrome.storage.local) {
+                        window.chrome.storage.local.set({ pin_prompt_shown: true });
+                      }
                     }
                   });
                 }
               } else {
-                // Show developer options if we're in development mode
-                if (import.meta.env.DEV) {
-                  setShowDevOptions(true);
-                }
+                // Show manual install option since the extension is not yet in the store
+                setShowManualInstall(true);
               }
             }
           );
         } catch (e) {
           // Extension not installed or cannot communicate
           console.log("Extension not detected:", e);
-          
-          // Show developer options if we're in development mode
-          if (import.meta.env.DEV) {
-            setShowDevOptions(true);
-          }
+          setShowManualInstall(true);
         }
       } else {
         // Chrome API not available, likely not in Chrome browser
@@ -79,6 +75,7 @@ const Start = () => {
           description: "MainGallery works best with Google Chrome. Some features may not be available in your current browser.",
           variant: "destructive"
         });
+        setShowManualInstall(true);
       }
     };
 
@@ -97,20 +94,12 @@ const Start = () => {
   }, [user, activeStep]);
 
   const handleInstallExtension = () => {
-    if (showDevOptions) {
-      // For development, show toast with dev instructions
+    if (showManualInstall) {
+      // Show toast with manual install instructions
       toast({
-        title: "Developer Mode",
-        description: "Please download the extension ZIP and load it as unpacked extension in Chrome",
+        title: "Extension Installation",
+        description: "Our Chrome extension will be available in the Chrome Web Store soon. Until then, follow the manual installation instructions.",
       });
-      
-      // Offer direct download link (this would be to a hosted ZIP file in production)
-      const downloadLink = document.createElement('a');
-      downloadLink.href = '/maingallery-extension.zip'; // This would be a real downloadable ZIP in production
-      downloadLink.download = 'maingallery-extension.zip';
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
     } else {
       // For production, redirect to Chrome Web Store
       window.open('https://chrome.google.com/webstore/detail/main-gallery/example', '_blank');
@@ -226,29 +215,26 @@ const Start = () => {
                       </div>
                       <Button onClick={() => setActiveStep(2)}>Continue <ArrowRight className="ml-2 h-4 w-4" /></Button>
                     </div>
-                  ) : showDevOptions ? (
+                  ) : showManualInstall ? (
                     <div className="flex flex-col items-center gap-4">
-                      <Button onClick={handleInstallExtension} className="px-6">
-                        <Download className="mr-2 h-4 w-4" />
-                        Download Extension ZIP
-                      </Button>
                       <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg max-w-md">
                         <div className="flex items-center gap-2 mb-2">
                           <Info className="h-4 w-4" />
-                          <span className="font-medium">Developer Mode</span>
+                          <span className="font-medium">Manual Installation</span>
                         </div>
+                        <p className="mb-2">Our extension will be available in the Chrome Web Store soon. Until then, you can install it manually:</p>
                         <ol className="list-decimal pl-5 space-y-1">
-                          <li>Download the extension ZIP</li>
-                          <li>Unzip the file to a folder</li>
+                          <li>Download the extension from our website</li>
                           <li>In Chrome, go to chrome://extensions/</li>
                           <li>Enable "Developer mode" (top-right)</li>
-                          <li>Click "Load unpacked" and select the folder</li>
+                          <li>Click "Load unpacked" and select the extension folder</li>
                           <li>Refresh this page after installation</li>
                         </ol>
                       </div>
+                      <Button onClick={() => setActiveStep(2)} variant="outline">Continue without extension <ArrowRight className="ml-2 h-4 w-4" /></Button>
                     </div>
                   ) : (
-                    <Button onClick={handleInstallExtension} className="px-6">
+                    <Button onClick={handleInstallExtension} className="px-6 bg-blue-500 hover:bg-blue-600">
                       <Chrome className="mr-2 h-4 w-4" />
                       Install Chrome Extension
                     </Button>
@@ -276,7 +262,7 @@ const Start = () => {
                       <span className="font-medium">Already logged in as {user.email}</span>
                     </div>
                   ) : (
-                    <Button onClick={handleAuthClick} className="px-6">
+                    <Button onClick={handleAuthClick} className="px-6 bg-blue-500 hover:bg-blue-600">
                       Log In or Sign Up
                     </Button>
                   )}
@@ -284,7 +270,9 @@ const Start = () => {
                 
                 <div className="flex justify-center pt-4">
                   {user && (
-                    <Button onClick={() => setActiveStep(3)}>Continue <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                    <Button onClick={() => setActiveStep(3)} className="bg-blue-500 hover:bg-blue-600">
+                      Continue <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
                   )}
                 </div>
               </div>
@@ -311,7 +299,7 @@ const Start = () => {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
-                  <Button onClick={handleGoPlatforms}>
+                  <Button onClick={handleGoPlatforms} className="bg-blue-500 hover:bg-blue-600">
                     Manage Platforms
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
@@ -321,17 +309,14 @@ const Start = () => {
                     <ExternalLink className="ml-2 h-4 w-4" />
                   </Button>
                   
-                  {/* For demo purposes, added a "simulate connection" button */}
-                  {import.meta.env.DEV && (
-                    <Button 
-                      variant="outline" 
-                      onClick={handleConnectionComplete}
-                      className="mt-4 sm:mt-0 border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
-                    >
-                      Simulate Connection Complete
-                      <CheckCircle className="ml-2 h-4 w-4" />
-                    </Button>
-                  )}
+                  <Button 
+                    variant="outline" 
+                    onClick={handleConnectionComplete}
+                    className="mt-4 sm:mt-0 border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+                  >
+                    Simulate Connection Complete
+                    <CheckCircle className="ml-2 h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             )}

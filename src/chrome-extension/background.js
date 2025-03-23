@@ -88,7 +88,7 @@ async function handlePlatformConnected(platformId) {
   try {
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Using chrome.runtime.getURL to ensure proper path resolution
       title: 'Platform Connected',
       message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
     });
@@ -108,7 +108,7 @@ async function handlePlatformDisconnected(platformId) {
   try {
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Using chrome.runtime.getURL to ensure proper path resolution
       title: 'Platform Disconnected',
       message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
     });
@@ -152,7 +152,7 @@ async function handleAddToGallery(data) {
     try {
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Using chrome.runtime.getURL to ensure proper path resolution
         title: 'Added to Main Gallery',
         message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
       });

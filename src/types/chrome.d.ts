@@ -2,7 +2,7 @@
 interface Chrome {
   runtime: {
     sendMessage: (extensionId: string, message: any, callback?: (response: any) => void) => void;
-    getURL?: (path: string) => string;
+    getURL: (path: string) => string;
   };
   storage?: {
     local: {

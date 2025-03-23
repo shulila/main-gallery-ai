@@ -73,11 +73,8 @@ const Navbar = () => {
     scrollToSection('how-it-works');
   };
 
-  const handlePlatformsClick = (e: React.MouseEvent) => {
-    if (!user && location.pathname === brandConfig.routes.home) {
-      e.preventDefault();
-      scrollToSection('platforms');
-    }
+  const handleAuth = (tab: string) => {
+    navigate(`${brandConfig.routes.auth}?tab=${tab}`);
   };
 
   return (
@@ -127,15 +124,29 @@ const Navbar = () => {
                 My Gallery
               </Link>
             )}
-            <Link 
-              to={user ? brandConfig.routes.platforms : brandConfig.routes.home} 
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                isActive(brandConfig.routes.platforms) ? 'text-primary' : 'text-foreground/80'
-              }`}
-              onClick={handlePlatformsClick}
-            >
-              Platforms
-            </Link>
+            {user ? (
+              <Link 
+                to={brandConfig.routes.platforms} 
+                className={`text-sm font-medium transition-colors hover:text-primary ${
+                  isActive(brandConfig.routes.platforms) ? 'text-primary' : 'text-foreground/80'
+                }`}
+              >
+                Connected Platforms
+              </Link>
+            ) : (
+              <Link 
+                to={brandConfig.routes.home} 
+                className={`text-sm font-medium transition-colors hover:text-primary ${
+                  isActive(brandConfig.routes.platforms) ? 'text-primary' : 'text-foreground/80'
+                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection('platforms');
+                }}
+              >
+                Platforms
+              </Link>
+            )}
           </nav>
           
           {/* Authentication Buttons */}
@@ -170,14 +181,14 @@ const Navbar = () => {
                   variant="outline" 
                   size="sm" 
                   className="rounded-full" 
-                  onClick={() => navigate(`${brandConfig.routes.auth}?tab=login`)}
+                  onClick={() => handleAuth('login')}
                 >
                   Log in
                 </Button>
                 <Button 
                   size="sm" 
                   className="rounded-full" 
-                  onClick={() => navigate(`${brandConfig.routes.auth}?tab=signup`)}
+                  onClick={() => handleAuth('signup')}
                 >
                   Sign up
                 </Button>
@@ -237,17 +248,29 @@ const Navbar = () => {
                   <span>My Gallery</span>
                 </Link>
               )}
-              <Link 
-                to={user ? brandConfig.routes.platforms : brandConfig.routes.home}
-                className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                onClick={(e) => {
-                  setIsMobileMenuOpen(false);
-                  handlePlatformsClick(e);
-                }}
-              >
-                <User size={18} />
-                <span>Platforms</span>
-              </Link>
+              {user ? (
+                <Link 
+                  to={brandConfig.routes.platforms}
+                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <User size={18} />
+                  <span>Connected Platforms</span>
+                </Link>
+              ) : (
+                <a
+                  href="#platforms"
+                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
+                  onClick={(e) => {
+                    setIsMobileMenuOpen(false);
+                    e.preventDefault();
+                    scrollToSection('platforms');
+                  }}
+                >
+                  <User size={18} />
+                  <span>Platforms</span>
+                </a>
+              )}
               <div className="pt-4 mt-4 border-t border-border/50 flex flex-col space-y-2">
                 {user ? (
                   <Button 
@@ -269,7 +292,7 @@ const Navbar = () => {
                       className="w-full justify-start" 
                       size="sm"
                       onClick={() => {
-                        navigate(`${brandConfig.routes.auth}?tab=login`);
+                        handleAuth('login');
                         setIsMobileMenuOpen(false);
                       }}
                     >
@@ -279,7 +302,7 @@ const Navbar = () => {
                       className="w-full justify-start" 
                       size="sm"
                       onClick={() => {
-                        navigate(`${brandConfig.routes.auth}?tab=signup`);
+                        handleAuth('signup');
                         setIsMobileMenuOpen(false);
                       }}
                     >
