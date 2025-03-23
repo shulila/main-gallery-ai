@@ -1,3 +1,4 @@
+
 // This script runs in the context of the AI platform websites
 
 // Update the button color to match the brand

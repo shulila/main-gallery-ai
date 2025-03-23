@@ -12,7 +12,9 @@ import {
   ArrowRight, 
   ExternalLink, 
   Download, 
-  Info 
+  Info,
+  Youtube,
+  FileDown
 } from 'lucide-react';
 
 const Start = () => {
@@ -79,7 +81,7 @@ const Start = () => {
       }
     };
 
-    // Simulate extension detection for demo
+    // Check for extension
     setTimeout(() => {
       checkExtension();
     }, 500);
@@ -94,25 +96,16 @@ const Start = () => {
   }, [user, activeStep]);
 
   const handleInstallExtension = () => {
-    if (showManualInstall) {
-      // Show toast with manual install instructions
-      toast({
-        title: "Extension Installation",
-        description: "Our Chrome extension will be available in the Chrome Web Store soon. Until then, follow the manual installation instructions.",
-      });
-    } else {
-      // For production, redirect to Chrome Web Store
-      window.open('https://chrome.google.com/webstore/detail/main-gallery/example', '_blank');
-      
-      toast({
-        title: "Installing extension",
-        description: "After installation, please refresh this page",
-      });
-    }
+    // For production, this would redirect to Chrome Web Store
+    // Since it's not available yet, we show the manual installation instructions
+    toast({
+      title: "Extension Installation",
+      description: "Please follow the manual installation instructions to install the extension.",
+    });
   };
 
   const handleAuthClick = () => {
-    navigate('/auth');
+    navigate('/auth?tab=login');
   };
 
   const handleGoPlatforms = () => {
@@ -220,24 +213,43 @@ const Start = () => {
                       <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg max-w-md">
                         <div className="flex items-center gap-2 mb-2">
                           <Info className="h-4 w-4" />
-                          <span className="font-medium">Manual Installation</span>
+                          <span className="font-medium">Manual Installation Instructions</span>
                         </div>
-                        <p className="mb-2">Our extension will be available in the Chrome Web Store soon. Until then, you can install it manually:</p>
                         <ol className="list-decimal pl-5 space-y-1">
-                          <li>Download the extension from our website</li>
-                          <li>In Chrome, go to chrome://extensions/</li>
-                          <li>Enable "Developer mode" (top-right)</li>
-                          <li>Click "Load unpacked" and select the extension folder</li>
+                          <li>Download the extension file below</li>
+                          <li>In Chrome, go to <code>chrome://extensions/</code></li>
+                          <li>Enable "Developer mode" (toggle in top-right)</li>
+                          <li>Click "Load unpacked" and select the extracted folder</li>
                           <li>Refresh this page after installation</li>
                         </ol>
                       </div>
-                      <Button onClick={() => setActiveStep(2)} variant="outline">Continue without extension <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                      
+                      <div className="flex flex-col sm:flex-row gap-3 mt-2">
+                        <Button className="bg-blue-500 hover:bg-blue-600">
+                          <FileDown className="mr-2 h-4 w-4" />
+                          Download Extension
+                        </Button>
+                        
+                        <Button variant="outline">
+                          <Youtube className="mr-2 h-4 w-4" />
+                          Watch Installation Guide
+                        </Button>
+                      </div>
+                      
+                      <Button onClick={() => setActiveStep(2)} variant="outline" className="mt-2">
+                        Continue without extension <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
                     </div>
                   ) : (
-                    <Button onClick={handleInstallExtension} className="px-6 bg-blue-500 hover:bg-blue-600">
-                      <Chrome className="mr-2 h-4 w-4" />
-                      Install Chrome Extension
-                    </Button>
+                    <div className="flex flex-col items-center gap-3">
+                      <Button onClick={handleInstallExtension} className="px-6 bg-blue-500 hover:bg-blue-600">
+                        <Chrome className="mr-2 h-4 w-4" />
+                        Install Chrome Extension
+                      </Button>
+                      <Button onClick={() => setActiveStep(2)} variant="outline">
+                        Continue without extension <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
                   )}
                 </div>
                 
@@ -307,15 +319,6 @@ const Start = () => {
                   <Button variant="outline" onClick={handleGoToGallery}>
                     Go to My Gallery
                     <ExternalLink className="ml-2 h-4 w-4" />
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    onClick={handleConnectionComplete}
-                    className="mt-4 sm:mt-0 border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
-                  >
-                    Simulate Connection Complete
-                    <CheckCircle className="ml-2 h-4 w-4" />
                   </Button>
                 </div>
               </div>
