@@ -37,13 +37,58 @@ const Navbar = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const scrollToSection = (sectionId: string) => {
+    const section = document.getElementById(sectionId);
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleLogoClick = (e: React.MouseEvent) => {
+    if (location.pathname === brandConfig.routes.home) {
+      e.preventDefault();
+      scrollToTop();
+    }
+  };
+
+  const handleHomeClick = (e: React.MouseEvent) => {
+    if (location.pathname === brandConfig.routes.home) {
+      e.preventDefault();
+      scrollToTop();
+    }
+  };
+
+  const handleHowItWorksClick = (e: React.MouseEvent) => {
+    if (location.pathname === brandConfig.routes.home) {
+      e.preventDefault();
+      scrollToSection('how-it-works');
+    } else {
+      navigate(brandConfig.routes.howItWorks);
+    }
+  };
+
+  const handlePlatformsClick = (e: React.MouseEvent) => {
+    if (!user && location.pathname === brandConfig.routes.home) {
+      e.preventDefault();
+      scrollToSection('platforms');
+    }
+  };
+
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
       isScrolled ? 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-md shadow-subtle' : 'bg-transparent'
     }`}>
       <div className="container mx-auto px-4 md:px-6 py-4">
         <div className="flex items-center justify-between">
-          <Link to={brandConfig.routes.home} className="flex items-center space-x-2">
+          <Link 
+            to={brandConfig.routes.home} 
+            className="flex items-center space-x-2"
+            onClick={handleLogoClick}
+          >
             <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
               <ImageIcon className="h-5 w-5 text-white" />
             </div>
@@ -52,9 +97,13 @@ const Navbar = () => {
           
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <Link to={brandConfig.routes.home} className={`text-sm font-medium transition-colors hover:text-primary ${
-              isActive(brandConfig.routes.home) ? 'text-primary' : 'text-foreground/80'
-            }`}>
+            <Link 
+              to={brandConfig.routes.home} 
+              className={`text-sm font-medium transition-colors hover:text-primary ${
+                isActive(brandConfig.routes.home) ? 'text-primary' : 'text-foreground/80'
+              }`}
+              onClick={handleHomeClick}
+            >
               Home
             </Link>
             {user && (
@@ -64,14 +113,24 @@ const Navbar = () => {
                 Gallery
               </Link>
             )}
-            <Link to={brandConfig.routes.platforms} className={`text-sm font-medium transition-colors hover:text-primary ${
-              isActive(brandConfig.routes.platforms) ? 'text-primary' : 'text-foreground/80'
-            }`}>
+            <Link 
+              to={user ? brandConfig.routes.platforms : brandConfig.routes.home} 
+              className={`text-sm font-medium transition-colors hover:text-primary ${
+                isActive(brandConfig.routes.platforms) ? 'text-primary' : 'text-foreground/80'
+              }`}
+              onClick={handlePlatformsClick}
+            >
               Platforms
             </Link>
-            <a href={brandConfig.routes.howItWorks} className="text-sm font-medium transition-colors hover:text-primary text-foreground/80">
-              How It Works
-            </a>
+            {!user && (
+              <a 
+                href={brandConfig.routes.howItWorks} 
+                className="text-sm font-medium transition-colors hover:text-primary text-foreground/80"
+                onClick={handleHowItWorksClick}
+              >
+                How It Works
+              </a>
+            )}
           </nav>
           
           {/* Authentication Buttons */}
@@ -130,7 +189,10 @@ const Navbar = () => {
               <Link 
                 to={brandConfig.routes.home}
                 className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                onClick={() => setIsMobileMenuOpen(false)}
+                onClick={(e) => {
+                  setIsMobileMenuOpen(false);
+                  handleHomeClick(e);
+                }}
               >
                 <Home size={18} />
                 <span>Home</span>
@@ -146,21 +208,29 @@ const Navbar = () => {
                 </Link>
               )}
               <Link 
-                to={brandConfig.routes.platforms}
+                to={user ? brandConfig.routes.platforms : brandConfig.routes.home}
                 className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                onClick={() => setIsMobileMenuOpen(false)}
+                onClick={(e) => {
+                  setIsMobileMenuOpen(false);
+                  handlePlatformsClick(e);
+                }}
               >
                 <User size={18} />
                 <span>Platforms</span>
               </Link>
-              <a 
-                href={brandConfig.routes.howItWorks}
-                className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <Home size={18} />
-                <span>How It Works</span>
-              </a>
+              {!user && (
+                <a 
+                  href={brandConfig.routes.howItWorks}
+                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
+                  onClick={(e) => {
+                    setIsMobileMenuOpen(false);
+                    handleHowItWorksClick(e);
+                  }}
+                >
+                  <Home size={18} />
+                  <span>How It Works</span>
+                </a>
+              )}
               <div className="pt-4 mt-4 border-t border-border/50 flex flex-col space-y-2">
                 {user ? (
                   <Button 

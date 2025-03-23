@@ -10,34 +10,44 @@ const Features = () => {
     {
       icon: <Globe className="h-6 w-6 text-primary" />,
       title: "One-Click Connection",
-      description: "Seamlessly connect to Midjourney, DALL·E, Runway, Pika, and others with our Chrome extension."
+      description: "Seamlessly connect to Midjourney, DALL·E, Runway, Pika, and others with our Chrome extension.",
+      slug: "one-click-connection"
     },
     {
       icon: <Lock className="h-6 w-6 text-primary" />,
       title: "Secure Access",
-      description: "Your API tokens and OAuth credentials are securely stored with industry-standard encryption."
+      description: "Your API tokens and OAuth credentials are securely stored with industry-standard encryption.",
+      slug: "secure-access"
     },
     {
       icon: <Zap className="h-6 w-6 text-primary" />,
       title: "Real-Time Sync",
-      description: "See your latest creations instantly without transferring or uploading any files."
+      description: "See your latest creations instantly without transferring or uploading any files.",
+      slug: "real-time-sync"
     },
     {
       icon: <Image className="h-6 w-6 text-primary" />,
       title: "Complete Metadata",
-      description: "View all image details including prompts, models, creation dates, and technical parameters."
+      description: "View all image details including prompts, models, creation dates, and technical parameters.",
+      slug: "complete-metadata"
     },
     {
       icon: <Copy className="h-6 w-6 text-primary" />,
       title: "Copy Prompts",
-      description: "Easily reuse successful prompts across different AI image generation platforms."
+      description: "Easily reuse successful prompts across different AI image generation platforms.",
+      slug: "copy-prompts"
     },
     {
       icon: <Download className="h-6 w-6 text-primary" />,
       title: "Quick Downloads",
-      description: "Download any of your creations directly from the unified gallery with a single click."
+      description: "Download any of your creations directly from the unified gallery with a single click.",
+      slug: "quick-downloads"
     }
   ];
+
+  const handleLearnMore = (featureSlug: string) => {
+    navigate(`/features/${featureSlug}`);
+  };
 
   const handleInstallExtension = () => {
     // This would normally lead to the Chrome Web Store
@@ -71,9 +81,12 @@ const Features = () => {
               </div>
               <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
               <p className="text-foreground/80 mb-4">{feature.description}</p>
-              <a href="#" className="inline-flex items-center text-primary font-medium hover:underline">
+              <button 
+                onClick={() => handleLearnMore(feature.slug)} 
+                className="inline-flex items-center text-primary font-medium hover:underline"
+              >
                 Learn more <ArrowRight className="ml-1 h-4 w-4" />
-              </a>
+              </button>
             </div>
           ))}
         </div>

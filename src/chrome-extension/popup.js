@@ -1,3 +1,4 @@
+
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery",
@@ -68,10 +69,6 @@ const platformIconElem = document.getElementById('platform-icon');
 const connectedPlatformNameElem = document.getElementById('connected-platform-name');
 const connectedPlatformIconElem = document.getElementById('connected-platform-icon');
 const connectingPlatformNameElem = document.getElementById('connecting-platform-name');
-
-// Constants
-const GALLERY_URL = 'https://main-gallery-hub.lovable.app/gallery';
-const AUTH_URL = 'https://main-gallery-hub.lovable.app/auth';
 
 // Helper functions
 function hideAllStates() {

@@ -1,6 +1,9 @@
 
 // This script runs in the context of the AI platform websites
 
+// Update the button color to match the brand
+const BRAND_BLUE = '#0077ED';
+
 // Platform-specific selectors and logic
 const PLATFORM_CONFIGS = {
   midjourney: {
@@ -195,7 +198,7 @@ function injectConnectButton(platform, isEnabled) {
       display: flex;
       align-items: center;
       gap: 8px;
-      background-color: #0077ED;
+      background-color: ${BRAND_BLUE};
       color: white;
       border: none;
       border-radius: 20px;
