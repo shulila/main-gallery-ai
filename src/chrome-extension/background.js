@@ -9,9 +9,11 @@ chrome.runtime.onInstalled.addListener(details => {
   if (details.reason === 'install') {
     try {
       console.warn('Creating installation notification');
+      // Ensure we're using the correct icon path
+      const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+        iconUrl: iconUrl,
         title: 'Pin MainGallery Extension',
         message: 'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
       });
@@ -91,6 +93,7 @@ async function handlePlatformConnected(platformId) {
   // Show success notification with proper icon path
   try {
     console.warn('Creating notification for platform connected');
+    // Ensure we're using the correct icon path with chrome.runtime.getURL
     const iconUrl = chrome.runtime.getURL('icons/icon128.png');
     console.warn('Using icon path:', iconUrl);
     
@@ -116,6 +119,7 @@ async function handlePlatformDisconnected(platformId) {
   // Show success notification with proper icon path
   try {
     console.warn('Creating notification for platform disconnected');
+    // Ensure we're using the correct icon path with chrome.runtime.getURL
     const iconUrl = chrome.runtime.getURL('icons/icon128.png');
     console.warn('Using icon path:', iconUrl);
     
@@ -165,6 +169,7 @@ async function handleAddToGallery(data) {
     // Show notification with proper icon path
     try {
       console.warn('Creating notification for add to gallery');
+      // Ensure we're using the correct icon path with chrome.runtime.getURL
       const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       console.warn('Using icon path:', iconUrl);
       

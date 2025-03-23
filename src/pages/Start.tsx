@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -11,7 +12,8 @@ import {
   ArrowRight, 
   ExternalLink,
   Info,
-  Download
+  Download,
+  Clock
 } from 'lucide-react';
 
 const Start = () => {
@@ -204,7 +206,7 @@ const Start = () => {
                     <div className="text-center max-w-md">
                       <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800 mb-4">
                         <div className="flex items-center gap-2 mb-2">
-                          <Info className="h-4 w-4 text-blue-500" />
+                          <Clock className="h-4 w-4 text-blue-500" />
                           <span className="font-medium">Coming Soon</span>
                         </div>
                         <p className="text-sm text-muted-foreground">
@@ -214,9 +216,16 @@ const Start = () => {
                         </p>
                       </div>
                       
-                      <Button onClick={() => setActiveStep(3)} className="bg-blue-500 hover:bg-blue-600">
-                        Continue Without Extension <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
+                      <div className="flex flex-col gap-4 items-center justify-center">
+                        <Button variant="outline" disabled className="bg-blue-50 border-blue-200 text-blue-500 opacity-70 cursor-not-allowed">
+                          <Clock className="mr-2 h-4 w-4" />
+                          Extension Coming Soon
+                        </Button>
+                        
+                        <Button onClick={() => setActiveStep(3)} className="bg-blue-500 hover:bg-blue-600">
+                          Continue Without Extension <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -227,8 +236,7 @@ const Start = () => {
               <div className="space-y-6">
                 <h2 className="text-2xl font-semibold">3. Connect Your Platforms</h2>
                 <p className="text-muted-foreground">
-                  You're ready to start collecting! Visit any supported AI platform, and use the MainGallery 
-                  extension to add your creations to your gallery with a single click.
+                  You're ready to start collecting! When our extension is available, you'll be able to visit any supported AI platform and add your creations to your gallery with a single click.
                 </p>
                 
                 <div className="bg-muted/50 p-4 rounded-lg border">
