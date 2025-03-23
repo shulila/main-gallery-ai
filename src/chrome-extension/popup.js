@@ -186,8 +186,8 @@ async function updateUI() {
 document.addEventListener('DOMContentLoaded', updateUI);
 
 loginBtn.addEventListener('click', () => {
-  // Open Main Gallery login page
-  chrome.tabs.create({ url: 'https://maingallery.app/auth' });
+  // Instead of opening a tab, just log the action
+  console.log('Login button clicked');
 });
 
 connectBtn.addEventListener('click', async () => {
@@ -207,7 +207,8 @@ disconnectBtn.addEventListener('click', async () => {
 });
 
 viewGalleryBtn.addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://maingallery.app/gallery' });
+  // Instead of opening a tab, just log the action
+  console.log('View gallery button clicked');
 });
 
 // Listen for messages from background script

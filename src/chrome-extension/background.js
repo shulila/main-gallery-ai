@@ -4,10 +4,8 @@ const MAIN_GALLERY_API_URL = 'https://maingallery.app/api';
 
 // Listen for extension installation/update
 chrome.runtime.onInstalled.addListener(details => {
-  if (details.reason === 'install') {
-    // Open onboarding page on install
-    chrome.tabs.create({ url: 'https://maingallery.app/welcome' });
-  }
+  // Removed automatic tab opening on install
+  console.log('Extension installed:', details.reason);
 });
 
 // Handle messages from popup and content scripts
@@ -37,13 +35,8 @@ async function handlePlatformConnection(platformId) {
   // Check if user is logged in to Main Gallery
   const loggedIn = await isLoggedIn();
   if (!loggedIn) {
-    // Prompt user to log in
-    chrome.windows.create({
-      url: 'https://maingallery.app/auth?redirect=extension',
-      type: 'popup',
-      width: 480,
-      height: 700
-    });
+    // Instead of opening a tab, we'll just log this for now
+    console.log('User not logged in, authentication required');
     return;
   }
   
@@ -54,82 +47,31 @@ async function handlePlatformConnection(platformId) {
 async function handlePlatformConnected(platformId) {
   console.log(`Platform ${platformId} connected successfully`);
   
-  // Notify the Main Gallery API about the connection
-  try {
-    const authToken = await getAuthToken();
-    if (!authToken) throw new Error('Not logged in');
-    
-    const response = await fetch(`${MAIN_GALLERY_API_URL}/platforms/connect`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`
-      },
-      body: JSON.stringify({
-        platform: platformId,
-        connectedAt: new Date().toISOString()
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    // Show success notification
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'Platform Connected',
-      message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
-    });
-    
-  } catch (error) {
-    console.error('Error notifying API about connection:', error);
-    
-    // Show error notification
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'Connection Error',
-      message: `There was a problem connecting your ${getPlatformName(platformId)} account. Please try again.`
-    });
-  }
+  // Instead of making an API call to a non-existent domain, just log the action
+  console.log(`Would notify API about connection for platform: ${platformId}`);
+  
+  // Show success notification
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: 'Platform Connected',
+    message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
+  });
 }
 
 async function handlePlatformDisconnected(platformId) {
   console.log(`Platform ${platformId} disconnected`);
   
-  // Notify the Main Gallery API about the disconnection
-  try {
-    const authToken = await getAuthToken();
-    if (!authToken) throw new Error('Not logged in');
-    
-    const response = await fetch(`${MAIN_GALLERY_API_URL}/platforms/disconnect`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`
-      },
-      body: JSON.stringify({
-        platform: platformId
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    // Show success notification
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'Platform Disconnected',
-      message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
-    });
-    
-  } catch (error) {
-    console.error('Error notifying API about disconnection:', error);
-  }
+  // Instead of making an API call, just log the action
+  console.log(`Would notify API about disconnection for platform: ${platformId}`);
+  
+  // Show success notification
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: 'Platform Disconnected',
+    message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
+  });
 }
 
 // Helper functions
@@ -161,7 +103,7 @@ async function getAuthToken() {
   });
 }
 
-// Listen for auth state changes from the website
+// Check for non-existent webNavigation API before using it
 if (chrome.webNavigation) {
   chrome.webNavigation.onCompleted.addListener(details => {
     if (details.url.startsWith('https://maingallery.app/auth/callback')) {

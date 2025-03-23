@@ -1,4 +1,3 @@
-
 // This script runs in the context of the AI platform websites
 
 // Platform-specific selectors and logic
@@ -108,6 +107,7 @@ function injectGalleryButton() {
   
   // Add click event
   button.addEventListener('click', () => {
+    console.log("Clicked Add to Main Gallery");
     chrome.runtime.sendMessage({ 
       action: 'initiatePlatformConnection',
       platform: platform
