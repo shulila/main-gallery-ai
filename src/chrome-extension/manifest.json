@@ -51,7 +51,9 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*"],
+      "resources": [
+        "icons/*"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

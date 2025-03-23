@@ -74,12 +74,26 @@ const Auth = ({
     
     try {
       await signIn(values.email, values.password);
-      // Get redirect URL from query parameters if it exists
+      
+      // Get parameters from query string
       const searchParams = new URLSearchParams(location.search);
       const redirectParam = searchParams.get('redirect');
+      const fromExtension = searchParams.get('from') === 'extension';
       
-      // Navigate to the appropriate page
-      if (redirectParam) {
+      // Handle different navigation flows based on entry point
+      if (fromExtension) {
+        // If login came from extension, just close the tab or show success message
+        toast({
+          title: "Login successful",
+          description: "You can now close this tab and return to the extension",
+        });
+        
+        // Optional: show a message that they can close this tab
+        // For now, we'll redirect them to the gallery after a brief delay
+        setTimeout(() => {
+          navigate('/gallery');
+        }, 3000);
+      } else if (redirectParam) {
         // Check if it's an external URL (like a chrome-extension:// URL)
         if (redirectParam.startsWith('chrome-extension://') || 
             redirectParam.startsWith('http://') || 
@@ -90,6 +104,7 @@ const Auth = ({
           navigate(redirectParam);
         }
       } else {
+        // Default redirect to gallery
         navigate(redirectTo);
       }
     } catch (error) {
@@ -105,12 +120,26 @@ const Auth = ({
     
     try {
       await signUp(values.email, values.password);
-      // Optional: switch to login tab after signup
+      
+      // Check if the signup was initiated from the extension
+      const searchParams = new URLSearchParams(location.search);
+      const fromExtension = searchParams.get('from') === 'extension';
+      
+      if (fromExtension) {
+        // Show special message for extension users
+        toast({
+          title: "Account created",
+          description: "Please log in to continue using the extension",
+        });
+      } else {
+        toast({
+          title: "Account created",
+          description: "Please log in to continue",
+        });
+      }
+      
+      // Switch to login tab after signup
       setActiveTab('login');
-      toast({
-        title: "Account created",
-        description: "Please log in to continue",
-      });
     } catch (error) {
       console.error('Signup handler error:', error);
       // Error is already handled by the signUp function
@@ -165,7 +194,7 @@ const Auth = ({
                   )}
                 />
                 
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full bg-blue-500 hover:bg-blue-600" disabled={loading}>
                   {loading ? "Logging in..." : "Log in"}
                 </Button>
               </form>
@@ -217,7 +246,7 @@ const Auth = ({
                   )}
                 />
                 
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full bg-blue-500 hover:bg-blue-600" disabled={loading}>
                   {loading ? "Creating account..." : "Sign up"}
                 </Button>
               </form>

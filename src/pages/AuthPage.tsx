@@ -15,6 +15,7 @@ const AuthPage = () => {
   const queryParams = new URLSearchParams(location.search);
   const tabParam = queryParams.get('tab');
   const redirectParam = queryParams.get('redirect');
+  const fromExtension = queryParams.get('from') === 'extension';
   
   // Redirect to gallery if already logged in
   useEffect(() => {
@@ -30,12 +31,16 @@ const AuthPage = () => {
           // For internal routes
           navigate(redirectParam);
         }
+      } else if (fromExtension) {
+        // If login came from extension, show a message that they can close this tab
+        // For this demo, we'll just navigate to gallery with a special parameter
+        navigate('/gallery?from=extension');
       } else {
         // Default redirect to gallery
         navigate('/gallery');
       }
     }
-  }, [user, isLoading, navigate, redirectParam]);
+  }, [user, isLoading, navigate, redirectParam, fromExtension]);
 
   // Scroll to top on page load
   useEffect(() => {
@@ -47,9 +52,18 @@ const AuthPage = () => {
       <Navbar />
       <main className="pt-24 py-16">
         <div className="container mx-auto px-4">
+          {fromExtension && (
+            <div className="max-w-md mx-auto mb-8 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+              <h2 className="text-lg font-medium mb-2">Connecting from Extension</h2>
+              <p className="text-sm text-muted-foreground">
+                After logging in, you can close this tab and return to using the extension.
+              </p>
+            </div>
+          )}
+          
           <Auth 
             mode="page" 
-            redirectTo={redirectParam || "/gallery"} 
+            redirectTo={fromExtension ? '/gallery?from=extension' : '/gallery'} 
             initialTab={tabParam === 'signup' ? 'signup' : 'login'} 
           />
         </div>

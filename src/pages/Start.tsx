@@ -10,11 +10,8 @@ import {
   Chrome, 
   CheckCircle, 
   ArrowRight, 
-  ExternalLink, 
-  Download, 
-  Info,
-  Youtube,
-  FileDown
+  ExternalLink,
+  Info
 } from 'lucide-react';
 
 const Start = () => {
@@ -24,7 +21,6 @@ const Start = () => {
   const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [hasShownPinPrompt, setHasShownPinPrompt] = useState(false);
-  const [showManualInstall, setShowManualInstall] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   // Scroll to top on page load
@@ -37,7 +33,7 @@ const Start = () => {
       if (window.chrome && 'runtime' in window.chrome) {
         try {
           window.chrome.runtime.sendMessage(
-            "chrome-extension-id", // Replace with your actual extension ID
+            "chrome-extension-id", // Replace with your actual extension ID when published
             { action: "isInstalled" },
             (response) => {
               if (response && response.installed) {
@@ -59,25 +55,13 @@ const Start = () => {
                     }
                   });
                 }
-              } else {
-                // Show manual install option since the extension is not yet in the store
-                setShowManualInstall(true);
-              }
+              } 
             }
           );
         } catch (e) {
-          // Extension not installed or cannot communicate
+          // Extension not installed or cannot communicate - this is normal for most users
           console.log("Extension not detected:", e);
-          setShowManualInstall(true);
         }
-      } else {
-        // Chrome API not available, likely not in Chrome browser
-        toast({
-          title: "Browser compatibility",
-          description: "MainGallery works best with Google Chrome. Some features may not be available in your current browser.",
-          variant: "destructive"
-        });
-        setShowManualInstall(true);
       }
     };
 
@@ -94,15 +78,6 @@ const Start = () => {
       setActiveStep(3);
     }
   }, [user, activeStep]);
-
-  const handleInstallExtension = () => {
-    // For production, this would redirect to Chrome Web Store
-    // Since it's not available yet, we show the manual installation instructions
-    toast({
-      title: "Extension Installation",
-      description: "Please follow the manual installation instructions to install the extension.",
-    });
-  };
 
   const handleAuthClick = () => {
     navigate('/auth?tab=login');
@@ -189,89 +164,29 @@ const Start = () => {
           <div className="bg-card border rounded-xl p-8 shadow-sm">
             {activeStep === 1 && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-semibold">1. Install the Chrome Extension</h2>
+                <h2 className="text-2xl font-semibold">1. Create Your Account</h2>
                 <p className="text-muted-foreground">
-                  Our Chrome extension makes it easy to connect your AI platforms to Main Gallery.
-                  It helps you save your creations with a single click.
+                  Main Gallery helps you collect and organize all your AI-generated art in one place. 
+                  Start by creating an account to access your personalized gallery.
                 </p>
                 
-                <div className="flex items-center justify-center py-6">
-                  <Chrome className="w-20 h-20 text-primary" />
+                <div className="bg-muted/50 p-4 rounded-lg border mt-4">
+                  <h3 className="font-medium mb-2">What you'll be able to do:</h3>
+                  <ul className="space-y-2">
+                    <li className="flex items-center"><CheckCircle className="h-3 w-3 text-green-500 mr-2" /> Save AI art from multiple platforms</li>
+                    <li className="flex items-center"><CheckCircle className="h-3 w-3 text-green-500 mr-2" /> Organize your creations in one gallery</li>
+                    <li className="flex items-center"><CheckCircle className="h-3 w-3 text-green-500 mr-2" /> Access your collection from any device</li>
+                  </ul>
                 </div>
                 
-                <div className="flex justify-center">
-                  {isExtensionInstalled ? (
+                <div className="flex justify-center py-4">
+                  {user ? (
                     <div className="flex flex-col items-center gap-2">
                       <div className="flex items-center text-green-500">
                         <CheckCircle className="h-5 w-5 mr-2" />
-                        <span className="font-medium">Extension installed!</span>
+                        <span className="font-medium">Already logged in as {user.email}</span>
                       </div>
-                      <Button onClick={() => setActiveStep(2)}>Continue <ArrowRight className="ml-2 h-4 w-4" /></Button>
-                    </div>
-                  ) : showManualInstall ? (
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg max-w-md">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Info className="h-4 w-4" />
-                          <span className="font-medium">Manual Installation Instructions</span>
-                        </div>
-                        <ol className="list-decimal pl-5 space-y-1">
-                          <li>Download the extension file below</li>
-                          <li>In Chrome, go to <code>chrome://extensions/</code></li>
-                          <li>Enable "Developer mode" (toggle in top-right)</li>
-                          <li>Click "Load unpacked" and select the extracted folder</li>
-                          <li>Refresh this page after installation</li>
-                        </ol>
-                      </div>
-                      
-                      <div className="flex flex-col sm:flex-row gap-3 mt-2">
-                        <Button className="bg-blue-500 hover:bg-blue-600">
-                          <FileDown className="mr-2 h-4 w-4" />
-                          Download Extension
-                        </Button>
-                        
-                        <Button variant="outline">
-                          <Youtube className="mr-2 h-4 w-4" />
-                          Watch Installation Guide
-                        </Button>
-                      </div>
-                      
-                      <Button onClick={() => setActiveStep(2)} variant="outline" className="mt-2">
-                        Continue without extension <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3">
-                      <Button onClick={handleInstallExtension} className="px-6 bg-blue-500 hover:bg-blue-600">
-                        <Chrome className="mr-2 h-4 w-4" />
-                        Install Chrome Extension
-                      </Button>
-                      <Button onClick={() => setActiveStep(2)} variant="outline">
-                        Continue without extension <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="pt-4 text-sm text-center text-muted-foreground">
-                  <p>After installation, remember to pin the extension for easy access.</p>
-                </div>
-              </div>
-            )}
-            
-            {activeStep === 2 && (
-              <div className="space-y-6">
-                <h2 className="text-2xl font-semibold">2. Create Your Account</h2>
-                <p className="text-muted-foreground">
-                  Sign up or log in to start building your AI art and video gallery.
-                  Your account lets you access your collection from any device.
-                </p>
-                
-                <div className="flex justify-center py-6">
-                  {user ? (
-                    <div className="flex items-center text-green-500">
-                      <CheckCircle className="h-5 w-5 mr-2" />
-                      <span className="font-medium">Already logged in as {user.email}</span>
+                      <Button onClick={() => setActiveStep(2)} className="bg-blue-500 hover:bg-blue-600">Continue <ArrowRight className="ml-2 h-4 w-4" /></Button>
                     </div>
                   ) : (
                     <Button onClick={handleAuthClick} className="px-6 bg-blue-500 hover:bg-blue-600">
@@ -279,12 +194,50 @@ const Start = () => {
                     </Button>
                   )}
                 </div>
+              </div>
+            )}
+            
+            {activeStep === 2 && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-semibold">2. Install the Chrome Extension</h2>
+                <p className="text-muted-foreground">
+                  Our Chrome extension makes it easy to save your AI creations with a single click 
+                  directly from platforms like Midjourney, DALL·E, and others.
+                </p>
                 
-                <div className="flex justify-center pt-4">
-                  {user && (
-                    <Button onClick={() => setActiveStep(3)} className="bg-blue-500 hover:bg-blue-600">
-                      Continue <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
+                <div className="flex items-center justify-center py-6">
+                  <Chrome className="w-20 h-20 text-primary" />
+                </div>
+                
+                <div className="flex flex-col items-center justify-center gap-4">
+                  {isExtensionInstalled ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="flex items-center text-green-500">
+                        <CheckCircle className="h-5 w-5 mr-2" />
+                        <span className="font-medium">Extension installed!</span>
+                      </div>
+                      <Button onClick={() => setActiveStep(3)} className="bg-blue-500 hover:bg-blue-600">
+                        Continue <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="text-center max-w-md">
+                      <div className="bg-muted/50 p-4 rounded-lg border mb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Info className="h-4 w-4 text-blue-500" />
+                          <span className="font-medium">Coming Soon</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Our Chrome extension will be available in the Chrome Web Store soon.
+                          You can continue using Main Gallery without it for now, and we'll
+                          notify you when it's ready.
+                        </p>
+                      </div>
+                      
+                      <Button onClick={() => setActiveStep(3)} className="bg-blue-500 hover:bg-blue-600">
+                        Continue <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -294,8 +247,8 @@ const Start = () => {
               <div className="space-y-6">
                 <h2 className="text-2xl font-semibold">3. Connect Your Platforms</h2>
                 <p className="text-muted-foreground">
-                  Visit any supported AI platform like Midjourney, DALL·E, or Pika. The Main Gallery 
-                  button will appear automatically. Click it to add your creations to your gallery.
+                  You're ready to start collecting! Visit any supported AI platform, and use the MainGallery 
+                  extension to add your creations to your gallery with a single click.
                 </p>
                 
                 <div className="bg-muted/50 p-4 rounded-lg border">

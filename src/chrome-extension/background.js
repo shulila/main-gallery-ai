@@ -11,9 +11,9 @@ chrome.runtime.onInstalled.addListener(details => {
       // Use a simple notification without custom icons to avoid loading issues
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: 'icons/icon128.png', // Using relative path within extension package
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Use chrome.runtime.getURL for proper path resolution
         title: 'Pin MainGallery Extension',
-        message: 'Click the puzzle piece icon in your toolbar and pin MainGallery for easy access!'
+        message: 'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
       });
       console.log('Installation notification shown successfully');
     } catch (error) {
@@ -27,6 +27,8 @@ chrome.runtime.onInstalled.addListener(details => {
 
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('Received message:', message.action);
+  
   switch (message.action) {
     case 'initiatePlatformConnection':
       handlePlatformConnection(message.platform);
@@ -91,7 +93,7 @@ async function handlePlatformConnected(platformId) {
     console.warn('Creating notification for platform connected');
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icons/icon128.png', // Using relative path within extension
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Use runtime.getURL for proper path resolution
       title: 'Platform Connected',
       message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
     });
@@ -113,7 +115,7 @@ async function handlePlatformDisconnected(platformId) {
     console.warn('Creating notification for platform disconnected');
     chrome.notifications.create({
       type: 'basic',
-      iconUrl: 'icons/icon128.png', // Using relative path
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Use runtime.getURL for proper path resolution
       title: 'Platform Disconnected',
       message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
     });
@@ -159,7 +161,7 @@ async function handleAddToGallery(data) {
       console.warn('Creating notification for add to gallery');
       chrome.notifications.create({
         type: 'basic',
-        iconUrl: 'icons/icon128.png', // Using relative path
+        iconUrl: chrome.runtime.getURL('icons/icon128.png'), // Use runtime.getURL for proper path resolution
         title: 'Added to Main Gallery',
         message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
       });
@@ -201,9 +203,8 @@ async function openGallery() {
 
 // Open auth page with redirect
 function openAuthPage(redirectUrl) {
-  const baseAuthUrl = 'https://main-gallery-hub.lovable.app/auth';
+  let authUrl = 'https://main-gallery-hub.lovable.app/auth?from=extension';
   
-  let authUrl = baseAuthUrl + '?tab=login';
   if (redirectUrl) {
     authUrl += `&redirect=${encodeURIComponent(redirectUrl)}`;
   }

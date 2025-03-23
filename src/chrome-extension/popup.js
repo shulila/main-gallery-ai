@@ -181,9 +181,18 @@ async function openGallery() {
 }
 
 function getAuthUrlWithRedirect(currentUrl) {
-  if (!currentUrl) return AUTH_URL;
-  const encodedRedirect = encodeURIComponent(currentUrl);
-  return `${AUTH_URL}?redirect=${encodedRedirect}&tab=login`;
+  if (!currentUrl) return `${AUTH_URL}?from=extension`;
+  
+  // Set from=extension param to trigger the appropriate flow
+  const params = new URLSearchParams();
+  params.set('from', 'extension');
+  
+  // Add redirect if provided
+  if (currentUrl) {
+    params.set('redirect', currentUrl);
+  }
+  
+  return `${AUTH_URL}?${params.toString()}`;
 }
 
 async function openAuthPage() {

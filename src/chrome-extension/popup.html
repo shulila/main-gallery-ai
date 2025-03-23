@@ -25,12 +25,8 @@
     </div>
     
     <div id="not-logged-in" class="state">
-      <p>Please log in to your Main Gallery account to connect platforms.</p>
-      <button id="login-btn" class="primary-btn">Log In</button>
-      <div class="secondary-action">
-        <span>Don't have an account?</span>
-        <a href="#" id="sign-up-link" onclick="window.open('https://main-gallery-hub.lovable.app/auth?tab=signup', '_blank')">Sign Up</a>
-      </div>
+      <p>Sign in to MainGallery to collect and organize your AI creations in one place.</p>
+      <button id="login-btn" class="primary-btn">Log In or Sign Up</button>
     </div>
     
     <div id="logged-in-message" class="state hidden">
@@ -38,7 +34,7 @@
     </div>
     
     <div id="not-platform-page" class="state hidden">
-      <p>Visit a supported AI platform gallery to connect it to your Main Gallery.</p>
+      <p>Visit a supported AI platform to save your creations to MainGallery.</p>
       <div class="platforms">
         <p>Supported platforms:</p>
         <ul>
@@ -78,12 +74,9 @@
           <p class="connected-status">✓ Connected</p>
         </div>
       </div>
+      <p class="info-text">Your creations from this platform will be automatically saved to your gallery.</p>
       <button id="disconnect-btn" class="secondary-btn">Disconnect</button>
       <button id="view-gallery-btn" class="primary-btn">View in Main Gallery</button>
-      <button class="secondary-btn view-my-gallery-btn">
-        <span class="icon gallery-icon"></span>
-        Go to My Gallery
-      </button>
     </div>
     
     <div id="connecting" class="state hidden">
