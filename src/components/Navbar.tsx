@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Menu, X, User, Image as ImageIcon, Home, LogOut } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
+import { brandConfig } from '@/config/brandConfig';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +32,7 @@ const Navbar = () => {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/');
+    navigate(brandConfig.routes.home);
   };
 
   const isActive = (path: string) => location.pathname === path;
@@ -42,32 +43,35 @@ const Navbar = () => {
     }`}>
       <div className="container mx-auto px-4 md:px-6 py-4">
         <div className="flex items-center justify-between">
-          <Link to="/" className="flex items-center space-x-2">
+          <Link to={brandConfig.routes.home} className="flex items-center space-x-2">
             <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
               <ImageIcon className="h-5 w-5 text-white" />
             </div>
-            <span className="text-xl font-medium">MainGallery</span>
+            <span className="text-xl font-medium">{brandConfig.name}</span>
           </Link>
           
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <Link to="/" className={`text-sm font-medium transition-colors hover:text-primary ${
-              isActive('/') ? 'text-primary' : 'text-foreground/80'
+            <Link to={brandConfig.routes.home} className={`text-sm font-medium transition-colors hover:text-primary ${
+              isActive(brandConfig.routes.home) ? 'text-primary' : 'text-foreground/80'
             }`}>
               Home
             </Link>
             {user && (
-              <Link to="/gallery" className={`text-sm font-medium transition-colors hover:text-primary ${
-                isActive('/gallery') ? 'text-primary' : 'text-foreground/80'
+              <Link to={brandConfig.routes.gallery} className={`text-sm font-medium transition-colors hover:text-primary ${
+                isActive(brandConfig.routes.gallery) ? 'text-primary' : 'text-foreground/80'
               }`}>
                 Gallery
               </Link>
             )}
-            <Link to="/platforms" className={`text-sm font-medium transition-colors hover:text-primary ${
-              isActive('/platforms') ? 'text-primary' : 'text-foreground/80'
+            <Link to={brandConfig.routes.platforms} className={`text-sm font-medium transition-colors hover:text-primary ${
+              isActive(brandConfig.routes.platforms) ? 'text-primary' : 'text-foreground/80'
             }`}>
               Platforms
             </Link>
+            <a href={brandConfig.routes.howItWorks} className="text-sm font-medium transition-colors hover:text-primary text-foreground/80">
+              How It Works
+            </a>
           </nav>
           
           {/* Authentication Buttons */}
@@ -83,10 +87,10 @@ const Navbar = () => {
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate('/gallery')}>
+                  <DropdownMenuItem onClick={() => navigate(brandConfig.routes.gallery)}>
                     My Gallery
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/platforms')}>
+                  <DropdownMenuItem onClick={() => navigate(brandConfig.routes.platforms)}>
                     Connected Platforms
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -98,10 +102,10 @@ const Navbar = () => {
               </DropdownMenu>
             ) : (
               <>
-                <Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate('/auth')}>
+                <Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate(brandConfig.routes.auth)}>
                   Log in
                 </Button>
-                <Button size="sm" className="rounded-full" onClick={() => navigate('/auth?tab=signup')}>
+                <Button size="sm" className="rounded-full" onClick={() => navigate(`${brandConfig.routes.auth}?tab=signup`)}>
                   Sign up
                 </Button>
               </>
@@ -124,7 +128,7 @@ const Navbar = () => {
           <div className="container mx-auto px-4">
             <nav className="flex flex-col space-y-4">
               <Link 
-                to="/" 
+                to={brandConfig.routes.home}
                 className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -133,7 +137,7 @@ const Navbar = () => {
               </Link>
               {user && (
                 <Link 
-                  to="/gallery" 
+                  to={brandConfig.routes.gallery}
                   className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
@@ -142,13 +146,21 @@ const Navbar = () => {
                 </Link>
               )}
               <Link 
-                to="/platforms" 
+                to={brandConfig.routes.platforms}
                 className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <User size={18} />
                 <span>Platforms</span>
               </Link>
+              <a 
+                href={brandConfig.routes.howItWorks}
+                className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <Home size={18} />
+                <span>How It Works</span>
+              </a>
               <div className="pt-4 mt-4 border-t border-border/50 flex flex-col space-y-2">
                 {user ? (
                   <Button 
@@ -170,7 +182,7 @@ const Navbar = () => {
                       className="w-full justify-start" 
                       size="sm"
                       onClick={() => {
-                        navigate('/auth');
+                        navigate(brandConfig.routes.auth);
                         setIsMobileMenuOpen(false);
                       }}
                     >
@@ -180,7 +192,7 @@ const Navbar = () => {
                       className="w-full justify-start" 
                       size="sm"
                       onClick={() => {
-                        navigate('/auth?tab=signup');
+                        navigate(`${brandConfig.routes.auth}?tab=signup`);
                         setIsMobileMenuOpen(false);
                       }}
                     >

@@ -1,3 +1,16 @@
+// Brand configuration to align with the main app
+const BRAND = {
+  name: "MainGallery",
+  urls: {
+    baseUrl: "https://main-gallery-hub.lovable.app",
+    auth: "/auth",
+    gallery: "/gallery"
+  }
+};
+
+// Gallery URL with base from brand config
+const GALLERY_URL = `${BRAND.urls.baseUrl}${BRAND.urls.gallery}`;
+const AUTH_URL = `${BRAND.urls.baseUrl}${BRAND.urls.auth}`;
 
 // Platform detection patterns
 const PLATFORMS = {
@@ -162,19 +175,21 @@ async function openGallery() {
   }
 }
 
+function getAuthUrlWithRedirect(currentUrl) {
+  if (!currentUrl) return AUTH_URL;
+  return `${AUTH_URL}?redirect=${encodeURIComponent(currentUrl)}`;
+}
+
 async function openAuthPage() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     let redirectUrl = '';
     
     if (tab && tab.url) {
-      const platform = detectPlatform(tab.url);
-      if (platform) {
-        redirectUrl = `?redirect=${encodeURIComponent(tab.url)}`;
-      }
+      redirectUrl = tab.url;
     }
     
-    chrome.tabs.create({ url: `${AUTH_URL}${redirectUrl}` });
+    chrome.tabs.create({ url: getAuthUrlWithRedirect(redirectUrl) });
   } catch (error) {
     console.error('Error opening auth page:', error);
   }

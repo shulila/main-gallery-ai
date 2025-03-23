@@ -1,8 +1,34 @@
-
 import { ArrowRight } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import { useNavigate } from 'react-router-dom';
+import { brandConfig } from '@/config/brandConfig';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Hero = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const handleGetStarted = () => {
+    if (user) {
+      // If user is logged in, take them to gallery
+      navigate(brandConfig.routes.gallery);
+    } else {
+      // Otherwise take them to auth page
+      navigate(brandConfig.routes.auth);
+    }
+  };
+
+  const handleHowItWorks = () => {
+    // For now, use an anchor link to scroll to a section
+    const howItWorksSection = document.getElementById('how-it-works');
+    if (howItWorksSection) {
+      howItWorksSection.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      // Fallback to the route defined in config
+      navigate(brandConfig.routes.howItWorks);
+    }
+  };
+
   return (
     <section className="relative overflow-hidden pt-32 pb-16 md:pt-40 md:pb-24 min-h-[85vh] flex items-center">
       {/* Background gradient */}
@@ -22,14 +48,14 @@ const Hero = () => {
               Your unified gallery for <span className="text-primary">AI-generated art</span>
             </h1>
             <p className="text-lg text-foreground/80 mb-8 max-w-xl">
-              Connect all your AI art platforms in one click and experience your entire creative universe in a beautifully organized gallery without any file transfers.
+              {brandConfig.description}
             </p>
             <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 justify-center md:justify-start">
-              <Button size="lg" className="rounded-full px-8 shadow-md hover:shadow-xl transition-all group">
+              <Button size="lg" className="rounded-full px-8 shadow-md hover:shadow-xl transition-all group" onClick={handleGetStarted}>
                 Get Started
                 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button variant="outline" size="lg" className="rounded-full px-8">
+              <Button variant="outline" size="lg" className="rounded-full px-8" onClick={handleHowItWorks}>
                 How It Works
               </Button>
             </div>
