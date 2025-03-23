@@ -61,16 +61,49 @@ function injectGalleryButton() {
     return;
   }
 
-  // Check if platform is already connected
-  checkPlatformConnection(platform).then(isConnected => {
-    if (isConnected) {
-      // If already connected, show status indicator instead of button
-      injectStatusIndicator(platform);
-    } else {
-      // If not connected, inject the button
-      injectConnectButton(platform);
+  // Check authentication status for both systems
+  Promise.all([
+    checkUserAuthentication(),
+    checkPlatformLogin(platform)
+  ]).then(([isMainGalleryLoggedIn, isPlatformLoggedIn]) => {
+    // Case 1: Logged in to both Main Gallery and Platform
+    if (isMainGalleryLoggedIn && isPlatformLoggedIn) {
+      // Check if platform is already connected
+      checkPlatformConnection(platform).then(isConnected => {
+        if (isConnected) {
+          // If already connected, show status indicator instead of button
+          injectStatusIndicator(platform);
+        } else {
+          // If not connected, inject the button
+          injectConnectButton(platform, true);
+        }
+      });
+    } 
+    // Case 2: Logged in to Main Gallery but not Platform
+    else if (isMainGalleryLoggedIn && !isPlatformLoggedIn) {
+      showToast(`Please log in to ${getPlatformName(platform)} first to connect your gallery`);
+    }
+    // Case 3: Logged in to Platform but not Main Gallery
+    else if (!isMainGalleryLoggedIn && isPlatformLoggedIn) {
+      injectConnectButton(platform, false);
+    }
+    // Case 4: Not logged in to either
+    else {
+      showToast("Please log in to both platforms to sync your creations");
     }
   });
+}
+
+// Get platform display name
+function getPlatformName(platformId) {
+  switch(platformId) {
+    case 'midjourney': return 'Midjourney';
+    case 'dalle': return 'DALL·E';
+    case 'stableDiffusion': return 'Stable Diffusion';
+    case 'runway': return 'Runway';
+    case 'pika': return 'Pika';
+    default: return 'the platform';
+  }
 }
 
 // Inject status indicator when platform is already connected
@@ -124,14 +157,29 @@ function injectStatusIndicator(platform) {
 }
 
 // Inject the connect button
-function injectConnectButton(platform) {
+function injectConnectButton(platform, isEnabled) {
   // Create floating action button
   const button = document.createElement('button');
   button.className = 'main-gallery-connect-btn';
+  
+  if (!isEnabled) {
+    button.classList.add('disabled');
+    
+    // Add tooltip for disabled button
+    const tooltip = document.createElement('div');
+    tooltip.className = 'main-gallery-tooltip';
+    tooltip.textContent = 'Login required';
+    button.appendChild(tooltip);
+  }
+  
   button.innerHTML = `
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-      <path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${!isEnabled ? 
+        `<path d="M12 16a1 1 0 0 1-1-1v-6a1 1 0 0 1 2 0v6a1 1 0 0 1-1 1z" fill="currentColor"/>
+         <path d="M18 10h-1V7c0-2.8-2.2-5-5-5S7 4.2 7 7v3H6c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2zM9 7c0-1.7 1.3-3 3-3s3 1.3 3 3v3H9V7zm9 12c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1v-7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v7z" fill="currentColor"/>` : 
+        `<path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+         <path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`
+      }
     </svg>
     Add to Main Gallery
   `;
@@ -162,6 +210,15 @@ function injectConnectButton(platform) {
       background-color: #0062c4;
       transform: translateY(-2px);
     }
+    .main-gallery-connect-btn.disabled {
+      background-color: #94a3b8;
+      cursor: not-allowed;
+      position: relative;
+    }
+    .main-gallery-connect-btn.disabled:hover {
+      background-color: #94a3b8;
+      transform: none;
+    }
     .main-gallery-connect-btn svg {
       width: 20px;
       height: 20px;
@@ -171,6 +228,19 @@ function injectConnectButton(platform) {
     }
     .main-gallery-connect-btn.error {
       background-color: #ef4444;
+    }
+    .main-gallery-tooltip {
+      position: absolute;
+      top: -30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.75);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+      pointer-events: none;
     }
     .main-gallery-toast {
       position: fixed;
@@ -200,21 +270,9 @@ function injectConnectButton(platform) {
   button.addEventListener('click', async () => {
     console.log("Clicked Add to Main Gallery");
     
-    // Check authentication
-    const isAuthenticated = await checkUserAuthentication();
-    
-    if (!isAuthenticated) {
-      showToast("Please log in to add to Main Gallery");
-      button.classList.add('error');
-      
-      // Open authentication page after a brief delay
-      setTimeout(() => {
-        openAuthPage();
-      }, 1000);
-      
-      setTimeout(() => {
-        button.classList.remove('error');
-      }, 3000);
+    if (!isEnabled) {
+      showToast("Please log in to Main Gallery to enable sync");
+      openAuthPage();
       return;
     }
     
@@ -278,6 +336,14 @@ async function checkPlatformConnection(platformId) {
       resolve(!!result[`${platformId}_token`]);
     });
   });
+}
+
+// Check if user is logged into the platform (simplified mock implementation)
+async function checkPlatformLogin(platformId) {
+  // This is a simplified implementation that assumes the user is logged in
+  // In a real implementation, you would check for platform-specific indicators
+  // of a logged-in state (cookies, DOM elements, etc.)
+  return true;
 }
 
 // Show toast notification
