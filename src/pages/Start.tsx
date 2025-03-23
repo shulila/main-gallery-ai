@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -21,11 +20,10 @@ const Start = () => {
     
     // Check if extension is installed (simple detection)
     const checkExtension = () => {
-      // This is a simplified check - in a real application,
-      // you'd use a more reliable method to detect the extension
-      if (window.chrome && chrome.runtime) {
+      // Check if chrome object exists in window
+      if (window.chrome && 'runtime' in window.chrome) {
         try {
-          chrome.runtime.sendMessage(
+          window.chrome.runtime.sendMessage(
             "chrome-extension-id", // Replace with your actual extension ID
             { action: "isInstalled" },
             (response) => {
