@@ -1,4 +1,3 @@
-
 // Constants
 const MAIN_GALLERY_API_URL = 'https://maingallery.app/api';
 const DUMMY_API_URL = 'https://dummyapi.io/collect';
@@ -6,21 +5,37 @@ const DUMMY_API_URL = 'https://dummyapi.io/collect';
 // Helper function for creating text-only notifications
 function createTextNotification(id, title, message) {
   try {
-    console.log('Creating text-only notification');
+    console.log('Creating text-only notification with params:', { id, title, message });
     
-    // Create notification with only the required properties
+    // Validate required parameters
+    if (!id || !title || !message) {
+      console.error('Missing required notification parameters:', { id, title, message });
+      return;
+    }
+    
+    // Create notification with all required properties
     chrome.notifications.create(
       id,
       {
         type: 'basic',
+        iconUrl: 'icons/icon128.png', // Always include iconUrl even for text notifications
         title: title,
         message: message,
-        // Intentionally not including iconUrl to avoid image loading issues
-        // Chrome will use a default icon
       },
       function(createdId) {
         if (chrome.runtime.lastError) {
           console.error('Notification creation error:', chrome.runtime.lastError.message || 'Unknown error');
+          // Try a super basic notification as fallback if we still get errors
+          try {
+            chrome.notifications.create({
+              type: 'basic',
+              title: 'MainGallery Notification',
+              message: 'An event occurred in MainGallery',
+              iconUrl: 'icons/icon16.png'
+            });
+          } catch (fallbackError) {
+            console.error('Even fallback notification failed:', fallbackError);
+          }
         } else {
           console.log('Text notification created with ID:', createdId);
         }
