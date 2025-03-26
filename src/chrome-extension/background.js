@@ -1,38 +1,28 @@
+
 // Constants
 const MAIN_GALLERY_API_URL = 'https://maingallery.app/api';
 const DUMMY_API_URL = 'https://dummyapi.io/collect';
 
-// Helper function for creating notifications with text-only fallback
-function createNotification(id, options) {
+// Helper function for creating text-only notifications
+function createTextNotification(id, title, message) {
   try {
-    console.log('Creating notification with options:', options);
+    console.log('Creating text-only notification');
     
-    // Ensure all required properties are present
-    if (!options.type || !options.title || !options.message) {
-      console.error('Missing required notification properties');
-      return;
-    }
-    
-    // Try creating notification without icon first
-    const textOnlyOptions = {...options};
-    if (textOnlyOptions.iconUrl) {
-      delete textOnlyOptions.iconUrl;
-    }
-    
-    // Create text-only notification first
+    // Create notification with only the required properties
     chrome.notifications.create(
-      id + "-text",
-      textOnlyOptions,
+      id,
+      {
+        type: 'basic',
+        title: title,
+        message: message,
+        // Intentionally not including iconUrl to avoid image loading issues
+        // Chrome will use a default icon
+      },
       function(createdId) {
         if (chrome.runtime.lastError) {
-          console.error('Text-only notification failed:', chrome.runtime.lastError.message || 'Unknown error');
+          console.error('Notification creation error:', chrome.runtime.lastError.message || 'Unknown error');
         } else {
-          console.log('Text-only notification created with ID:', createdId);
-          
-          // If we have an icon, try to update the notification with it
-          if (options.iconUrl) {
-            console.log('Will not attempt to add icon - using text-only notification');
-          }
+          console.log('Text notification created with ID:', createdId);
         }
       }
     );
@@ -51,14 +41,11 @@ chrome.runtime.onInstalled.addListener(function(details) {
       // Create a unique ID for this notification
       const notificationId = 'installation-' + Date.now();
       
-      // Use our notification function with text-only approach
-      createNotification(
+      // Use our text-only notification function
+      createTextNotification(
         notificationId, 
-        {
-          type: 'basic',
-          title: 'Pin MainGallery Extension',
-          message: 'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
-        }
+        'Pin MainGallery Extension',
+        'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
       );
     } catch (error) {
       console.error('Failed to show notification:', error);
@@ -134,21 +121,18 @@ function handlePlatformConnected(platformId) {
   // Instead of making an API call to a non-existent domain, just log the action
   console.log(`Would notify API about connection for platform: ${platformId}`);
   
-  // Show success notification with text-only approach
+  // Show success notification
   try {
     console.log('Creating platform connected notification');
     
     // Create a unique ID for this notification
     const notificationId = 'platform-connected-' + Date.now();
     
-    // Use our notification function with text-only approach
-    createNotification(
+    // Use our text-only notification function
+    createTextNotification(
       notificationId,
-      {
-        type: 'basic',
-        title: 'Platform Connected',
-        message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
-      }
+      'Platform Connected',
+      `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
     );
   } catch (error) {
     console.error('Failed to show notification:', error);
@@ -161,21 +145,18 @@ function handlePlatformDisconnected(platformId) {
   // Instead of making an API call, just log the action
   console.log(`Would notify API about disconnection for platform: ${platformId}`);
   
-  // Show success notification with text-only approach
+  // Show success notification
   try {
     console.log('Creating platform disconnected notification');
     
     // Create a unique ID for this notification
     const notificationId = 'platform-disconnected-' + Date.now();
     
-    // Use our notification function with text-only approach
-    createNotification(
+    // Use our text-only notification function
+    createTextNotification(
       notificationId,
-      {
-        type: 'basic',
-        title: 'Platform Disconnected',
-        message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
-      }
+      'Platform Disconnected',
+      `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
     );
   } catch (error) {
     console.error('Failed to show notification:', error);
@@ -212,21 +193,18 @@ async function handleAddToGallery(data) {
     const responseData = await response.json();
     console.log('API response:', responseData);
     
-    // Show notification with text-only approach
+    // Show notification
     try {
       console.log('Creating add to gallery notification');
       
       // Create a unique ID for this notification
       const notificationId = 'added-to-gallery-' + Date.now();
       
-      // Use our notification function with text-only approach
-      createNotification(
+      // Use our text-only notification function
+      createTextNotification(
         notificationId,
-        {
-          type: 'basic',
-          title: 'Added to Main Gallery',
-          message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
-        }
+        'Added to Main Gallery',
+        `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
       );
     } catch (error) {
       console.error('Failed to show notification:', error);
