@@ -21,3 +21,10 @@ export function getPlatformName(platformId) {
 export function getExtensionResourceUrl(resourcePath) {
   return chrome.runtime.getURL(resourcePath);
 }
+
+// Notification icon helper function
+export function getNotificationIconPath(size = 128) {
+  // Verify the size is one of the available sizes
+  const validSize = [16, 48, 128].includes(size) ? size : 128;
+  return `icons/icon${validSize}.png`;
+}
