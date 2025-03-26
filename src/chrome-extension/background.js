@@ -1,48 +1,76 @@
+
 // Constants
 const MAIN_GALLERY_API_URL = 'https://maingallery.app/api';
 const DUMMY_API_URL = 'https://dummyapi.io/collect';
 
-// Helper function for creating text-only notifications
-function createTextNotification(id, title, message) {
+// Get the fully qualified URL to the extension's icon
+function getIconPath(iconName) {
+  return chrome.runtime.getURL(`icons/${iconName}`);
+}
+
+// Simplified notification function without icons - as a last resort
+function createSimpleNotification(title, message) {
   try {
-    console.log('Creating text-only notification with params:', { id, title, message });
+    console.log('Creating simple notification without icon');
     
-    // Validate required parameters
+    // Create a completely basic notification with minimal options
+    chrome.notifications.create({
+      type: 'basic',
+      title: title || 'MainGallery Notification',
+      message: message || 'An event occurred in Main Gallery',
+      iconUrl: getIconPath('icon16.png')  // Smallest icon as a last resort
+    });
+  } catch (error) {
+    console.error('Simple notification creation failed:', error);
+  }
+}
+
+// Main notification function with proper icon path handling
+function createNotification(id, title, message, iconSize = 128) {
+  try {
+    console.log('Creating notification with params:', { id, title, message, iconSize });
+    
+    // Verify required parameters
     if (!id || !title || !message) {
-      console.error('Missing required notification parameters:', { id, title, message });
+      console.error('Missing required notification parameters');
       return;
     }
     
-    // Create notification with all required properties
+    // Get the absolute icon URL using chrome.runtime.getURL
+    const iconUrl = getIconPath(`icon${iconSize}.png`);
+    console.log('Using absolute icon URL:', iconUrl);
+    
+    // Create the notification with the absolute URL
     chrome.notifications.create(
       id,
       {
         type: 'basic',
-        iconUrl: 'icons/icon128.png', // Always include iconUrl even for text notifications
+        iconUrl: iconUrl,
         title: title,
         message: message,
+        priority: 2  // High priority
       },
       function(createdId) {
         if (chrome.runtime.lastError) {
-          console.error('Notification creation error:', chrome.runtime.lastError.message || 'Unknown error');
-          // Try a super basic notification as fallback if we still get errors
-          try {
-            chrome.notifications.create({
-              type: 'basic',
-              title: 'MainGallery Notification',
-              message: 'An event occurred in MainGallery',
-              iconUrl: 'icons/icon16.png'
-            });
-          } catch (fallbackError) {
-            console.error('Even fallback notification failed:', fallbackError);
+          console.error('Notification creation error:', chrome.runtime.lastError.message);
+          
+          // Try with the smallest icon as a fallback
+          if (iconSize > 16) {
+            console.log('Trying smaller icon size');
+            createNotification(id + '-smaller', title, message, 16);
+          } else {
+            // If even the smallest icon fails, try without specifying an icon
+            createSimpleNotification(title, message);
           }
         } else {
-          console.log('Text notification created with ID:', createdId);
+          console.log('Notification created successfully with ID:', createdId);
         }
       }
     );
   } catch (error) {
     console.error('Error in notification creation:', error);
+    // Fall back to simple notification
+    createSimpleNotification(title, message);
   }
 }
 
@@ -51,19 +79,19 @@ chrome.runtime.onInstalled.addListener(function(details) {
   // Show a notification to pin the extension on install
   if (details.reason === 'install') {
     try {
-      console.log('Creating installation notification');
+      console.log('Extension installed, creating welcome notification');
       
       // Create a unique ID for this notification
       const notificationId = 'installation-' + Date.now();
       
-      // Use our text-only notification function
-      createTextNotification(
+      // Use our notification function
+      createNotification(
         notificationId, 
         'Pin MainGallery Extension',
         'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
       );
     } catch (error) {
-      console.error('Failed to show notification:', error);
+      console.error('Failed to show installation notification:', error);
     }
   }
   
@@ -143,8 +171,8 @@ function handlePlatformConnected(platformId) {
     // Create a unique ID for this notification
     const notificationId = 'platform-connected-' + Date.now();
     
-    // Use our text-only notification function
-    createTextNotification(
+    // Use our notification function
+    createNotification(
       notificationId,
       'Platform Connected',
       `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
@@ -167,8 +195,8 @@ function handlePlatformDisconnected(platformId) {
     // Create a unique ID for this notification
     const notificationId = 'platform-disconnected-' + Date.now();
     
-    // Use our text-only notification function
-    createTextNotification(
+    // Use our notification function
+    createNotification(
       notificationId,
       'Platform Disconnected',
       `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
@@ -215,8 +243,8 @@ async function handleAddToGallery(data) {
       // Create a unique ID for this notification
       const notificationId = 'added-to-gallery-' + Date.now();
       
-      // Use our text-only notification function
-      createTextNotification(
+      // Use our notification function
+      createNotification(
         notificationId,
         'Added to Main Gallery',
         `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
