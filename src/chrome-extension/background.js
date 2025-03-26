@@ -2,7 +2,7 @@
 const MAIN_GALLERY_API_URL = 'https://maingallery.app/api';
 const DUMMY_API_URL = 'https://dummyapi.io/collect';
 
-// Helper function for creating notifications with proper fallback
+// Helper function for creating notifications with text-only fallback
 function createNotification(id, options) {
   try {
     console.log('Creating notification with options:', options);
@@ -13,39 +13,26 @@ function createNotification(id, options) {
       return;
     }
     
-    // Log the icon URL if present
-    if (options.iconUrl) {
-      console.log('Using icon URL:', options.iconUrl);
+    // Try creating notification without icon first
+    const textOnlyOptions = {...options};
+    if (textOnlyOptions.iconUrl) {
+      delete textOnlyOptions.iconUrl;
     }
     
-    // Create the notification
+    // Create text-only notification first
     chrome.notifications.create(
-      id,
-      options,
+      id + "-text",
+      textOnlyOptions,
       function(createdId) {
         if (chrome.runtime.lastError) {
-          console.error('Notification creation error:', chrome.runtime.lastError.message || 'Unknown error');
-          
-          // If there's an error and we have an icon, try without it
-          if (options.iconUrl) {
-            console.log('Trying fallback notification without icon');
-            const fallbackOptions = {...options};
-            delete fallbackOptions.iconUrl;
-            
-            chrome.notifications.create(
-              id + '-fallback',
-              fallbackOptions,
-              function(fallbackId) {
-                if (chrome.runtime.lastError) {
-                  console.error('Fallback notification also failed:', chrome.runtime.lastError.message || 'Unknown error');
-                } else {
-                  console.log('Fallback notification created with ID:', fallbackId);
-                }
-              }
-            );
-          }
+          console.error('Text-only notification failed:', chrome.runtime.lastError.message || 'Unknown error');
         } else {
-          console.log('Notification created with ID:', createdId);
+          console.log('Text-only notification created with ID:', createdId);
+          
+          // If we have an icon, try to update the notification with it
+          if (options.iconUrl) {
+            console.log('Will not attempt to add icon - using text-only notification');
+          }
         }
       }
     );
@@ -64,16 +51,11 @@ chrome.runtime.onInstalled.addListener(function(details) {
       // Create a unique ID for this notification
       const notificationId = 'installation-' + Date.now();
       
-      // Get absolute URL for icon - ensure the path matches what's in web_accessible_resources
-      const iconUrl = chrome.runtime.getURL('icons/icon128.png');
-      console.log('Using icon URL for notification:', iconUrl);
-      
-      // Use our notification function
+      // Use our notification function with text-only approach
       createNotification(
         notificationId, 
         {
           type: 'basic',
-          iconUrl: iconUrl,
           title: 'Pin MainGallery Extension',
           message: 'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
         }
@@ -152,23 +134,18 @@ function handlePlatformConnected(platformId) {
   // Instead of making an API call to a non-existent domain, just log the action
   console.log(`Would notify API about connection for platform: ${platformId}`);
   
-  // Show success notification with proper icon path
+  // Show success notification with text-only approach
   try {
     console.log('Creating platform connected notification');
     
     // Create a unique ID for this notification
     const notificationId = 'platform-connected-' + Date.now();
     
-    // Get absolute URL for icon
-    const iconUrl = chrome.runtime.getURL('icons/icon128.png');
-    console.log('Using icon URL for connected notification:', iconUrl);
-    
-    // Use our notification function
+    // Use our notification function with text-only approach
     createNotification(
       notificationId,
       {
         type: 'basic',
-        iconUrl: iconUrl,
         title: 'Platform Connected',
         message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
       }
@@ -184,23 +161,18 @@ function handlePlatformDisconnected(platformId) {
   // Instead of making an API call, just log the action
   console.log(`Would notify API about disconnection for platform: ${platformId}`);
   
-  // Show success notification with proper icon path
+  // Show success notification with text-only approach
   try {
     console.log('Creating platform disconnected notification');
     
     // Create a unique ID for this notification
     const notificationId = 'platform-disconnected-' + Date.now();
     
-    // Get absolute URL for icon
-    const iconUrl = chrome.runtime.getURL('icons/icon128.png');
-    console.log('Using icon URL for disconnected notification:', iconUrl);
-    
-    // Use our notification function
+    // Use our notification function with text-only approach
     createNotification(
       notificationId,
       {
         type: 'basic',
-        iconUrl: iconUrl,
         title: 'Platform Disconnected',
         message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
       }
@@ -240,23 +212,18 @@ async function handleAddToGallery(data) {
     const responseData = await response.json();
     console.log('API response:', responseData);
     
-    // Show notification with proper icon path
+    // Show notification with text-only approach
     try {
       console.log('Creating add to gallery notification');
       
       // Create a unique ID for this notification
       const notificationId = 'added-to-gallery-' + Date.now();
       
-      // Get absolute URL for icon
-      const iconUrl = chrome.runtime.getURL('icons/icon128.png');
-      console.log('Using icon URL for gallery notification:', iconUrl);
-      
-      // Use our notification function
+      // Use our notification function with text-only approach
       createNotification(
         notificationId,
         {
           type: 'basic',
-          iconUrl: iconUrl,
           title: 'Added to Main Gallery',
           message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
         }
