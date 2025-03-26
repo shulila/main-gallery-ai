@@ -1,7 +1,7 @@
 
-import { getExtensionResourceUrl } from './common.js';
+import { getExtensionResourceUrl, getFallbackIconDataUri } from './common.js';
 
-// Create a notification with proper icon and fallback handling
+// Create a notification with proper icon path handling
 export function createNotification(id, title, message) {
   try {
     console.log('Creating notification with params:', { id, title, message });
@@ -12,88 +12,95 @@ export function createNotification(id, title, message) {
       return;
     }
     
-    // Get the absolute icon URL
-    const iconUrl = getExtensionResourceUrl('icons/icon128.png');
-    console.log('Using icon URL:', iconUrl);
-    
-    // Create notification with all required properties
-    chrome.notifications.create(
-      id,
-      {
-        type: 'basic',
-        iconUrl: iconUrl,
-        title: title,
-        message: message,
-      },
-      function(createdId) {
-        if (chrome.runtime.lastError) {
-          console.error('Notification creation error:', chrome.runtime.lastError.message);
-          // Try with a smaller icon as fallback
-          tryWithSmallerIcon(id, title, message);
-        } else {
-          console.log('Notification created with ID:', createdId);
-        }
-      }
-    );
+    // First try with proper icon 
+    tryCreateNotificationWithIcon(id, title, message);
   } catch (error) {
     console.error('Error in notification creation:', error);
-    tryWithSmallerIcon(id, title, message);
-  }
-}
-
-// Fallback to smaller icon if 128px icon fails
-function tryWithSmallerIcon(id, title, message) {
-  try {
-    const smallerIconUrl = getExtensionResourceUrl('icons/icon16.png');
-    console.log('Trying with smaller icon:', smallerIconUrl);
-    
-    chrome.notifications.create(
-      `${id}-smaller`,
-      {
-        type: 'basic',
-        iconUrl: smallerIconUrl,
-        title: title,
-        message: message,
-      },
-      function(createdId) {
-        if (chrome.runtime.lastError) {
-          console.error('Smaller icon notification also failed:', chrome.runtime.lastError.message);
-          // Final fallback - text-only notification
-          createTextOnlyNotification(id, title, message);
-        } else {
-          console.log('Notification with smaller icon created:', createdId);
-        }
-      }
-    );
-  } catch (error) {
-    console.error('Error in smaller icon notification:', error);
+    // As a last resort, try text-only notification
     createTextOnlyNotification(id, title, message);
   }
 }
 
-// Last resort - text-only notification without icon
-function createTextOnlyNotification(id, title, message) {
-  try {
-    console.log('Creating text-only notification as last resort');
-    
-    chrome.notifications.create(
-      `${id}-text-only`,
-      {
-        type: 'basic',
-        title: title || 'MainGallery Notification',
-        message: message || 'An event occurred in MainGallery',
-        // Chrome requires iconUrl but will use default icon if loading fails
-        iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFeQI4W7hGgwAAAABJRU5ErkJggg=='
-      },
-      function(createdId) {
-        if (chrome.runtime.lastError) {
-          console.error('Even text-only notification failed:', chrome.runtime.lastError.message);
-        } else {
-          console.log('Text-only notification created as fallback:', createdId);
-        }
+// Try to create a notification with proper icon
+function tryCreateNotificationWithIcon(id, title, message) {
+  // Start with the largest icon and attempt to create the notification
+  const iconUrl = getExtensionResourceUrl('icons/icon128.png');
+  console.log('Attempting notification with iconUrl:', iconUrl);
+  
+  chrome.notifications.create(
+    id,
+    {
+      type: 'basic',
+      iconUrl: iconUrl,
+      title: title,
+      message: message,
+      priority: 2  // High priority
+    },
+    function(createdId) {
+      if (chrome.runtime.lastError) {
+        console.error('Notification creation error with 128px icon:', chrome.runtime.lastError.message || 'Unknown error');
+        // Try with the 48px icon
+        tryWithSmallerIcon(id, title, message, 48);
+      } else {
+        console.log('Notification created successfully with ID:', createdId);
       }
-    );
-  } catch (error) {
-    console.error('Error in text-only notification:', error);
-  }
+    }
+  );
+}
+
+// Try with smaller icon sizes as fallback
+function tryWithSmallerIcon(id, title, message, iconSize) {
+  const iconUrl = getExtensionResourceUrl(`icons/icon${iconSize}.png`);
+  console.log(`Trying with ${iconSize}px icon:`, iconUrl);
+  
+  chrome.notifications.create(
+    `${id}-${iconSize}px`,
+    {
+      type: 'basic',
+      iconUrl: iconUrl,
+      title: title,
+      message: message,
+      priority: 2
+    },
+    function(createdId) {
+      if (chrome.runtime.lastError) {
+        console.error(`Notification creation error with ${iconSize}px icon:`, chrome.runtime.lastError.message);
+        // If we tried the 48px icon and it failed, try with 16px
+        if (iconSize === 48) {
+          tryWithSmallerIcon(id, title, message, 16);
+        } else {
+          // If even the smallest icon fails, try with data URI
+          createTextOnlyNotification(id, title, message);
+        }
+      } else {
+        console.log(`Notification created successfully with ${iconSize}px icon:`, createdId);
+      }
+    }
+  );
+}
+
+// Create text-only notification with data URI icon as fallback
+function createTextOnlyNotification(id, title, message) {
+  console.log('Creating text-only notification as last resort');
+  
+  const fallbackIcon = getFallbackIconDataUri();
+  console.log('Using data URI for icon:', fallbackIcon.substring(0, 30) + '...');
+  
+  chrome.notifications.create(
+    `${id}-text-only`,
+    {
+      type: 'basic',
+      iconUrl: fallbackIcon,
+      title: title || 'MainGallery Notification',
+      message: message || 'An event occurred in MainGallery',
+      priority: 1
+    },
+    function(createdId) {
+      if (chrome.runtime.lastError) {
+        console.error('Even text-only notification failed:', chrome.runtime.lastError.message);
+      } else {
+        console.log('Text-only notification created as fallback:', createdId);
+      }
+    }
+  );
 }

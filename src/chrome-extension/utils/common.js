@@ -21,3 +21,9 @@ export function getPlatformName(platformId) {
 export function getExtensionResourceUrl(resourcePath) {
   return chrome.runtime.getURL(resourcePath);
 }
+
+// Get a data URI for a fallback icon (1x1 pixel transparent PNG)
+export function getFallbackIconDataUri() {
+  // This is a minimal transparent PNG that will always work as a fallback
+  return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+}
