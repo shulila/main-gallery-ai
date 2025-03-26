@@ -1,14 +1,24 @@
-
 // Constants
 const MAIN_GALLERY_API_URL = 'https://maingallery.app/api';
 const DUMMY_API_URL = 'https://dummyapi.io/collect';
 
-// Helper function to safely create notifications without image preloading
+// Helper function for creating notifications with proper fallback
 function createNotification(id, options) {
   try {
-    console.log('Attempting to create notification with icon:', options.iconUrl);
+    console.log('Creating notification with options:', options);
     
-    // Create notification directly without image preloading
+    // Ensure all required properties are present
+    if (!options.type || !options.title || !options.message) {
+      console.error('Missing required notification properties');
+      return;
+    }
+    
+    // Log the icon URL if present
+    if (options.iconUrl) {
+      console.log('Using icon URL:', options.iconUrl);
+    }
+    
+    // Create the notification
     chrome.notifications.create(
       id,
       options,
@@ -16,14 +26,14 @@ function createNotification(id, options) {
         if (chrome.runtime.lastError) {
           console.error('Notification creation error:', chrome.runtime.lastError.message || 'Unknown error');
           
-          // If there's an error with the icon, try without it
+          // If there's an error and we have an icon, try without it
           if (options.iconUrl) {
             console.log('Trying fallback notification without icon');
             const fallbackOptions = {...options};
             delete fallbackOptions.iconUrl;
             
             chrome.notifications.create(
-              id,
+              id + '-fallback',
               fallbackOptions,
               function(fallbackId) {
                 if (chrome.runtime.lastError) {
@@ -54,7 +64,7 @@ chrome.runtime.onInstalled.addListener(function(details) {
       // Create a unique ID for this notification
       const notificationId = 'installation-' + Date.now();
       
-      // Get absolute URL for icon - ensure it's relative to extension root
+      // Get absolute URL for icon - ensure the path matches what's in web_accessible_resources
       const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       console.log('Using icon URL for notification:', iconUrl);
       
