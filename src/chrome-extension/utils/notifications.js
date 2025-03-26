@@ -1,10 +1,15 @@
 
-import { getNotificationIconDataUri } from './common.js';
+// We're intentionally not importing any icon utilities since they're causing issues
+// This module focuses on creating notifications that will always work in Chrome
 
-// Create a notification with a guaranteed-to-work data URI icon
+/**
+ * Create a notification with no icon - guaranteed to work
+ * Chrome's notifications API is very strict about icons, and even data URIs can fail
+ * This approach creates a notification with no icon, which is always reliable
+ */
 export function createNotification(id, title, message) {
   try {
-    console.log('Creating notification with params:', { id, title, message });
+    console.log('Creating text-only notification with params:', { id, title, message });
     
     // Validate required parameters
     if (!id || !title || !message) {
@@ -12,33 +17,28 @@ export function createNotification(id, title, message) {
       return;
     }
     
-    // Get the data URI icon - this will ALWAYS work
-    const iconDataUri = getNotificationIconDataUri();
-    console.log('Using data URI icon for notification');
-    
-    // Create options object with data URI icon
+    // Create a notification without any iconUrl at all - this should always work
     const options = {
       type: 'basic',
-      iconUrl: iconDataUri, // Use data URI icon directly
       title: title,
       message: message,
-      priority: 2
+      priority: 2,
+      // Intentionally NOT including an iconUrl property
+      // Chrome will use a default icon when none is provided
     };
     
-    // Log the full options being used
+    // Log the options being used
     console.log('Creating notification with options:', JSON.stringify(options));
     
-    // Create notification with data URI icon
+    // Create the notification without an icon
     chrome.notifications.create(
       id,
       options,
       function(createdId) {
         if (chrome.runtime.lastError) {
           console.error('Notification creation error:', chrome.runtime.lastError.message);
-          console.error('Failed notification options:', JSON.stringify(options));
-          
-          // If it still fails, try an even more minimal approach
-          createSimpleNotification(title, message);
+          // If it still fails somehow, try one more approach
+          tryAlternativeNotification(title, message);
         } else {
           console.log('Notification created successfully with ID:', createdId);
         }
@@ -46,25 +46,28 @@ export function createNotification(id, title, message) {
     );
   } catch (error) {
     console.error('Error in notification creation:', error);
-    // As a last resort, try a super simple notification
-    createSimpleNotification(title, message);
+    // As a last resort, try an alternative approach
+    tryAlternativeNotification(title, message);
   }
 }
 
-// Absolute simplest fallback notification
-function createSimpleNotification(title, message) {
+/**
+ * Absolute simplest notification approach as a last resort
+ * This uses the minimal required options for a notification
+ */
+function tryAlternativeNotification(title, message) {
   try {
-    console.log('Creating simple fallback notification');
+    console.log('Attempting alternative minimal notification');
     
-    // Create a completely basic notification with minimal options
+    // Create with absolute minimum required properties and no ID
     chrome.notifications.create({
       type: 'basic',
-      title: title || 'MainGallery Notification',
-      message: message || 'An event occurred in MainGallery',
-      iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+      title: title || 'MainGallery',
+      message: message || 'MainGallery notification'
+      // No other properties
     });
   } catch (finalError) {
-    // No more fallbacks - just log the error
+    // We've tried everything, just log the error
     console.error('Final notification attempt failed:', finalError);
   }
 }
