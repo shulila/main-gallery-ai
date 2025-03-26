@@ -22,9 +22,9 @@ export function getExtensionResourceUrl(resourcePath) {
   return chrome.runtime.getURL(resourcePath);
 }
 
-// Notification icon helper function
+// Get the appropriate notification icon path based on size
 export function getNotificationIconPath(size = 128) {
-  // Verify the size is one of the available sizes
+  // Chrome notification icons must be one of these sizes, defaulting to 128
   const validSize = [16, 48, 128].includes(size) ? size : 128;
   return `icons/icon${validSize}.png`;
 }

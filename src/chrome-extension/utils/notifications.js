@@ -1,9 +1,9 @@
 
-import { getExtensionResourceUrl, getNotificationIconPath } from './common.js';
+import { getNotificationIconPath } from './common.js';
 
 /**
- * Create a notification using local icon files
- * Chrome extensions must use local files defined in the manifest for notification icons
+ * Create a notification with the most reliable approach for Chrome extensions
+ * Chrome is very strict about notification icons - they must be packaged with the extension
  */
 export function createNotification(id, title, message) {
   try {
@@ -11,33 +11,32 @@ export function createNotification(id, title, message) {
     
     // Validate required parameters
     if (!id || !title || !message) {
-      console.error('Missing required notification parameters:', { id, title, message });
+      console.error('Missing required notification parameters');
       return;
     }
     
-    // Use the default icon from the extension's package
-    // This is crucial - we must use a local file path
+    // IMPORTANT: For Chrome notifications, we must use a relative path to the icon
+    // NOT chrome.runtime.getURL() which doesn't work properly with notifications
     const iconPath = getNotificationIconPath(128);
-    const iconUrl = getExtensionResourceUrl(iconPath);
     
-    console.log('Using local icon for notification:', iconUrl);
+    console.log('Using icon path for notification:', iconPath);
     
-    // Create notification with proper local icon path
+    // Create notification with the correct icon path format
     const notificationOptions = {
       type: 'basic',
       title: String(title),
       message: String(message),
-      iconUrl: iconUrl
+      iconUrl: iconPath
     };
     
-    // Log options being used
+    // Log complete options for debugging
     console.log('Creating notification with options:', JSON.stringify(notificationOptions));
     
-    // Create notification
+    // Create the notification
     chrome.notifications.create(id, notificationOptions, function(createdId) {
       if (chrome.runtime.lastError) {
         console.error('Notification creation error:', chrome.runtime.lastError.message);
-        // If the main icon fails, try with a smaller icon
+        // Try with a smaller icon as fallback
         tryWithSmallerIcon(id, title, message);
       } else {
         console.log('Notification created successfully with ID:', createdId);
@@ -45,7 +44,7 @@ export function createNotification(id, title, message) {
     });
   } catch (error) {
     console.error('Error in notification creation:', error);
-    // Try a simpler approach
+    // Try with smaller icon as fallback
     tryWithSmallerIcon(id, title, message);
   }
 }
@@ -56,18 +55,19 @@ export function createNotification(id, title, message) {
  */
 function tryWithSmallerIcon(id, title, message) {
   try {
-    console.log('Attempting with smaller icon');
+    console.log('Attempting notification with smaller icon');
     
-    // Try with smaller icon (16px)
+    // Use 16px icon as fallback
     const smallIconPath = getNotificationIconPath(16);
-    const smallIconUrl = getExtensionResourceUrl(smallIconPath);
     
-    // Create with smaller icon
+    console.log('Using small icon path:', smallIconPath);
+    
+    // Create notification with smaller icon
     chrome.notifications.create(`${id}-small`, {
       type: 'basic',
       title: String(title || 'MainGallery'),
       message: String(message || 'MainGallery notification'),
-      iconUrl: smallIconUrl
+      iconUrl: smallIconPath
     }, function(createdId) {
       if (chrome.runtime.lastError) {
         console.error('Small icon notification failed:', chrome.runtime.lastError.message);
