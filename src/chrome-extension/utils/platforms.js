@@ -1,5 +1,5 @@
 
-import { getPlatformName } from './common.js';
+import { getPlatformName, getGalleryUrl } from './common.js';
 import { createNotification } from './notifications.js';
 import { isLoggedIn } from './auth.js';
 
@@ -129,7 +129,7 @@ export async function handleAddToGallery(data) {
 // Open gallery in new tab or focus existing gallery tab
 export function openGallery() {
   try {
-    const mainGalleryUrl = 'https://main-gallery-hub.lovable.app/gallery';
+    const mainGalleryUrl = getGalleryUrl();
     
     // Find any existing gallery tabs
     chrome.tabs.query({ url: mainGalleryUrl + '*' }, function(existingTabs) {

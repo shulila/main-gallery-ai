@@ -1,3 +1,4 @@
+
 // This script runs in the context of the AI platform websites
 console.log('MainGallery: Content script loaded and running');
 
@@ -438,6 +439,9 @@ function showOnboardingTooltip() {
   closeButton.addEventListener('click', () => {
     onboarding.classList.remove('show');
     setTimeout(() => onboarding.remove(), 300);
+    
+    // Remember that the user closed it
+    chrome.storage.local.set({ onboarding_shown: true });
   });
   
   // Auto-hide after 15 seconds
