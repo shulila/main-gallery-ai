@@ -3,6 +3,60 @@
 const MAIN_GALLERY_API_URL = 'https://maingallery.app/api';
 const DUMMY_API_URL = 'https://dummyapi.io/collect';
 
+// Helper function to safely create notifications
+function safeCreateNotification(id, options) {
+  try {
+    // Validate the iconUrl first
+    const iconUrl = options.iconUrl;
+    console.log('Attempting to create notification with icon:', iconUrl);
+    
+    // Simple image preload to verify the icon is accessible
+    const testImage = new Image();
+    testImage.onload = function() {
+      console.log('Icon loaded successfully, creating notification');
+      
+      // Now create the notification with the verified icon
+      chrome.notifications.create(
+        id,
+        options,
+        function(createdId) {
+          if (chrome.runtime.lastError) {
+            console.error('Notification creation error:', chrome.runtime.lastError.message || 'Unknown error');
+          } else {
+            console.log('Notification created with ID:', createdId);
+          }
+        }
+      );
+    };
+    
+    testImage.onerror = function() {
+      console.error('Failed to load icon from URL:', iconUrl);
+      
+      // Try with a fallback behavior - create notification without icon
+      const fallbackOptions = {...options};
+      delete fallbackOptions.iconUrl; // Remove the iconUrl property
+      
+      chrome.notifications.create(
+        id,
+        fallbackOptions,
+        function(createdId) {
+          if (chrome.runtime.lastError) {
+            console.error('Fallback notification error:', chrome.runtime.lastError.message || 'Unknown error');
+          } else {
+            console.log('Fallback notification created with ID:', createdId);
+          }
+        }
+      );
+    };
+    
+    // Start loading the image to trigger onload or onerror
+    testImage.src = iconUrl;
+    
+  } catch (error) {
+    console.error('Error in notification creation:', error);
+  }
+}
+
 // Listen for extension installation/update
 chrome.runtime.onInstalled.addListener(function(details) {
   // Show a notification to pin the extension on install
@@ -13,27 +67,19 @@ chrome.runtime.onInstalled.addListener(function(details) {
       // Create a unique ID for this notification
       const notificationId = 'installation-' + Date.now();
       
-      // Get absolute URL for icon using runtime.getURL()
-      // Using absolute path from extension root
+      // Get absolute URL for icon - ensure it's relative to extension root
+      // Note: 'chrome-extension' folder is at root level, so we need to adjust the path
       const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       console.log('Using icon URL for notification:', iconUrl);
       
-      // Create notification with proper error handling and notification ID
-      // Use traditional function syntax for callback (not arrow function)
-      chrome.notifications.create(
-        notificationId,
+      // Use our safe notification function
+      safeCreateNotification(
+        notificationId, 
         {
           type: 'basic',
           iconUrl: iconUrl,
           title: 'Pin MainGallery Extension',
           message: 'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
-        },
-        function(createdId) {
-          if (chrome.runtime.lastError) {
-            console.error('Notification creation error:', chrome.runtime.lastError);
-          } else {
-            console.log('Notification created with ID:', createdId);
-          }
         }
       );
     } catch (error) {
@@ -118,25 +164,18 @@ function handlePlatformConnected(platformId) {
     // Create a unique ID for this notification
     const notificationId = 'platform-connected-' + Date.now();
     
-    // Get absolute URL for icon - using the correct path from extension root
+    // Get absolute URL for icon
     const iconUrl = chrome.runtime.getURL('icons/icon128.png');
     console.log('Using icon URL for connected notification:', iconUrl);
     
-    // Create notification with proper error handling and notification ID
-    chrome.notifications.create(
+    // Use our safe notification function
+    safeCreateNotification(
       notificationId,
       {
         type: 'basic',
         iconUrl: iconUrl,
         title: 'Platform Connected',
         message: `Your ${getPlatformName(platformId)} account has been connected to Main Gallery.`
-      },
-      function(createdId) {
-        if (chrome.runtime.lastError) {
-          console.error('Notification creation error:', chrome.runtime.lastError);
-        } else {
-          console.log('Notification created with ID:', createdId);
-        }
       }
     );
   } catch (error) {
@@ -158,25 +197,18 @@ function handlePlatformDisconnected(platformId) {
     // Create a unique ID for this notification
     const notificationId = 'platform-disconnected-' + Date.now();
     
-    // Get absolute URL for icon - using the correct path from extension root
+    // Get absolute URL for icon
     const iconUrl = chrome.runtime.getURL('icons/icon128.png');
     console.log('Using icon URL for disconnected notification:', iconUrl);
     
-    // Create notification with proper error handling and notification ID
-    chrome.notifications.create(
+    // Use our safe notification function
+    safeCreateNotification(
       notificationId,
       {
         type: 'basic',
         iconUrl: iconUrl,
         title: 'Platform Disconnected',
         message: `Your ${getPlatformName(platformId)} account has been disconnected from Main Gallery.`
-      },
-      function(createdId) {
-        if (chrome.runtime.lastError) {
-          console.error('Notification creation error:', chrome.runtime.lastError);
-        } else {
-          console.log('Notification created with ID:', createdId);
-        }
       }
     );
   } catch (error) {
@@ -222,25 +254,18 @@ async function handleAddToGallery(data) {
       // Create a unique ID for this notification
       const notificationId = 'added-to-gallery-' + Date.now();
       
-      // Get absolute URL for icon - using the correct path from extension root
+      // Get absolute URL for icon
       const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       console.log('Using icon URL for gallery notification:', iconUrl);
       
-      // Create notification with proper error handling and notification ID
-      chrome.notifications.create(
+      // Use our safe notification function
+      safeCreateNotification(
         notificationId,
         {
           type: 'basic',
           iconUrl: iconUrl,
           title: 'Added to Main Gallery',
           message: `Your ${getPlatformName(data.platformId)} content has been added to Main Gallery.`
-        },
-        function(createdId) {
-          if (chrome.runtime.lastError) {
-            console.error('Notification creation error:', chrome.runtime.lastError);
-          } else {
-            console.log('Notification created with ID:', createdId);
-          }
         }
       );
     } catch (error) {
