@@ -6,6 +6,7 @@ interface Chrome {
     lastError?: {
       message: string;
     };
+    id?: string;
   };
   storage?: {
     local: {

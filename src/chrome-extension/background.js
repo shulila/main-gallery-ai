@@ -14,10 +14,12 @@ chrome.runtime.onInstalled.addListener(function(details) {
       const notificationId = 'installation-' + Date.now();
       
       // Get absolute URL for icon using runtime.getURL()
-      const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+      // Using absolute path from extension root
+      const iconUrl = chrome.runtime.getURL('/icons/icon128.png');
       console.log('Using icon URL for notification:', iconUrl);
       
       // Create notification with proper error handling and notification ID
+      // Use traditional function syntax for callback (not arrow function)
       chrome.notifications.create(
         notificationId,
         {
@@ -116,8 +118,8 @@ function handlePlatformConnected(platformId) {
     // Create a unique ID for this notification
     const notificationId = 'platform-connected-' + Date.now();
     
-    // Get absolute URL for icon
-    const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+    // Get absolute URL for icon - using the correct path from extension root
+    const iconUrl = chrome.runtime.getURL('/icons/icon128.png');
     console.log('Using icon URL for connected notification:', iconUrl);
     
     // Create notification with proper error handling and notification ID
@@ -156,8 +158,8 @@ function handlePlatformDisconnected(platformId) {
     // Create a unique ID for this notification
     const notificationId = 'platform-disconnected-' + Date.now();
     
-    // Get absolute URL for icon
-    const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+    // Get absolute URL for icon - using the correct path from extension root
+    const iconUrl = chrome.runtime.getURL('/icons/icon128.png');
     console.log('Using icon URL for disconnected notification:', iconUrl);
     
     // Create notification with proper error handling and notification ID
@@ -220,8 +222,8 @@ async function handleAddToGallery(data) {
       // Create a unique ID for this notification
       const notificationId = 'added-to-gallery-' + Date.now();
       
-      // Get absolute URL for icon
-      const iconUrl = chrome.runtime.getURL('icons/icon128.png');
+      // Get absolute URL for icon - using the correct path from extension root
+      const iconUrl = chrome.runtime.getURL('/icons/icon128.png');
       console.log('Using icon URL for gallery notification:', iconUrl);
       
       // Create notification with proper error handling and notification ID
