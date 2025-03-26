@@ -8,7 +8,7 @@ import {
   openGallery
 } from './utils/platforms.js';
 import { setupAuthCallbackListener, openAuthPage } from './utils/auth.js';
-import { debugPlatformDetection } from './utils/common.js';
+import { debugPlatformDetection, getGalleryUrl } from './utils/common.js';
 
 // Set up auth callback listener
 setupAuthCallbackListener();
@@ -56,6 +56,23 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
+// Listen for auth state changes
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'sync' && changes.main_gallery_auth_token) {
+    // Auth token changed, notify content scripts
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, { 
+          action: 'authStateChanged',
+          isLoggedIn: !!changes.main_gallery_auth_token.newValue
+        }).catch(() => {
+          // Ignore errors for tabs where content script isn't running
+        });
+      });
+    });
+  }
+});
+
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   console.log('Received message:', message.action, 'from:', sender);
@@ -97,7 +114,7 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       return true; // Will respond asynchronously
       
     case 'openGallery':
-      openGallery();
+      chrome.tabs.create({ url: getGalleryUrl() });
       break;
       
     case 'openAuthPage':

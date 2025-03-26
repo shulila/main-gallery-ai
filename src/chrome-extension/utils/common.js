@@ -52,3 +52,8 @@ export function debugPlatformDetection(url) {
   console.log('MainGallery: No supported platform detected');
   return null;
 }
+
+// Get gallery URL
+export function getGalleryUrl() {
+  return 'https://main-gallery.ai/app';
+}
