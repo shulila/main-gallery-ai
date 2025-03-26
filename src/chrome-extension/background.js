@@ -15,7 +15,7 @@ chrome.runtime.onInstalled.addListener(function(details) {
       
       // Get absolute URL for icon using runtime.getURL()
       // Using absolute path from extension root
-      const iconUrl = chrome.runtime.getURL('/icons/icon128.png');
+      const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       console.log('Using icon URL for notification:', iconUrl);
       
       // Create notification with proper error handling and notification ID
@@ -30,7 +30,7 @@ chrome.runtime.onInstalled.addListener(function(details) {
         },
         function(createdId) {
           if (chrome.runtime.lastError) {
-            console.error('Notification creation error:', chrome.runtime.lastError.message);
+            console.error('Notification creation error:', chrome.runtime.lastError);
           } else {
             console.log('Notification created with ID:', createdId);
           }
@@ -119,7 +119,7 @@ function handlePlatformConnected(platformId) {
     const notificationId = 'platform-connected-' + Date.now();
     
     // Get absolute URL for icon - using the correct path from extension root
-    const iconUrl = chrome.runtime.getURL('/icons/icon128.png');
+    const iconUrl = chrome.runtime.getURL('icons/icon128.png');
     console.log('Using icon URL for connected notification:', iconUrl);
     
     // Create notification with proper error handling and notification ID
@@ -133,7 +133,7 @@ function handlePlatformConnected(platformId) {
       },
       function(createdId) {
         if (chrome.runtime.lastError) {
-          console.error('Notification creation error:', chrome.runtime.lastError.message);
+          console.error('Notification creation error:', chrome.runtime.lastError);
         } else {
           console.log('Notification created with ID:', createdId);
         }
@@ -159,7 +159,7 @@ function handlePlatformDisconnected(platformId) {
     const notificationId = 'platform-disconnected-' + Date.now();
     
     // Get absolute URL for icon - using the correct path from extension root
-    const iconUrl = chrome.runtime.getURL('/icons/icon128.png');
+    const iconUrl = chrome.runtime.getURL('icons/icon128.png');
     console.log('Using icon URL for disconnected notification:', iconUrl);
     
     // Create notification with proper error handling and notification ID
@@ -173,7 +173,7 @@ function handlePlatformDisconnected(platformId) {
       },
       function(createdId) {
         if (chrome.runtime.lastError) {
-          console.error('Notification creation error:', chrome.runtime.lastError.message);
+          console.error('Notification creation error:', chrome.runtime.lastError);
         } else {
           console.log('Notification created with ID:', createdId);
         }
@@ -223,7 +223,7 @@ async function handleAddToGallery(data) {
       const notificationId = 'added-to-gallery-' + Date.now();
       
       // Get absolute URL for icon - using the correct path from extension root
-      const iconUrl = chrome.runtime.getURL('/icons/icon128.png');
+      const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       console.log('Using icon URL for gallery notification:', iconUrl);
       
       // Create notification with proper error handling and notification ID
@@ -237,7 +237,7 @@ async function handleAddToGallery(data) {
         },
         function(createdId) {
           if (chrome.runtime.lastError) {
-            console.error('Notification creation error:', chrome.runtime.lastError.message);
+            console.error('Notification creation error:', chrome.runtime.lastError);
           } else {
             console.log('Notification created with ID:', createdId);
           }
