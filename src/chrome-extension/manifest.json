@@ -23,7 +23,8 @@
     "https://*.runwayml.com/*",
     "https://*.pika.art/*",
     "https://*.leonardo.ai/*",
-    "https://*.placeholder.com/*"
+    "https://*.placeholder.com/*",
+    "https://discord.com/channels/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -41,9 +42,11 @@
         "https://*.dreamstudio.ai/*",
         "https://*.runwayml.com/*",
         "https://*.pika.art/*",
-        "https://*.leonardo.ai/*"
+        "https://*.leonardo.ai/*",
+        "https://discord.com/channels/*"
       ],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "run_at": "document_idle"
     }
   ],
   "background": {

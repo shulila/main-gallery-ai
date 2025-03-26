@@ -1,5 +1,6 @@
 
 // This script runs in the context of the AI platform websites
+console.log('MainGallery: Content script loaded and running');
 
 // Update the button color to match the brand
 const BRAND_BLUE = '#0077ED';
@@ -67,20 +68,56 @@ const PLATFORM_CONFIGS = {
       prompt: '.prompt',
       model: '.model-name'
     }
+  },
+  leonardo: {
+    name: 'Leonardo.ai',
+    icon: 'icons/leonardo.png',
+    urlPatterns: [/leonardo\.ai/],
+    tokenStorageKey: 'leonardo_token',
+    galleryDetectionSelectors: ['.gallery-container', '.generations-gallery'],
+    imageSelectors: ['.generation-item', '.image-card'],
+    metadataSelectors: {
+      prompt: '.prompt-text',
+      model: '.model-name'
+    }
   }
 };
 
-// Inject "Add to Main Gallery" button
-function injectGalleryButton() {
+// Immediately notify background script that the content script is loaded
+chrome.runtime.sendMessage({ 
+  action: 'contentScriptLoaded',
+  url: window.location.href
+}, response => {
+  if (chrome.runtime.lastError) {
+    console.error('Error sending contentScriptLoaded message:', chrome.runtime.lastError.message);
+    // Continue anyway - background might not be ready yet
+    detectAndInjectButton();
+  } else if (response && response.success) {
+    console.log('MainGallery: Background confirmed detection of', response.platformId);
+    // Continue with platform-specific logic
+    detectAndInjectButton();
+  } else {
+    console.log('MainGallery: Not a supported platform or no response from background');
+  }
+});
+
+// Main function to detect platform and inject UI
+function detectAndInjectButton() {
+  console.log('MainGallery: Running detectAndInjectButton()');
+  
   // Detect which platform we're on
   const platform = detectPlatform();
-  if (!platform) return;
+  if (!platform) {
+    console.log('MainGallery: No supported platform detected');
+    return;
+  }
   
   console.log(`MainGallery: Detected ${platform.name} gallery`);
   
   // Check if button or status indicator already exists
   if (document.querySelector('.main-gallery-connect-btn') || 
       document.querySelector('.main-gallery-status-indicator')) {
+    console.log('MainGallery: Button or indicator already exists');
     return;
   }
 
@@ -89,6 +126,8 @@ function injectGalleryButton() {
     checkUserAuthentication(),
     checkPlatformLogin(platform)
   ]).then(([isMainGalleryLoggedIn, isPlatformLoggedIn]) => {
+    console.log('MainGallery auth status:', { isMainGalleryLoggedIn, isPlatformLoggedIn });
+    
     // Case 1: Logged in to both Main Gallery and Platform
     if (isMainGalleryLoggedIn && isPlatformLoggedIn) {
       // Check if platform is already connected
@@ -454,34 +493,137 @@ function collectPageData(platform) {
 
 function detectPlatform() {
   const url = window.location.href;
+  console.log('MainGallery: Checking URL for platform detection:', url);
   
   for (const [id, platform] of Object.entries(PLATFORM_CONFIGS)) {
     for (const pattern of platform.urlPatterns) {
       if (pattern.test(url)) {
+        console.log('MainGallery: Platform detected:', id);
         return { id, ...platform };
       }
     }
   }
   
+  console.log('MainGallery: No platform detected');
   return null;
 }
 
-// Run on page load
-injectGalleryButton();
+// Check if user is logged into the platform (simplified implementation)
+async function checkPlatformLogin(platform) {
+  console.log('MainGallery: Checking platform login for', platform.name);
+  // This is a simplified implementation - we'll assume logged in for testing
+  return true;
+}
 
-// Re-check when DOM changes (for SPAs)
+// Check user authentication status with Main Gallery
+async function checkUserAuthentication() {
+  console.log('MainGallery: Checking user authentication');
+  return new Promise(resolve => {
+    chrome.storage.sync.get(['main_gallery_auth_token'], result => {
+      const isLoggedIn = !!result.main_gallery_auth_token;
+      console.log('MainGallery: User authentication status:', isLoggedIn);
+      resolve(isLoggedIn);
+    });
+  });
+}
+
+// Check if platform is already connected
+async function checkPlatformConnection(platform) {
+  console.log('MainGallery: Checking platform connection for', platform.name);
+  return new Promise(resolve => {
+    chrome.storage.sync.get([platform.tokenStorageKey], result => {
+      const isConnected = !!result[platform.tokenStorageKey];
+      console.log('MainGallery: Platform connection status:', isConnected);
+      resolve(isConnected);
+    });
+  });
+}
+
+// Show toast notification
+function showToast(message) {
+  console.log('MainGallery Toast:', message);
+  
+  // Remove any existing toasts
+  const existingToast = document.querySelector('.main-gallery-toast');
+  if (existingToast) {
+    existingToast.remove();
+  }
+  
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.className = 'main-gallery-toast';
+  toast.textContent = message;
+  
+  // Add styles for the toast
+  const style = document.createElement('style');
+  style.textContent = `
+    .main-gallery-toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: #1f2937;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      z-index: 10001;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transform: translateY(-10px);
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+    .main-gallery-toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  `;
+  
+  document.head.appendChild(style);
+  document.body.appendChild(toast);
+  
+  // Trigger animation
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+  
+  // Auto hide after 3 seconds
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// Run platform detection immediately
+detectAndInjectButton();
+
+// Re-check when DOM changes (for SPAs) using a throttled observer
+let throttleTimer;
 const observer = new MutationObserver(() => {
-  setTimeout(injectGalleryButton, 500);
+  if (throttleTimer) return;
+  throttleTimer = setTimeout(() => {
+    throttleTimer = null;
+    detectAndInjectButton();
+  }, 1000); // Throttle to once per second
 });
 
-observer.observe(document.body, { 
-  childList: true, 
-  subtree: true 
-});
+// Start observing with a delay to ensure page is fully loaded
+setTimeout(() => {
+  observer.observe(document.body, { 
+    childList: true, 
+    subtree: true 
+  });
+  console.log('MainGallery: Started MutationObserver');
+}, 1500);
 
 // Listen for messages from popup or background
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'scanGallery') {
+  console.log('MainGallery content script received message:', message.action);
+  
+  if (message.action === 'platformDetected') {
+    console.log('MainGallery: Background script detected platform:', message.platformId);
+    detectAndInjectButton();
+    sendResponse({ success: true });
+  } else if (message.action === 'scanGallery') {
     const platform = detectPlatform();
     if (!platform) {
       sendResponse({ success: false, error: 'Not a supported platform' });
@@ -503,10 +645,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (existingIndicator) existingIndicator.remove();
         
         // Re-inject based on current state
-        injectGalleryButton();
+        detectAndInjectButton();
       }, 500);
     }
   }
   
   return true; // Indicate async response
 });
+
+// Log that the content script has fully initialized
+console.log('MainGallery: Content script initialization complete');

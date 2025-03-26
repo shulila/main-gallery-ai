@@ -8,6 +8,7 @@ import {
   openGallery
 } from './utils/platforms.js';
 import { setupAuthCallbackListener, openAuthPage } from './utils/auth.js';
+import { debugPlatformDetection } from './utils/common.js';
 
 // Set up auth callback listener
 setupAuthCallbackListener();
@@ -36,11 +37,47 @@ chrome.runtime.onInstalled.addListener(function(details) {
   console.log('Extension installed:', details.reason);
 });
 
+// Listen for tab updates to detect supported platforms
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url) {
+    const platformId = debugPlatformDetection(tab.url);
+    
+    if (platformId) {
+      console.log(`MainGallery: Detected ${platformId} on tab ${tabId}`);
+      
+      // Notify the content script that we've detected a supported platform
+      chrome.tabs.sendMessage(tabId, { 
+        action: 'platformDetected',
+        platformId: platformId
+      }).catch(err => {
+        console.log('Content script may not be ready yet:', err.message);
+      });
+    }
+  }
+});
+
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
-  console.log('Received message:', message.action);
+  console.log('Received message:', message.action, 'from:', sender);
   
   switch (message.action) {
+    case 'contentScriptLoaded':
+      // Content script has loaded, check if we're on a supported platform
+      if (sender.tab && sender.tab.url) {
+        const platformId = debugPlatformDetection(sender.tab.url);
+        if (platformId) {
+          // Send response immediately to confirm detection
+          sendResponse({ 
+            success: true, 
+            platformId: platformId,
+            message: `Detected ${platformId} platform` 
+          });
+        } else {
+          sendResponse({ success: false, message: 'Not a supported platform' });
+        }
+      }
+      break;
+      
     case 'initiatePlatformConnection':
       handlePlatformConnection(message.platform);
       break;

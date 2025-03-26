@@ -57,7 +57,7 @@ function tryWithSmallerIcon(id, title, message) {
   try {
     console.log('Attempting notification with smaller icon');
     
-    // Use 16px icon as fallback
+    // Use 16px icon as fallback - RELATIVE path, not URL
     const smallIconPath = getNotificationIconPath(16);
     
     console.log('Using small icon path:', smallIconPath);

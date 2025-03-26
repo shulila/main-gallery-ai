@@ -28,3 +28,27 @@ export function getNotificationIconPath(size = 128) {
   const validSize = [16, 48, 128].includes(size) ? size : 128;
   return `icons/icon${validSize}.png`;
 }
+
+// Debug helper to check if we're on a supported platform
+export function debugPlatformDetection(url) {
+  console.log('MainGallery: Checking platform detection for URL:', url);
+  const platforms = [
+    { id: 'midjourney', patterns: [/midjourney\.com/, /discord\.com\/channels.*midjourney/] },
+    { id: 'dalle', patterns: [/openai\.com/] },
+    { id: 'stableDiffusion', patterns: [/dreamstudio\.ai/, /stability\.ai/] },
+    { id: 'runway', patterns: [/runwayml\.com/] },
+    { id: 'pika', patterns: [/pika\.art/] },
+    { id: 'leonardo', patterns: [/leonardo\.ai/] }
+  ];
+  
+  for (const platform of platforms) {
+    for (const pattern of platform.patterns) {
+      if (pattern.test(url)) {
+        console.log('MainGallery: Platform detected:', platform.id);
+        return platform.id;
+      }
+    }
+  }
+  console.log('MainGallery: No supported platform detected');
+  return null;
+}
