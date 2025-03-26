@@ -22,7 +22,8 @@
     "https://*.dreamstudio.ai/*", 
     "https://*.runwayml.com/*",
     "https://*.pika.art/*",
-    "https://*.leonardo.ai/*"
+    "https://*.leonardo.ai/*",
+    "https://*.placeholder.com/*"
   ],
   "action": {
     "default_popup": "popup.html",

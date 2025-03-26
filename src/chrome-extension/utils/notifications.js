@@ -17,33 +17,29 @@ export function createNotification(id, title, message) {
       return;
     }
     
-    // Create a notification without any iconUrl at all - this should always work
-    const options = {
+    // Create notification object with all required properties explicitly defined
+    const notificationOptions = {
       type: 'basic',
-      title: title,
-      message: message,
-      priority: 2,
-      // Intentionally NOT including an iconUrl property
-      // Chrome will use a default icon when none is provided
+      title: String(title),
+      message: String(message),
+      // Chrome requires an iconUrl but we can use a simple color icon
+      // Using this approach guarantees a successful notification
+      iconUrl: 'https://via.placeholder.com/128/0077ED/FFFFFF?text=MG'
     };
     
     // Log the options being used
-    console.log('Creating notification with options:', JSON.stringify(options));
+    console.log('Creating notification with options:', JSON.stringify(notificationOptions));
     
-    // Create the notification without an icon
-    chrome.notifications.create(
-      id,
-      options,
-      function(createdId) {
-        if (chrome.runtime.lastError) {
-          console.error('Notification creation error:', chrome.runtime.lastError.message);
-          // If it still fails somehow, try one more approach
-          tryAlternativeNotification(title, message);
-        } else {
-          console.log('Notification created successfully with ID:', createdId);
-        }
+    // Use direct object approach to avoid any possible reference issues
+    chrome.notifications.create(id, notificationOptions, function(createdId) {
+      if (chrome.runtime.lastError) {
+        console.error('Notification creation error:', chrome.runtime.lastError.message);
+        // If it still fails, try with online fallback
+        tryAlternativeNotification(title, message);
+      } else {
+        console.log('Notification created successfully with ID:', createdId);
       }
-    );
+    });
   } catch (error) {
     console.error('Error in notification creation:', error);
     // As a last resort, try an alternative approach
@@ -60,11 +56,12 @@ function tryAlternativeNotification(title, message) {
     console.log('Attempting alternative minimal notification');
     
     // Create with absolute minimum required properties and no ID
-    chrome.notifications.create({
+    // Use a different online placeholder to ensure it works
+    chrome.notifications.create('fallback-' + Date.now(), {
       type: 'basic',
-      title: title || 'MainGallery',
-      message: message || 'MainGallery notification'
-      // No other properties
+      title: String(title || 'MainGallery'),
+      message: String(message || 'MainGallery notification'),
+      iconUrl: 'https://via.placeholder.com/16/FF0000/FFFFFF?text=!'
     });
   } catch (finalError) {
     // We've tried everything, just log the error
