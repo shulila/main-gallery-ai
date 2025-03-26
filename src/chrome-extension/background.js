@@ -3,55 +3,42 @@
 const MAIN_GALLERY_API_URL = 'https://maingallery.app/api';
 const DUMMY_API_URL = 'https://dummyapi.io/collect';
 
-// Helper function to safely create notifications
-function safeCreateNotification(id, options) {
+// Helper function to safely create notifications without image preloading
+function createNotification(id, options) {
   try {
-    // Validate the iconUrl first
-    const iconUrl = options.iconUrl;
-    console.log('Attempting to create notification with icon:', iconUrl);
+    console.log('Attempting to create notification with icon:', options.iconUrl);
     
-    // Simple image preload to verify the icon is accessible
-    const testImage = new Image();
-    testImage.onload = function() {
-      console.log('Icon loaded successfully, creating notification');
-      
-      // Now create the notification with the verified icon
-      chrome.notifications.create(
-        id,
-        options,
-        function(createdId) {
-          if (chrome.runtime.lastError) {
-            console.error('Notification creation error:', chrome.runtime.lastError.message || 'Unknown error');
-          } else {
-            console.log('Notification created with ID:', createdId);
+    // Create notification directly without image preloading
+    chrome.notifications.create(
+      id,
+      options,
+      function(createdId) {
+        if (chrome.runtime.lastError) {
+          console.error('Notification creation error:', chrome.runtime.lastError.message || 'Unknown error');
+          
+          // If there's an error with the icon, try without it
+          if (options.iconUrl) {
+            console.log('Trying fallback notification without icon');
+            const fallbackOptions = {...options};
+            delete fallbackOptions.iconUrl;
+            
+            chrome.notifications.create(
+              id,
+              fallbackOptions,
+              function(fallbackId) {
+                if (chrome.runtime.lastError) {
+                  console.error('Fallback notification also failed:', chrome.runtime.lastError.message || 'Unknown error');
+                } else {
+                  console.log('Fallback notification created with ID:', fallbackId);
+                }
+              }
+            );
           }
+        } else {
+          console.log('Notification created with ID:', createdId);
         }
-      );
-    };
-    
-    testImage.onerror = function() {
-      console.error('Failed to load icon from URL:', iconUrl);
-      
-      // Try with a fallback behavior - create notification without icon
-      const fallbackOptions = {...options};
-      delete fallbackOptions.iconUrl; // Remove the iconUrl property
-      
-      chrome.notifications.create(
-        id,
-        fallbackOptions,
-        function(createdId) {
-          if (chrome.runtime.lastError) {
-            console.error('Fallback notification error:', chrome.runtime.lastError.message || 'Unknown error');
-          } else {
-            console.log('Fallback notification created with ID:', createdId);
-          }
-        }
-      );
-    };
-    
-    // Start loading the image to trigger onload or onerror
-    testImage.src = iconUrl;
-    
+      }
+    );
   } catch (error) {
     console.error('Error in notification creation:', error);
   }
@@ -68,12 +55,11 @@ chrome.runtime.onInstalled.addListener(function(details) {
       const notificationId = 'installation-' + Date.now();
       
       // Get absolute URL for icon - ensure it's relative to extension root
-      // Note: 'chrome-extension' folder is at root level, so we need to adjust the path
       const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       console.log('Using icon URL for notification:', iconUrl);
       
-      // Use our safe notification function
-      safeCreateNotification(
+      // Use our notification function
+      createNotification(
         notificationId, 
         {
           type: 'basic',
@@ -84,7 +70,6 @@ chrome.runtime.onInstalled.addListener(function(details) {
       );
     } catch (error) {
       console.error('Failed to show notification:', error);
-      // Continue without showing notification
     }
   }
   
@@ -168,8 +153,8 @@ function handlePlatformConnected(platformId) {
     const iconUrl = chrome.runtime.getURL('icons/icon128.png');
     console.log('Using icon URL for connected notification:', iconUrl);
     
-    // Use our safe notification function
-    safeCreateNotification(
+    // Use our notification function
+    createNotification(
       notificationId,
       {
         type: 'basic',
@@ -180,7 +165,6 @@ function handlePlatformConnected(platformId) {
     );
   } catch (error) {
     console.error('Failed to show notification:', error);
-    // Continue without showing notification
   }
 }
 
@@ -201,8 +185,8 @@ function handlePlatformDisconnected(platformId) {
     const iconUrl = chrome.runtime.getURL('icons/icon128.png');
     console.log('Using icon URL for disconnected notification:', iconUrl);
     
-    // Use our safe notification function
-    safeCreateNotification(
+    // Use our notification function
+    createNotification(
       notificationId,
       {
         type: 'basic',
@@ -213,7 +197,6 @@ function handlePlatformDisconnected(platformId) {
     );
   } catch (error) {
     console.error('Failed to show notification:', error);
-    // Continue without showing notification
   }
 }
 
@@ -258,8 +241,8 @@ async function handleAddToGallery(data) {
       const iconUrl = chrome.runtime.getURL('icons/icon128.png');
       console.log('Using icon URL for gallery notification:', iconUrl);
       
-      // Use our safe notification function
-      safeCreateNotification(
+      // Use our notification function
+      createNotification(
         notificationId,
         {
           type: 'basic',
@@ -270,7 +253,6 @@ async function handleAddToGallery(data) {
       );
     } catch (error) {
       console.error('Failed to show notification:', error);
-      // Continue without showing notification
     }
     
     return { success: true, data: responseData };
