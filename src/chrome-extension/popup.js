@@ -58,21 +58,27 @@ const states = {
   notLoggedIn: document.getElementById('not-logged-in'),
   loggedInMessage: document.getElementById('logged-in-message'),
   notPlatformPage: document.getElementById('not-platform-page'),
+  notPlatformLoggedIn: document.getElementById('not-platform-logged-in'),
   readyToConnect: document.getElementById('ready-to-connect'),
   alreadyConnected: document.getElementById('already-connected'),
-  connecting: document.getElementById('connecting')
+  connecting: document.getElementById('connecting'),
+  authLoading: document.getElementById('auth-loading')
 };
 
 const loginBtn = document.getElementById('login-btn');
 const connectBtn = document.getElementById('connect-btn');
 const disconnectBtn = document.getElementById('disconnect-btn');
 const viewGalleryBtn = document.getElementById('view-gallery-btn');
-const viewMyGalleryBtns = document.querySelectorAll('.view-my-gallery-btn');
+const viewGalleryBtnAlt = document.getElementById('view-gallery-btn-alt');
+const viewMyGalleryBtns = document.querySelectorAll('.view-my-gallery-btn, #view-my-gallery-btn2');
 const firstTimeTip = document.getElementById('first-time-tip');
 const pinExtensionTip = document.getElementById('pin-extension-tip');
+const closeTipBtns = document.querySelectorAll('.close-tip');
 
 const platformNameElem = document.getElementById('platform-name');
 const platformIconElem = document.getElementById('platform-icon');
+const platformNameNotLoggedElem = document.getElementById('platform-name-not-logged');
+const platformIconNotLoggedElem = document.getElementById('platform-icon-not-logged');
 const connectedPlatformNameElem = document.getElementById('connected-platform-name');
 const connectedPlatformIconElem = document.getElementById('connected-platform-icon');
 const connectingPlatformNameElem = document.getElementById('connecting-platform-name');
@@ -98,6 +104,26 @@ function detectPlatform(url) {
   return null;
 }
 
+function isPlatformLoggedIn(url, platformId) {
+  // This is a placeholder. In a real-world scenario, you would have more
+  // sophisticated checks based on DOM elements or API calls to verify login state
+  
+  // For Midjourney, check for specific DOM elements that indicate login
+  if (platformId === 'midjourney') {
+    // Simplified check - in a real implementation, you would send a message
+    // to the content script to check for user-specific elements
+    return url.includes('discord.com/channels') && !url.includes('login');
+  }
+  
+  // For Leonardo, check for specific paths that indicate login
+  if (platformId === 'leonardo') {
+    return !url.includes('/login') && !url.includes('/signup');
+  }
+  
+  // Default case - assume logged in if not on login/signup pages
+  return !url.includes('login') && !url.includes('signup');
+}
+
 function isConnected(platformId) {
   return new Promise(resolve => {
     chrome.storage.local.get([`platform_${platformId}_connected`], result => {
@@ -119,7 +145,8 @@ async function connectPlatform(platform) {
   connectingPlatformNameElem.textContent = platform.name;
   
   try {
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Add a slight delay to show the connecting state
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     // In a production environment, this would make a real API call
     // to connect the user's platform account
@@ -135,7 +162,7 @@ async function connectPlatform(platform) {
     });
     
     // Show connected status as a small badge/notification
-    showToast('✓ Connected to ' + platform.name);
+    showToast(`✓ Connected to ${platform.name}`);
     
     // Update UI to show the connect status
     updateUI();
@@ -148,8 +175,8 @@ async function connectPlatform(platform) {
 
 async function disconnectPlatform(platform) {
   try {
-    // In a production environment, this would make a real API call
-    // to disconnect the user's platform account
+    // Add a slight delay to show the processing
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     // Mark platform as disconnected
     chrome.storage.local.set({ [`platform_${platform.id}_connected`]: false }, function() {
@@ -161,8 +188,8 @@ async function disconnectPlatform(platform) {
       platform: platform.id
     });
     
+    showToast(`✓ Disconnected from ${platform.name}`);
     updateUI();
-    showToast('✓ Disconnected from ' + platform.name);
   } catch (error) {
     console.error('Error disconnecting platform:', error);
     showToast('Failed to disconnect. Please try again.');
@@ -198,6 +225,9 @@ function getAuthUrlWithRedirect(currentUrl) {
 
 async function openAuthPage() {
   try {
+    // Show loading state
+    showState(states.authLoading);
+    
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     let redirectUrl = '';
     
@@ -211,29 +241,52 @@ async function openAuthPage() {
       redirectUrl: redirectUrl
     });
     
-    // Close the popup after navigating
-    window.close();
+    // Add a timeout to close the popup
+    setTimeout(() => {
+      window.close();
+    }, 1000);
   } catch (error) {
     console.error('Error opening auth page:', error);
+    
+    // If there's an error, go back to not logged in state
+    showState(states.notLoggedIn);
+    
+    // Show error toast
+    showToast('Error starting login process. Please try again.');
   }
 }
 
-function checkFirstTimeUser() {
-  chrome.storage.local.get(['popup_opened_before'], function(result) {
-    if (!result.popup_opened_before) {
+function handleTipClose(tipElement) {
+  if (!tipElement) return;
+  
+  tipElement.classList.add('hidden');
+  
+  // Remember that we've closed this tip
+  const tipId = tipElement.id;
+  chrome.storage.local.set({ [`${tipId}_closed`]: true });
+}
+
+function checkTipsVisibility() {
+  chrome.storage.local.get(['first-time-tip_closed', 'pin-extension-tip_closed', 'popup_opened_before'], function(result) {
+    if (!result.popup_opened_before && !result['first-time-tip_closed']) {
       if (firstTimeTip) {
         firstTimeTip.classList.remove('hidden');
       }
-      
-      // Show the pin extension tip only once
+    }
+    
+    // Show the pin extension tip only if not closed before
+    if (!result['pin-extension-tip_closed'] && pinExtensionTip) {
       chrome.storage.local.get(['pin_prompt_shown'], function(pinResult) {
-        if (!pinResult.pin_prompt_shown && pinExtensionTip) {
+        if (!pinResult.pin_prompt_shown) {
           pinExtensionTip.classList.remove('hidden');
           promptPinExtension();
           chrome.storage.local.set({ pin_prompt_shown: true });
         }
       });
-      
+    }
+    
+    // Record that the popup has been opened
+    if (!result.popup_opened_before) {
       chrome.storage.local.set({ popup_opened_before: true });
     }
   });
@@ -289,65 +342,56 @@ async function updateUI() {
   const loggedIn = await isLoggedIn();
   
   if (!loggedIn) {
-    // If first time, show welcome message with clear login CTA
-    chrome.storage.local.get(['popup_opened_before'], function(result) {
-      if (!result.popup_opened_before) {
-        if (firstTimeTip) {
-          firstTimeTip.classList.remove('hidden');
-        }
-        
-        chrome.storage.local.set({ popup_opened_before: true });
-      }
-    });
-    
+    // User is not logged in to MainGallery
     showState(states.notLoggedIn);
-    
-    // Update login button text to clarify action
-    if (loginBtn) {
-      loginBtn.textContent = 'Login / Sign up';
-    }
-    
+    checkTipsVisibility();
     return;
-  } else {
-    // If user is logged in, show appropriate state based on the current page
-    const platform = detectPlatform(url);
-    
-    if (!platform) {
-      // Show logged in message and then not platform page
-      states.loggedInMessage.classList.remove('hidden');
-      
-      setTimeout(() => {
-        showState(states.notPlatformPage);
-      }, 1000);
-      return;
-    }
-    
-    const connected = await isConnected(platform.id);
-    
-    if (connected) {
-      connectedPlatformNameElem.textContent = platform.name;
-      connectedPlatformIconElem.src = platform.icon;
-      showState(states.alreadyConnected);
-      
-      // Update button text to be clearer - show this is where to view their gallery
-      if (viewGalleryBtn) {
-        viewGalleryBtn.textContent = 'Open Main Gallery';
-      }
-    } else {
-      platformNameElem.textContent = platform.name;
-      platformIconElem.src = platform.icon;
-      showState(states.readyToConnect);
-      
-      // Update button text to clarify the action
-      if (connectBtn) {
-        connectBtn.textContent = `Add ${platform.name} to Main Gallery`;
-      }
-    }
   }
   
-  checkFirstTimeUser();
+  // User is logged in to MainGallery
+  const platform = detectPlatform(url);
+  
+  if (!platform) {
+    // Show logged in message briefly
+    states.loggedInMessage.classList.remove('hidden');
+    
+    setTimeout(() => {
+      // Then show not platform page
+      showState(states.notPlatformPage);
+    }, 1000);
+    return;
+  }
+  
+  // Check if the user is logged in to the platform
+  const platformLoggedIn = isPlatformLoggedIn(url, platform.id);
+  
+  if (!platformLoggedIn) {
+    // User is not logged in to the platform
+    platformNameNotLoggedElem.textContent = platform.name;
+    platformIconNotLoggedElem.src = platform.icon;
+    showState(states.notPlatformLoggedIn);
+    return;
+  }
+  
+  // User is logged in to both MainGallery and the platform
+  const connected = await isConnected(platform.id);
+  
+  if (connected) {
+    // Platform is already connected
+    connectedPlatformNameElem.textContent = platform.name;
+    connectedPlatformIconElem.src = platform.icon;
+    showState(states.alreadyConnected);
+  } else {
+    // Platform is ready to connect
+    platformNameElem.textContent = platform.name;
+    platformIconElem.src = platform.icon;
+    showState(states.readyToConnect);
+  }
+  
+  checkTipsVisibility();
 }
 
+// Event listeners
 document.addEventListener('DOMContentLoaded', updateUI);
 
 loginBtn.addEventListener('click', () => {
@@ -374,12 +418,27 @@ viewGalleryBtn.addEventListener('click', () => {
   openGallery();
 });
 
+viewGalleryBtnAlt.addEventListener('click', () => {
+  openGallery();
+});
+
 viewMyGalleryBtns.forEach(button => {
   button.addEventListener('click', () => {
     openGallery();
   });
 });
 
+// Tip close buttons
+closeTipBtns.forEach(btn => {
+  btn.addEventListener('click', (event) => {
+    const tipElement = event.target.closest('.tip-box');
+    if (tipElement) {
+      handleTipClose(tipElement);
+    }
+  });
+});
+
+// Listen for messages from background script
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'updateUI') {
     updateUI();

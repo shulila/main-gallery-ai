@@ -10,10 +10,13 @@ export function handlePlatformConnection(platformId) {
   // Check if user is logged in to Main Gallery
   isLoggedIn().then(function(loggedIn) {
     if (!loggedIn) {
+      console.log('User not logged in to Main Gallery, redirecting to auth page');
       // Open auth page with redirect back to current page
       openAuthPage();
       return;
     }
+    
+    console.log('User is logged in to Main Gallery, proceeding with platform connection');
     
     // Open popup to handle connection
     if (chrome.action && chrome.action.openPopup) {
@@ -96,19 +99,22 @@ export async function handleAddToGallery(data) {
       platformName: getPlatformName(data.platformId) || 'Unknown Platform',
     };
     
+    console.log('Sending data to gallery API:', enrichedData);
+    
     // In a production scenario, we would send this to our API
     // For now, make a simulated API call to a real endpoint
-    // This is a placeholder that will actually send data in production
     const response = await fetch('https://main-gallery-hub.lovable.app/api/collect', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': 'demo-key' // This would be a real API key in production
+        'X-API-Key': 'demo-key', // This would be a real API key in production
+        'Cache-Control': 'no-cache' // Prevent caching
       },
       body: JSON.stringify(enrichedData)
     }).catch(error => {
+      console.log('Fetch failed:', error);
+      console.log('Using simulated response for testing.');
       // If fetch fails, simulate a successful response for testing purposes
-      console.log('Fetch failed - using simulated response for testing.');
       return {
         ok: true,
         json: async () => ({ success: true, message: 'Simulated successful response for testing' })
@@ -139,6 +145,11 @@ export async function handleAddToGallery(data) {
 
       // Mark this platform as connected since we successfully added content
       savePlatformConnectionState(data.platformId, true);
+      
+      // Notify any open popup to update UI
+      chrome.runtime.sendMessage({
+        action: 'updateUI'
+      });
     } catch (error) {
       console.error('Failed to show notification:', error);
     }
@@ -155,6 +166,11 @@ export function savePlatformConnectionState(platformId, isConnected) {
   const key = `platform_${platformId}_connected`;
   chrome.storage.local.set({ [key]: isConnected }, function() {
     console.log(`Platform ${platformId} connection state saved: ${isConnected}`);
+    
+    // Notify any open popup to update UI
+    chrome.runtime.sendMessage({
+      action: 'updateUI'
+    });
   });
 }
 
@@ -163,7 +179,9 @@ export function isPlatformConnected(platformId) {
   return new Promise(resolve => {
     const key = `platform_${platformId}_connected`;
     chrome.storage.local.get([key], function(result) {
-      resolve(!!result[key]);
+      const isConnected = !!result[key];
+      console.log(`Platform ${platformId} connection status: ${isConnected}`);
+      resolve(isConnected);
     });
   });
 }
@@ -172,10 +190,12 @@ export function isPlatformConnected(platformId) {
 export function openGallery() {
   try {
     const mainGalleryUrl = getGalleryUrl();
+    console.log(`Opening gallery at ${mainGalleryUrl}`);
     
     // Find any existing gallery tabs
     chrome.tabs.query({ url: mainGalleryUrl + '*' }, function(existingTabs) {
       if (existingTabs.length > 0) {
+        console.log('Found existing gallery tab, focusing it');
         // Focus the first existing gallery tab
         chrome.tabs.update(existingTabs[0].id, { active: true }, function() {
           if (chrome.runtime.lastError) {
@@ -190,6 +210,7 @@ export function openGallery() {
           });
         });
       } else {
+        console.log('No existing gallery tab found, creating new one');
         // Open a new gallery tab
         chrome.tabs.create({ url: mainGalleryUrl }, function() {
           if (chrome.runtime.lastError) {
@@ -201,4 +222,31 @@ export function openGallery() {
   } catch (error) {
     console.error('Error opening gallery:', error);
   }
+}
+
+// Detect if a user is logged into a platform based on page content/cookies
+export function detectPlatformLogin(platformId, tabId) {
+  console.log(`Detecting login status for ${platformId} in tab ${tabId}`);
+  
+  // Send a message to the content script to check login status
+  chrome.tabs.sendMessage(tabId, { 
+    action: 'checkPlatformLogin',
+    platformId: platformId
+  }, response => {
+    if (chrome.runtime.lastError) {
+      console.log('Could not check platform login (content script may not be ready):', chrome.runtime.lastError.message);
+      return false;
+    }
+    
+    if (response && response.isLoggedIn) {
+      console.log(`User is logged in to ${platformId}`);
+      return true;
+    } else {
+      console.log(`User is NOT logged in to ${platformId}`);
+      return false;
+    }
+  });
+  
+  // Default to assuming not logged in if we can't determine
+  return false;
 }

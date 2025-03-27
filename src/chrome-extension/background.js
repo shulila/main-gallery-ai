@@ -5,9 +5,10 @@ import {
   handlePlatformConnected, 
   handlePlatformDisconnected, 
   handleAddToGallery,
-  openGallery
+  openGallery,
+  detectPlatformLogin
 } from './utils/platforms.js';
-import { setupAuthCallbackListener, openAuthPage } from './utils/auth.js';
+import { setupAuthCallbackListener, openAuthPage, isLoggedIn } from './utils/auth.js';
 import { debugPlatformDetection, getGalleryUrl } from './utils/common.js';
 
 // Set up auth callback listener
@@ -15,6 +16,8 @@ setupAuthCallbackListener();
 
 // Listen for extension installation/update
 chrome.runtime.onInstalled.addListener(function(details) {
+  console.log('Extension installed or updated:', details.reason);
+  
   // Show a notification to pin the extension on install
   if (details.reason === 'install') {
     try {
@@ -26,15 +29,13 @@ chrome.runtime.onInstalled.addListener(function(details) {
       // Use our notification function
       createNotification(
         notificationId, 
-        'Pin MainGallery Extension',
-        'Click the puzzle icon in your toolbar and pin MainGallery for easy access!'
+        'Welcome to MainGallery',
+        'Pin this extension for quick access to your AI art gallery!'
       );
     } catch (error) {
       console.error('Failed to show installation notification:', error);
     }
   }
-  
-  console.log('Extension installed:', details.reason);
 });
 
 // Listen for tab updates to detect supported platforms
@@ -45,12 +46,21 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (platformId) {
       console.log(`MainGallery: Detected ${platformId} on tab ${tabId}`);
       
-      // Notify the content script that we've detected a supported platform
-      chrome.tabs.sendMessage(tabId, { 
-        action: 'platformDetected',
-        platformId: platformId
-      }).catch(err => {
-        console.log('Content script may not be ready yet:', err.message);
+      // Check if user is logged in to MainGallery
+      isLoggedIn().then(loggedIn => {
+        // Notify the content script that we've detected a supported platform
+        chrome.tabs.sendMessage(tabId, { 
+          action: 'platformDetected',
+          platformId: platformId,
+          userLoggedIn: loggedIn
+        }).catch(err => {
+          console.log('Content script may not be ready yet:', err.message);
+        });
+        
+        // If the user is logged in, also check platform login status
+        if (loggedIn) {
+          detectPlatformLogin(platformId, tabId);
+        }
       });
     }
   }
@@ -59,12 +69,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // Listen for auth state changes
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'sync' && changes.main_gallery_auth_token) {
+    const isLoggedIn = !!changes.main_gallery_auth_token.newValue;
+    console.log('Auth state changed:', isLoggedIn ? 'logged in' : 'logged out');
+    
     // Auth token changed, notify content scripts
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
         chrome.tabs.sendMessage(tab.id, { 
           action: 'authStateChanged',
-          isLoggedIn: !!changes.main_gallery_auth_token.newValue
+          isLoggedIn: isLoggedIn
         }).catch(() => {
           // Ignore errors for tabs where content script isn't running
         });
@@ -75,7 +88,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
-  console.log('Received message:', message.action, 'from:', sender);
+  console.log('Received message:', message.action, 'from:', sender.tab?.url || 'popup');
   
   switch (message.action) {
     case 'contentScriptLoaded':
@@ -83,12 +96,17 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       if (sender.tab && sender.tab.url) {
         const platformId = debugPlatformDetection(sender.tab.url);
         if (platformId) {
-          // Send response immediately to confirm detection
-          sendResponse({ 
-            success: true, 
-            platformId: platformId,
-            message: `Detected ${platformId} platform` 
+          // Check if user is logged in to MainGallery
+          isLoggedIn().then(loggedIn => {
+            // Send response with platform detection and login status
+            sendResponse({ 
+              success: true, 
+              platformId: platformId,
+              userLoggedIn: loggedIn,
+              message: `Detected ${platformId} platform` 
+            });
           });
+          return true; // Will respond asynchronously
         } else {
           sendResponse({ success: false, message: 'Not a supported platform' });
         }
@@ -114,16 +132,28 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       return true; // Will respond asynchronously
       
     case 'openGallery':
-      chrome.tabs.create({ url: getGalleryUrl() });
+      openGallery();
       break;
       
     case 'openAuthPage':
       openAuthPage(message.redirectUrl);
       break;
       
+    case 'checkLoginStatus':
+      isLoggedIn().then(loggedIn => {
+        sendResponse({ isLoggedIn: loggedIn });
+      });
+      return true; // Will respond asynchronously
+      
     case 'isInstalled':
       // Simple ping to check if extension is installed
       sendResponse({ installed: true });
+      break;
+      
+    case 'debug':
+      // Log any debug messages
+      console.log('Debug:', message.data);
+      sendResponse({ received: true });
       break;
   }
   
