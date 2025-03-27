@@ -171,6 +171,20 @@ export function savePlatformConnectionState(platformId, isConnected) {
     chrome.runtime.sendMessage({
       action: 'updateUI'
     });
+    
+    // If this platform was just connected, hide any floating buttons for it
+    if (isConnected) {
+      chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+        if (tabs[0] && tabs[0].id) {
+          chrome.tabs.sendMessage(tabs[0].id, { 
+            action: 'platformConnected',
+            platformId: platformId
+          }).catch(err => {
+            console.log('Could not notify content script:', err.message);
+          });
+        }
+      });
+    }
   });
 }
 
@@ -240,6 +254,21 @@ export function detectPlatformLogin(platformId, tabId) {
     
     if (response && response.isLoggedIn) {
       console.log(`User is logged in to ${platformId}`);
+      
+      // Check if this platform is already connected to MainGallery
+      isPlatformConnected(platformId).then(isConnected => {
+        if (!isConnected) {
+          // If platform is detected and logged in but not connected,
+          // check if we should show a contextual connect button
+          chrome.tabs.sendMessage(tabId, { 
+            action: 'showConnectButton',
+            platformId: platformId
+          }).catch(err => {
+            console.log('Could not send contextual button message:', err.message);
+          });
+        }
+      });
+      
       return true;
     } else {
       console.log(`User is NOT logged in to ${platformId}`);
@@ -249,4 +278,20 @@ export function detectPlatformLogin(platformId, tabId) {
   
   // Default to assuming not logged in if we can't determine
   return false;
+}
+
+// Add a function to handle creating a floating connect button
+export function createFloatingConnectButton(platformId, tabId) {
+  // First check if the platform is already connected
+  isPlatformConnected(platformId).then(isConnected => {
+    if (!isConnected) {
+      // If not connected, show the floating button via content script
+      chrome.tabs.sendMessage(tabId, { 
+        action: 'showConnectButton',
+        platformId: platformId
+      }).catch(err => {
+        console.log('Could not show connect button:', err.message);
+      });
+    }
+  });
 }

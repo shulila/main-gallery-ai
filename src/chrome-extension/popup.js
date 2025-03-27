@@ -67,9 +67,7 @@ const states = {
 
 const loginBtn = document.getElementById('login-btn');
 const connectBtn = document.getElementById('connect-btn');
-const disconnectBtn = document.getElementById('disconnect-btn');
 const viewGalleryBtn = document.getElementById('view-gallery-btn');
-const viewGalleryBtnAlt = document.getElementById('view-gallery-btn-alt');
 const viewMyGalleryBtns = document.querySelectorAll('.view-my-gallery-btn, #view-my-gallery-btn2');
 const firstTimeTip = document.getElementById('first-time-tip');
 const pinExtensionTip = document.getElementById('pin-extension-tip');
@@ -82,6 +80,10 @@ const platformIconNotLoggedElem = document.getElementById('platform-icon-not-log
 const connectedPlatformNameElem = document.getElementById('connected-platform-name');
 const connectedPlatformIconElem = document.getElementById('connected-platform-icon');
 const connectingPlatformNameElem = document.getElementById('connecting-platform-name');
+
+// OAuth login buttons
+const googleLoginBtn = document.getElementById('google-login-btn');
+const facebookLoginBtn = document.getElementById('facebook-login-btn');
 
 // Helper functions
 function hideAllStates() {
@@ -145,8 +147,8 @@ async function connectPlatform(platform) {
   connectingPlatformNameElem.textContent = platform.name;
   
   try {
-    // Add a slight delay to show the connecting state
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Show the connecting state with the progress bar animation
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     // In a production environment, this would make a real API call
     // to connect the user's platform account
@@ -259,16 +261,22 @@ async function openAuthPage() {
 function handleTipClose(tipElement) {
   if (!tipElement) return;
   
-  tipElement.classList.add('hidden');
+  // Animate out before hiding
+  tipElement.style.animation = 'fadeOut 0.3s forwards';
   
-  // Remember that we've closed this tip
-  const tipId = tipElement.id;
-  chrome.storage.local.set({ [`${tipId}_closed`]: true });
+  setTimeout(() => {
+    tipElement.classList.add('hidden');
+    
+    // Remember that we've closed this tip
+    const tipId = tipElement.id;
+    chrome.storage.local.set({ [`${tipId}_closed`]: true });
+  }, 300);
 }
 
 function checkTipsVisibility() {
-  chrome.storage.local.get(['first-time-tip_closed', 'pin-extension-tip_closed', 'popup_opened_before'], function(result) {
-    if (!result.popup_opened_before && !result['first-time-tip_closed']) {
+  chrome.storage.local.get(['first-time-tip_closed', 'pin-extension-tip_closed', 'popup_opened_before', 'main_gallery_auth_token'], function(result) {
+    // Only show the first-time tip if not closed before and user is not logged in
+    if (!result.popup_opened_before && !result['first-time-tip_closed'] && !result.main_gallery_auth_token) {
       if (firstTimeTip) {
         firstTimeTip.classList.remove('hidden');
       }
@@ -391,12 +399,25 @@ async function updateUI() {
   checkTipsVisibility();
 }
 
+// OAuth login handlers (placeholders for now)
+function handleGoogleLogin() {
+  showToast('Google login coming soon');
+}
+
+function handleFacebookLogin() {
+  showToast('Facebook login coming soon');
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', updateUI);
 
 loginBtn.addEventListener('click', () => {
   openAuthPage();
 });
+
+// OAuth button listeners
+googleLoginBtn.addEventListener('click', handleGoogleLogin);
+facebookLoginBtn.addEventListener('click', handleFacebookLogin);
 
 connectBtn.addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -406,19 +427,7 @@ connectBtn.addEventListener('click', async () => {
   }
 });
 
-disconnectBtn.addEventListener('click', async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const platform = detectPlatform(tab.url);
-  if (platform) {
-    disconnectPlatform(platform);
-  }
-});
-
 viewGalleryBtn.addEventListener('click', () => {
-  openGallery();
-});
-
-viewGalleryBtnAlt.addEventListener('click', () => {
   openGallery();
 });
 

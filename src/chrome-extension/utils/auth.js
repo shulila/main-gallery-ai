@@ -58,6 +58,7 @@ export function setupAuthCallbackListener() {
     chrome.webNavigation.onCompleted.addListener(function(details) {
       console.log('Navigation detected to:', details.url);
       
+      // Check if this is an auth callback URL
       if (details.url.includes('/auth/callback') && 
           (details.url.includes('maingallery.app') || 
            details.url.includes('main-gallery.ai') || 
@@ -137,6 +138,46 @@ export function setupAuthCallbackListener() {
     });
   } else {
     console.warn('webNavigation API not available, auth callback listener not set up');
+    
+    // Fallback: Check for auth token periodically
+    setInterval(() => {
+      chrome.tabs.query({ url: [
+        '*://maingallery.app/auth/callback*',
+        '*://main-gallery.ai/auth/callback*',
+        '*://main-gallery-hub.lovable.app/auth/callback*'
+      ]}, (tabs) => {
+        if (tabs.length > 0) {
+          const callbackTab = tabs[0];
+          const url = new URL(callbackTab.url);
+          const token = url.searchParams.get('token');
+          
+          if (token) {
+            console.log('Token found in callback URL via polling, storing token');
+            
+            // Store the token
+            chrome.storage.sync.set({ main_gallery_auth_token: token }, function() {
+              console.log('Authentication token saved successfully via polling');
+              
+              // Similar logic as above, but through polling
+              // Get the redirect URL if available
+              const redirect = url.searchParams.get('redirect');
+              
+              // Notify about auth state change and close tab
+              // (similar actions as in the main callback handler)
+              chrome.runtime.sendMessage({ action: 'updateUI' });
+              
+              // Close the auth tab and potentially redirect
+              setTimeout(() => {
+                chrome.tabs.remove(callbackTab.id);
+                if (redirect) {
+                  chrome.tabs.create({ url: redirect });
+                }
+              }, 500);
+            });
+          }
+        }
+      });
+    }, 2000); // Check every 2 seconds
   }
 }
 

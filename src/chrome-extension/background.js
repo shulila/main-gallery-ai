@@ -6,7 +6,8 @@ import {
   handlePlatformDisconnected, 
   handleAddToGallery,
   openGallery,
-  detectPlatformLogin
+  detectPlatformLogin,
+  isPlatformConnected
 } from './utils/platforms.js';
 import { setupAuthCallbackListener, openAuthPage, isLoggedIn } from './utils/auth.js';
 import { debugPlatformDetection, getGalleryUrl } from './utils/common.js';
@@ -64,6 +65,38 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       });
     }
   }
+});
+
+// Listen for clicks on the extension icon in the toolbar
+chrome.action.onClicked.addListener(async (tab) => {
+  console.log('Extension icon clicked in toolbar');
+  
+  // Check if user is logged in to MainGallery
+  const loggedIn = await isLoggedIn();
+  
+  if (!loggedIn) {
+    // If not logged in, open popup for authentication
+    console.log('User not logged in, opening popup');
+    return; // Allow default popup to open
+  }
+  
+  // Check if we're on a supported platform
+  const platformId = tab.url ? debugPlatformDetection(tab.url) : null;
+  
+  if (platformId) {
+    // We're on a supported platform, check if it's connected
+    const isConnected = await isPlatformConnected(platformId);
+    
+    if (isConnected) {
+      // If already connected, bypass popup and go straight to gallery
+      console.log('Platform already connected, opening gallery directly');
+      openGallery();
+      return;
+    }
+  }
+  
+  // For all other cases, let the popup open normally
+  console.log('Opening popup for platform connection or non-platform page');
 });
 
 // Listen for auth state changes
