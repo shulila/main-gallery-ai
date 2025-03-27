@@ -44,6 +44,12 @@ const PLATFORMS = {
     icon: 'icons/pika.png',
     urlPatterns: [/pika\.art/],
     tokenStorageKey: 'pika_token'
+  },
+  leonardo: {
+    name: 'Leonardo.ai',
+    icon: 'icons/leonardo.png',
+    urlPatterns: [/leonardo\.ai/],
+    tokenStorageKey: 'leonardo_token'
   }
 };
 
@@ -94,8 +100,8 @@ function detectPlatform(url) {
 
 function isConnected(platformId) {
   return new Promise(resolve => {
-    chrome.storage.sync.get([PLATFORMS[platformId].tokenStorageKey], result => {
-      resolve(!!result[PLATFORMS[platformId].tokenStorageKey]);
+    chrome.storage.local.get([`platform_${platformId}_connected`], result => {
+      resolve(!!result[`platform_${platformId}_connected`]);
     });
   });
 }
@@ -115,15 +121,12 @@ async function connectPlatform(platform) {
   try {
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    const tokenData = {
-      token: 'sample_token_for_' + platform.id,
-      connectedAt: new Date().toISOString()
-    };
+    // In a production environment, this would make a real API call
+    // to connect the user's platform account
     
-    await new Promise(resolve => {
-      const data = {};
-      data[platform.tokenStorageKey] = tokenData;
-      chrome.storage.sync.set(data, resolve);
+    // Mark platform as connected
+    chrome.storage.local.set({ [`platform_${platform.id}_connected`]: true }, function() {
+      console.log(`Platform ${platform.id} connection state saved: true`);
     });
     
     chrome.runtime.sendMessage({
@@ -145,10 +148,12 @@ async function connectPlatform(platform) {
 
 async function disconnectPlatform(platform) {
   try {
-    await new Promise(resolve => {
-      const data = {};
-      data[platform.tokenStorageKey] = null;
-      chrome.storage.sync.remove(platform.tokenStorageKey, resolve);
+    // In a production environment, this would make a real API call
+    // to disconnect the user's platform account
+    
+    // Mark platform as disconnected
+    chrome.storage.local.set({ [`platform_${platform.id}_connected`]: false }, function() {
+      console.log(`Platform ${platform.id} connection state saved: false`);
     });
     
     chrome.runtime.sendMessage({
@@ -157,6 +162,7 @@ async function disconnectPlatform(platform) {
     });
     
     updateUI();
+    showToast('✓ Disconnected from ' + platform.name);
   } catch (error) {
     console.error('Error disconnecting platform:', error);
     showToast('Failed to disconnect. Please try again.');
@@ -165,13 +171,8 @@ async function disconnectPlatform(platform) {
 
 async function openGallery() {
   try {
-    const tabs = await chrome.tabs.query({ url: GALLERY_URL + '*' });
-    
-    if (tabs.length > 0) {
-      chrome.tabs.update(tabs[0].id, { active: true });
-    } else {
-      chrome.tabs.create({ url: GALLERY_URL });
-    }
+    // Send a message to the background script to handle opening the gallery
+    chrome.runtime.sendMessage({ action: 'openGallery' });
     
     // Close the popup after navigating
     window.close();
@@ -204,8 +205,14 @@ async function openAuthPage() {
       redirectUrl = tab.url;
     }
     
-    const authUrl = getAuthUrlWithRedirect(redirectUrl);
-    chrome.tabs.create({ url: authUrl });
+    // Send a message to the background script to handle opening the auth page
+    chrome.runtime.sendMessage({ 
+      action: 'openAuthPage',
+      redirectUrl: redirectUrl
+    });
+    
+    // Close the popup after navigating
+    window.close();
   } catch (error) {
     console.error('Error opening auth page:', error);
   }
@@ -282,7 +289,24 @@ async function updateUI() {
   const loggedIn = await isLoggedIn();
   
   if (!loggedIn) {
+    // If first time, show welcome message with clear login CTA
+    chrome.storage.local.get(['popup_opened_before'], function(result) {
+      if (!result.popup_opened_before) {
+        if (firstTimeTip) {
+          firstTimeTip.classList.remove('hidden');
+        }
+        
+        chrome.storage.local.set({ popup_opened_before: true });
+      }
+    });
+    
     showState(states.notLoggedIn);
+    
+    // Update login button text to clarify action
+    if (loginBtn) {
+      loginBtn.textContent = 'Login / Sign up';
+    }
+    
     return;
   } else {
     // If user is logged in, show appropriate state based on the current page
@@ -304,10 +328,20 @@ async function updateUI() {
       connectedPlatformNameElem.textContent = platform.name;
       connectedPlatformIconElem.src = platform.icon;
       showState(states.alreadyConnected);
+      
+      // Update button text to be clearer - show this is where to view their gallery
+      if (viewGalleryBtn) {
+        viewGalleryBtn.textContent = 'Open Main Gallery';
+      }
     } else {
       platformNameElem.textContent = platform.name;
       platformIconElem.src = platform.icon;
       showState(states.readyToConnect);
+      
+      // Update button text to clarify the action
+      if (connectBtn) {
+        connectBtn.textContent = `Add ${platform.name} to Main Gallery`;
+      }
     }
   }
   

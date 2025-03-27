@@ -38,7 +38,8 @@ export function setupAuthCallbackListener() {
   if (chrome.webNavigation) {
     chrome.webNavigation.onCompleted.addListener(function(details) {
       if (details.url.startsWith('https://maingallery.app/auth/callback') || 
-          details.url.startsWith('https://main-gallery.ai/auth/callback')) {
+          details.url.startsWith('https://main-gallery.ai/auth/callback') ||
+          details.url.startsWith('https://main-gallery-hub.lovable.app/auth/callback')) {
         // Extract token from URL
         const url = new URL(details.url);
         const token = url.searchParams.get('token');
@@ -85,8 +86,32 @@ export function setupAuthCallbackListener() {
     }, { 
       url: [
         { urlPrefix: 'https://maingallery.app/auth/callback' },
-        { urlPrefix: 'https://main-gallery.ai/auth/callback' }
+        { urlPrefix: 'https://main-gallery.ai/auth/callback' },
+        { urlPrefix: 'https://main-gallery-hub.lovable.app/auth/callback' }
       ] 
     });
   }
+}
+
+// Log out user by removing auth token
+export function logout() {
+  return new Promise(function(resolve) {
+    chrome.storage.sync.remove(['main_gallery_auth_token'], function() {
+      console.log('User logged out');
+      
+      // Notify content scripts about auth state change
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, { 
+            action: 'authStateChanged',
+            isLoggedIn: false
+          }).catch(() => {
+            // Ignore errors for tabs where content script isn't running
+          });
+        });
+      });
+      
+      resolve();
+    });
+  });
 }

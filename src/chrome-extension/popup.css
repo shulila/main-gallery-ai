@@ -1,22 +1,7 @@
 
-:root {
-  --primary-color: #7c3aed;
-  --background-color: #ffffff;
-  --text-color: #1f2937;
-  --border-color: #e5e7eb;
-  --success-color: #10b981;
-  --error-color: #ef4444;
-  --button-blue: #0077ED;
-}
+/* Add the existing popup.css content and append the OAuth styles */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background-color: #1f2937;
-    --text-color: #f9fafb;
-    --border-color: #374151;
-  }
-}
-
+/* General styling */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -24,24 +9,24 @@
 }
 
 body {
-  width: 320px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  background-color: var(--background-color);
-  color: var(--text-color);
-  padding: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
+  width: 320px;
+  min-height: 300px;
+  background-color: #ffffff;
 }
 
 .container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  padding: 16px;
 }
 
 .header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  justify-content: space-between;
+  margin-bottom: 20px;
 }
 
 .logo {
@@ -56,130 +41,199 @@ body {
 }
 
 .logo h1 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
-}
-
-.tip-box {
-  background-color: rgba(124, 58, 237, 0.1);
-  border-left: 3px solid var(--primary-color);
-  padding: 10px 12px;
-  border-radius: 4px;
-  margin-bottom: 8px;
-  font-size: 14px;
-}
-
-.pin-tip {
-  background-color: rgba(16, 185, 129, 0.1);
-  border-left: 3px solid var(--success-color);
+  margin: 0;
 }
 
 .state {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  margin-bottom: 16px;
 }
 
-.hidden {
-  display: none;
-}
-
-.platform-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.tip-box {
+  background-color: #f0f9ff;
+  border-left: 3px solid #3957ed;
   padding: 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
+  margin-bottom: 16px;
+  border-radius: 4px;
+  animation: fadeIn 0.5s ease-out;
 }
 
-.platform-info img {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+.pin-tip {
+  background-color: #fff7ed;
+  border-left: 3px solid #f59e0b;
 }
 
-.platform-info h2 {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 4px;
+.tip-box p {
+  margin: 0;
+  color: #1e293b;
+  font-size: 13px;
 }
 
-.connected-status {
-  color: var(--success-color);
-  font-weight: 500;
+p {
+  margin-bottom: 12px;
 }
 
-.platforms {
-  margin-top: 8px;
-}
-
-.platforms p {
-  margin-bottom: 4px;
-  font-weight: 500;
-}
-
-.platforms ul {
-  padding-left: 20px;
-  margin-top: 4px;
-}
-
-.platforms li {
-  margin-bottom: 4px;
-  font-size: 14px;
-}
-
-button {
-  padding: 10px 16px;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: background-color 0.2s;
+.primary-btn, .secondary-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .primary-btn {
-  background-color: var(--button-blue);
-  color: white;
+  background-color: #3957ed;
+  color: #ffffff;
 }
 
 .primary-btn:hover {
-  background-color: #0062c4;
+  background-color: #2a41b1;
 }
 
 .secondary-btn {
-  background-color: transparent;
-  border: 1px solid var(--border-color);
+  background-color: #f1f5f9;
+  color: #1e293b;
+  margin-top: 8px;
 }
 
 .secondary-btn:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-.loading-spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid rgba(0, 0, 0, 0.1);
-  border-top: 3px solid var(--button-blue);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 12px auto;
+  background-color: #e2e8f0;
 }
 
 .icon {
+  display: inline-block;
   width: 16px;
   height: 16px;
+  margin-right: 8px;
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
 }
 
 .gallery-icon {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2' ry='2'/%3E%3Crect width='6' height='6' x='7' y='7' rx='1' ry='1'/%3E%3Crect width='6' height='6' x='11' y='11' rx='1' ry='1'/%3E%3C/svg%3E");
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>');
+}
+
+.platform-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: #f8fafc;
+}
+
+.platform-info img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: contain;
+  background-color: #ffffff;
+  padding: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.platform-info h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.platform-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.connected-status {
+  color: #16a34a !important;
+  font-weight: 500;
+}
+
+.info-text {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 16px;
+}
+
+.platforms {
+  margin-bottom: 16px;
+}
+
+.platforms p {
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.platforms ul {
+  list-style-type: none;
+  padding-left: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.platforms li {
+  padding: 6px 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.platforms li::before {
+  content: "•";
+  color: #3957ed;
+  font-weight: bold;
+  display: inline-block; 
+  width: 16px;
+}
+
+/* Loading indicator */
+.loading-spinner {
+  margin: 20px auto;
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 3px solid #3957ed;
+  animation: spin 1s linear infinite;
+}
+
+#connecting {
+  text-align: center;
+  padding: 20px 0;
+}
+
+#connecting p {
+  margin-top: 12px;
+}
+
+/* Toast */
+.main-gallery-toast {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background-color: #3957ed;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  z-index: 9999;
+  transition: all 0.3s ease;
+  opacity: 0;
+}
+
+.main-gallery-toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
 }
 
 @keyframes spin {
@@ -187,35 +241,81 @@ button {
   100% { transform: rotate(360deg); }
 }
 
-#connecting {
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Success message animation */
+.success-message {
+  padding: 16px;
+  background-color: #ecfdf5;
+  border-radius: 8px;
+  color: #16a34a;
+  text-align: center;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(22, 163, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+}
+
+/* OAuth buttons styling */
+.oauth-options {
+  margin-top: 16px;
   text-align: center;
 }
 
-.success-message {
+.oauth-options p {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.oauth-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.oauth-btn {
   display: flex;
   align-items: center;
-  color: var(--success-color);
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13px;
   font-weight: 500;
-  padding: 8px 0;
+  gap: 8px;
+  flex: 1;
 }
 
-.main-gallery-toast {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background-color: #1f2937;
-  color: white;
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  z-index: 10001;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transform: translateY(-10px);
-  opacity: 0;
-  transition: all 0.3s ease;
+.oauth-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.main-gallery-toast.show {
-  transform: translateY(0);
-  opacity: 1;
+.oauth-btn:not(:disabled):hover {
+  background-color: #f8fafc;
+}
+
+.google {
+  color: #4285F4;
+}
+
+.facebook {
+  color: #1877F2;
+}
+
+.coming-soon {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
 }
