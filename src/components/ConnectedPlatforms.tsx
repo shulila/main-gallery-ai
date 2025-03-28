@@ -118,7 +118,7 @@ const ConnectedPlatforms = () => {
                     <CardTitle className="text-lg">{platform.name}</CardTitle>
                     <div className="flex items-center mt-1">
                       {platform.status === 'connected' ? (
-                        <Badge variant="success" className="text-xs font-normal">
+                        <Badge variant="secondary" className="text-xs font-normal bg-green-100 text-green-800 hover:bg-green-200 border-green-200">
                           <Check className="h-3 w-3 mr-1" /> Connected
                         </Badge>
                       ) : platform.status === 'not_connected' ? (
