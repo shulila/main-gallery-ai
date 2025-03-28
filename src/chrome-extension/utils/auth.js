@@ -1,4 +1,6 @@
 
+// Authentication utilities for MainGallery extension
+
 // Open auth page with redirect
 export function openAuthPage(redirectUrl) {
   let authUrl = 'https://main-gallery-hub.lovable.app/auth?from=extension';
@@ -29,6 +31,29 @@ export function openAuthPage(redirectUrl) {
       }, 3000);
     }
   });
+}
+
+// Open auth with specific provider (Google or Microsoft)
+export function openAuthWithProvider(provider) {
+  try {
+    console.log(`Opening auth with provider: ${provider}`);
+    
+    // Construct the URL with the provider parameter
+    let authUrl = `https://main-gallery-hub.lovable.app/auth?from=extension&provider=${provider}`;
+    
+    // Add timestamp to prevent caching
+    authUrl += `&t=${Date.now()}`;
+    
+    chrome.tabs.create({ url: authUrl }, function(tab) {
+      if (chrome.runtime.lastError) {
+        console.error(`Error opening ${provider} auth:`, chrome.runtime.lastError);
+      } else {
+        console.log(`${provider} auth page opened in tab:`, tab.id);
+      }
+    });
+  } catch (error) {
+    console.error(`Error in openAuthWithProvider for ${provider}:`, error);
+  }
 }
 
 // Check if user is logged in to Main Gallery
@@ -205,3 +230,4 @@ export function logout() {
     });
   });
 }
+

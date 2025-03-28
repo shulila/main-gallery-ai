@@ -1,13 +1,4 @@
-import { createNotification } from './utils/notifications.js';
-import { 
-  handlePlatformConnection, 
-  handlePlatformConnected, 
-  handlePlatformDisconnected, 
-  handleAddToGallery,
-  openGallery,
-  detectPlatformLogin,
-  isPlatformConnected
-} from './utils/platforms.js';
+
 import { setupAuthCallbackListener, openAuthPage, openAuthWithProvider, isLoggedIn } from './utils/auth.js';
 import { debugPlatformDetection, getGalleryUrl } from './utils/common.js';
 
@@ -26,12 +17,13 @@ chrome.runtime.onInstalled.addListener(function(details) {
       // Create a unique ID for this notification
       const notificationId = 'installation-' + Date.now();
       
-      // Use our notification function
-      createNotification(
-        notificationId, 
-        'Welcome to MainGallery',
-        'Pin this extension for quick access to your AI art gallery!'
-      );
+      // Use chrome notifications API
+      chrome.notifications.create(notificationId, {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'Welcome to MainGallery',
+        message: 'Pin this extension for quick access to your AI art gallery!'
+      });
     } catch (error) {
       console.error('Failed to show installation notification:', error);
     }
@@ -56,17 +48,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         }).catch(err => {
           console.log('Content script may not be ready yet:', err.message);
         });
-        
-        // If the user is logged in, also check platform login status
-        if (loggedIn) {
-          detectPlatformLogin(platformId, tabId);
-        }
       });
     }
   }
 });
 
-// IMPROVED SMART LOGIC: Extension icon click handler with direct gallery open optimization
+// Extension icon click handler with direct gallery open optimization
 chrome.action.onClicked.addListener(async (tab) => {
   console.log('Extension icon clicked in toolbar');
   
@@ -85,122 +72,28 @@ chrome.action.onClicked.addListener(async (tab) => {
   openAuthPage();
 });
 
-// Helper function to check if user is logged into platform
-async function checkIfUserIsLoggedInToPlatform(tabId, platformId) {
-  return new Promise(resolve => {
-    chrome.tabs.sendMessage(tabId, { 
-      action: 'checkPlatformLogin',
-      platformId: platformId
-    }, response => {
-      if (chrome.runtime.lastError) {
-        console.log('Could not check platform login:', chrome.runtime.lastError.message);
-        resolve(false);
-        return;
-      }
-      
-      resolve(response && response.isLoggedIn);
-    });
+// Function to open the gallery
+function openGallery() {
+  const galleryUrl = getGalleryUrl();
+  console.log('Opening gallery at', galleryUrl);
+  
+  // Check if gallery tab is already open
+  chrome.tabs.query({ url: `${galleryUrl}*` }, (tabs) => {
+    if (tabs && tabs.length > 0) {
+      // Gallery tab exists, focus it
+      chrome.tabs.update(tabs[0].id, { active: true });
+    } else {
+      // Gallery tab doesn't exist, open a new one
+      chrome.tabs.create({ url: galleryUrl });
+    }
   });
 }
-
-// Helper function to check if current page is a gallery page
-async function checkIfGalleryPage(tabId, platformId) {
-  return new Promise(resolve => {
-    chrome.tabs.sendMessage(tabId, { 
-      action: 'isGalleryPage',
-      platformId: platformId
-    }, response => {
-      if (chrome.runtime.lastError) {
-        console.log('Could not check if gallery page:', chrome.runtime.lastError.message);
-        resolve(false);
-        return;
-      }
-      
-      resolve(response && response.isGalleryPage);
-    });
-  });
-}
-
-// Check if user has any connected platforms
-async function checkForAnyConnectedPlatforms() {
-  return new Promise(resolve => {
-    chrome.storage.local.get(null, function(items) {
-      const platformKeys = Object.keys(items).filter(key => 
-        key.startsWith('platform_') && key.endsWith('_connected')
-      );
-      
-      const hasConnected = platformKeys.some(key => items[key] === true);
-      console.log('Connected platforms check:', hasConnected ? 'Has connected platforms' : 'No connected platforms');
-      resolve(hasConnected);
-    });
-  });
-}
-
-// Listen for auth state changes
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync' && changes.main_gallery_auth_token) {
-    const isLoggedIn = !!changes.main_gallery_auth_token.newValue;
-    console.log('Auth state changed:', isLoggedIn ? 'logged in' : 'logged out');
-    
-    // Auth token changed, notify content scripts
-    chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, { 
-          action: 'authStateChanged',
-          isLoggedIn: isLoggedIn
-        }).catch(() => {
-          // Ignore errors for tabs where content script isn't running
-        });
-      });
-    });
-  }
-});
 
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   console.log('Received message:', message.action, 'from:', sender.tab?.url || 'popup');
   
   switch (message.action) {
-    case 'contentScriptLoaded':
-      // Content script has loaded, check if we're on a supported platform
-      if (sender.tab && sender.tab.url) {
-        const platformId = debugPlatformDetection(sender.tab.url);
-        if (platformId) {
-          // Check if user is logged in to MainGallery
-          isLoggedIn().then(loggedIn => {
-            // Send response with platform detection and login status
-            sendResponse({ 
-              success: true, 
-              platformId: platformId,
-              userLoggedIn: loggedIn,
-              message: `Detected ${platformId} platform` 
-            });
-          });
-          return true; // Will respond asynchronously
-        } else {
-          sendResponse({ success: false, message: 'Not a supported platform' });
-        }
-      }
-      break;
-      
-    case 'initiatePlatformConnection':
-      handlePlatformConnection(message.platform);
-      break;
-      
-    case 'platformConnected':
-      handlePlatformConnected(message.platform);
-      break;
-      
-    case 'platformDisconnected':
-      handlePlatformDisconnected(message.platform);
-      break;
-      
-    case 'addToGallery':
-      handleAddToGallery(message.data)
-        .then(result => sendResponse(result))
-        .catch(error => sendResponse({ success: false, error: error.message }));
-      return true; // Will respond asynchronously
-      
     case 'openGallery':
       openGallery();
       break;
@@ -218,19 +111,8 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         sendResponse({ isLoggedIn: loggedIn });
       });
       return true; // Will respond asynchronously
-      
-    case 'isInstalled':
-      // Simple ping to check if extension is installed
-      sendResponse({ installed: true });
-      break;
-      
-    case 'debug':
-      // Log any debug messages
-      console.log('Debug:', message.data);
-      sendResponse({ received: true });
-      break;
   }
   
-  // Return true to indicate we'll respond asynchronously
+  // Return true if we plan to respond asynchronously
   return true;
 });

@@ -69,7 +69,7 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
-// IMPROVED: Auto-redirect to gallery if logged in
+// Auto-redirect to gallery if logged in
 async function checkAuthAndRedirect() {
   try {
     showState(states.authLoading); // Show loading state while checking
