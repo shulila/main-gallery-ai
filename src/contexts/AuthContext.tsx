@@ -1,6 +1,6 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createClient, Session, User } from '@supabase/supabase-js';
+import { createClient, Session, User, Provider } from '@supabase/supabase-js';
 import { useToast } from '@/components/ui/use-toast';
 
 // Updated with actual Supabase credentials
@@ -8,7 +8,13 @@ const supabaseUrl = 'https://ovhriawcqvcpagcaidlb.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U';
 
 // Create a single Supabase client instance to be used throughout the app
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: localStorage,
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+});
 
 // For debugging purposes
 console.log('Supabase URL:', supabaseUrl);
@@ -21,6 +27,8 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithMicrosoft: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,29 +44,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initializeAuth = async () => {
       setIsLoading(true);
       
-      // Get the current session
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('Error retrieving session:', error);
-      } else {
+      try {
+        // Set up auth state listener FIRST
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          (_event, session) => {
+            setSession(session);
+            setUser(session?.user ?? null);
+          }
+        );
+        
+        // THEN check for existing session
+        const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
         setUser(session?.user ?? null);
+        
+        return () => subscription.unsubscribe();
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
-      
-      // Set up auth state listener
-      const { data: authListener } = supabase.auth.onAuthStateChange(
-        (_event, newSession) => {
-          setSession(newSession);
-          setUser(newSession?.user ?? null);
-        }
-      );
-      
-      return () => {
-        authListener.subscription.unsubscribe();
-      };
     };
     
     initializeAuth();
@@ -139,13 +144,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Add OAuth sign-in methods
+  const signInWithGoogle = async () => {
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin + '/auth/callback'
+        }
+      });
+      
+      if (error) {
+        throw error;
+      }
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      toast({
+        title: "Google login failed",
+        description: error.message || "Could not authenticate with Google",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const signInWithMicrosoft = async () => {
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'azure',
+        options: {
+          redirectTo: window.location.origin + '/auth/callback'
+        }
+      });
+      
+      if (error) {
+        throw error;
+      }
+    } catch (error: any) {
+      console.error('Microsoft login error:', error);
+      toast({
+        title: "Microsoft login failed",
+        description: error.message || "Could not authenticate with Microsoft",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const value = {
     session,
     user,
     isLoading,
     signIn,
     signUp,
-    signOut
+    signOut,
+    signInWithGoogle,
+    signInWithMicrosoft
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

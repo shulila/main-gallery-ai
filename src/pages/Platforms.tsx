@@ -31,42 +31,42 @@ const Platforms = () => {
       name: 'Midjourney',
       logo: '/images/midjourney-logo.png',
       isConnected: false,
-      status: 'disconnected'
+      status: 'disconnected' as const
     },
     {
       id: 'leonardo',
       name: 'Leonardo.ai',
       logo: '/images/leonardo-logo.png',
       isConnected: false,
-      status: 'disconnected'
+      status: 'disconnected' as const
     },
     {
       id: 'dalle',
       name: 'DALL·E',
       logo: '/images/dalle-logo.png',
       isConnected: false,
-      status: 'disconnected'
+      status: 'disconnected' as const
     },
     {
       id: 'stable-diffusion',
       name: 'Stable Diffusion',
       logo: '/images/sd-logo.png',
       isConnected: false,
-      status: 'disconnected'
+      status: 'disconnected' as const
     },
     {
       id: 'pika',
       name: 'Pika',
       logo: '/images/pika-logo.png',
       isConnected: false,
-      status: 'disconnected'
+      status: 'disconnected' as const
     },
     {
       id: 'runway',
       name: 'Runway',
       logo: '/images/runway-logo.png',
       isConnected: false,
-      status: 'disconnected'
+      status: 'disconnected' as const
     }
   ]);
   
@@ -101,7 +101,7 @@ const Platforms = () => {
     if (user) {
       checkPlatformConnections();
     }
-  }, [user, platforms]);
+  }, [user]);
 
   // Detect if extension is installed
   const detectExtension = async (): Promise<boolean> => {
@@ -236,138 +236,142 @@ const Platforms = () => {
     window.scrollTo(0, 0);
   }, []);
 
+  // Render the platform manager dashboard for logged-in users
+  const renderPlatformManager = () => {
+    return (
+      <>
+        <h1 className="text-3xl font-bold mb-2 text-center">Platform Manager</h1>
+        <p className="text-muted-foreground text-center mb-8">Connect and manage your AI platforms</p>
+        
+        {/* Platform Dashboard UI */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {platforms.map(platform => (
+            <div 
+              key={platform.id}
+              className="bg-card border rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md"
+            >
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center">
+                      <img 
+                        src={platform.logo} 
+                        alt={platform.name} 
+                        className="w-6 h-6"
+                        onError={(e) => {
+                          // Fallback for missing images
+                          (e.target as HTMLImageElement).src = '/placeholder.svg';
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <h3 className="font-medium">{platform.name}</h3>
+                      <div className="flex items-center mt-1">
+                        {platform.status === 'connected' ? (
+                          <Badge className="bg-green-100 text-green-800 hover:bg-green-200 px-2 py-0">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Connected
+                          </Badge>
+                        ) : platform.status === 'error' ? (
+                          <Badge variant="destructive" className="px-2 py-0">
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Error
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="px-2 py-0">
+                            Disconnected
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {platform.lastSync && (
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Last synced: {new Date(platform.lastSync).toLocaleString()}
+                  </p>
+                )}
+                
+                <div className="flex items-center gap-2 mt-4">
+                  <Button
+                    variant={platform.isConnected ? "outline" : "default"}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => toggleConnection(platform.id, platform.isConnected)}
+                  >
+                    {platform.isConnected ? "Disconnect" : "Connect"}
+                  </Button>
+                  
+                  {platform.isConnected && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => refreshPlatform(platform.id)}
+                      title="Refresh content"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
+                  )}
+                  
+                  {platform.isConnected && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Platform settings"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        {/* Extension Instructions if no platforms connected */}
+        {platforms.every(p => !p.isConnected) && (
+          <div className="mt-10 p-6 border border-dashed rounded-2xl">
+            <h3 className="text-lg font-medium mb-2">Connect your first platform</h3>
+            <p className="text-muted-foreground mb-4">
+              Use the MainGallery browser extension to connect your AI platforms and automatically
+              sync your creations.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row gap-4 mt-6">
+              <Button asChild>
+                <a href="https://chrome.google.com/webstore/detail/maingallery-ai-art-collec/placeholder" target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Get Chrome Extension
+                </a>
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/gallery')}>
+                Continue to Gallery
+              </Button>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  // Render the marketing view for logged-out users
+  const renderMarketingView = () => {
+    return (
+      <>
+        <h1 className="text-3xl font-bold mb-2 text-center">Platform Integrations</h1>
+        <p className="text-muted-foreground text-center mb-8">Connect your favorite AI platforms to MainGallery</p>
+        <PlatformIntegration />
+      </>
+    );
+  };
+
   return (
     <div className="min-h-screen">
       <Navbar />
       <main className="pt-24">
         <div className="container mx-auto px-4 py-8">
-          {user ? (
-            // Logged in user sees the connected platforms management view
-            <>
-              <h1 className="text-3xl font-bold mb-2 text-center">Platform Manager</h1>
-              <p className="text-muted-foreground text-center mb-8">Connect and manage your AI platforms</p>
-              
-              {/* Platform Dashboard UI */}
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {platforms.map(platform => (
-                  <div 
-                    key={platform.id}
-                    className="bg-card border rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md"
-                  >
-                    <div className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center">
-                            <img 
-                              src={platform.logo} 
-                              alt={platform.name} 
-                              className="w-6 h-6"
-                              onError={(e) => {
-                                // Fallback for missing images
-                                (e.target as HTMLImageElement).src = '/placeholder.svg';
-                              }}
-                            />
-                          </div>
-                          <div>
-                            <h3 className="font-medium">{platform.name}</h3>
-                            <div className="flex items-center mt-1">
-                              {platform.status === 'connected' ? (
-                                <Badge className="bg-green-100 text-green-800 hover:bg-green-200 px-2 py-0">
-                                  <CheckCircle className="w-3 h-3 mr-1" />
-                                  Connected
-                                </Badge>
-                              ) : platform.status === 'error' ? (
-                                <Badge variant="destructive" className="px-2 py-0">
-                                  <XCircle className="w-3 h-3 mr-1" />
-                                  Error
-                                </Badge>
-                              ) : (
-                                <Badge variant="secondary" className="px-2 py-0">
-                                  Disconnected
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {platform.lastSync && (
-                        <p className="text-xs text-muted-foreground mb-4">
-                          Last synced: {new Date(platform.lastSync).toLocaleString()}
-                        </p>
-                      )}
-                      
-                      <div className="flex items-center gap-2 mt-4">
-                        <Button
-                          variant={platform.isConnected ? "outline" : "default"}
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => toggleConnection(platform.id, platform.isConnected)}
-                        >
-                          {platform.isConnected ? "Disconnect" : "Connect"}
-                        </Button>
-                        
-                        {platform.isConnected && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => refreshPlatform(platform.id)}
-                            title="Refresh content"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </Button>
-                        )}
-                        
-                        {platform.isConnected && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Platform settings"
-                          >
-                            <Settings className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              {/* Extension Instructions if no platforms connected */}
-              {platforms.every(p => !p.isConnected) && (
-                <div className="mt-10 p-6 border border-dashed rounded-2xl">
-                  <h3 className="text-lg font-medium mb-2">Connect your first platform</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Use the MainGallery browser extension to connect your AI platforms and automatically
-                    sync your creations.
-                  </p>
-                  
-                  <div className="flex flex-col sm:flex-row gap-4 mt-6">
-                    <Button asChild>
-                      <a href="https://chrome.google.com/webstore/detail/maingallery-ai-art-collec/placeholder" target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        Get Chrome Extension
-                      </a>
-                    </Button>
-                    <Button variant="outline" onClick={() => navigate('/gallery')}>
-                      Continue to Gallery
-                    </Button>
-                  </div>
-                </div>
-              )}
-              
-              <div className="mt-12">
-                <ConnectedPlatforms />
-              </div>
-            </>
-          ) : (
-            // Not logged in user sees integration explanation
-            <>
-              <h1 className="text-3xl font-bold mb-2 text-center">Platform Integrations</h1>
-              <p className="text-muted-foreground text-center mb-8">Connect your favorite AI platforms to MainGallery</p>
-              <PlatformIntegration />
-            </>
-          )}
+          {user ? renderPlatformManager() : renderMarketingView()}
         </div>
       </main>
       <Footer />

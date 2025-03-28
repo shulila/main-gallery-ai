@@ -1,134 +1,265 @@
 
-// Create and inject a floating "Connect to MainGallery" button with Apple-style design
+// This script is dynamically injected and handles UI elements like floating buttons
+
+// Create and insert floating connect button on valid gallery pages
 function createFloatingConnectButton(platformId, platformName) {
   // Check if button already exists
   if (document.querySelector('.mg-floating-connect-button')) {
     return;
   }
   
-  // Create button element
+  // Create button container
   const button = document.createElement('button');
   button.className = 'mg-floating-connect-button';
+  button.id = 'mg-connect-button';
+  button.setAttribute('data-platform', platformId);
   
-  // Create button contents: icon + text (initially hidden)
-  button.innerHTML = `
-    <div class="mg-button-icon">
-      <img src="chrome-extension://__MSG_@@extension_id__/icons/icon48.png" class="mg-logo-icon" alt="MainGallery">
-      <svg class="mg-plus-icon" viewBox="0 0 24 24" width="20" height="20">
-        <path d="M12 5v14M5 12h14"></path>
-      </svg>
-    </div>
-    <span class="mg-button-text">Add to MainGallery</span>
+  // Create icon
+  const icon = document.createElement('div');
+  icon.className = 'mg-floating-connect-icon';
+  
+  // Create icon SVG
+  icon.innerHTML = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
   `;
   
-  // Add styles
+  // Create text
+  const text = document.createElement('span');
+  text.className = 'mg-floating-connect-text';
+  text.textContent = `Connect to MainGallery`;
+  
+  // Assemble button
+  button.appendChild(icon);
+  button.appendChild(text);
+  
+  // Add to document
+  document.body.appendChild(button);
+  
+  // Add event listener
+  button.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Send message to connect platform
+    chrome.runtime.sendMessage({
+      action: 'initiatePlatformConnection',
+      platform: platformId
+    });
+    
+    // Show connecting state
+    showFloatingButtonState('connecting');
+    
+    // Prevent further clicks
+    button.disabled = true;
+  });
+  
+  // Add tooltip
+  createTooltip(button, `Connect ${platformName} to MainGallery`);
+  
+  // Show button with animation
+  setTimeout(() => {
+    button.classList.add('show');
+  }, 500);
+}
+
+// Create a tooltip element
+function createTooltip(element, text) {
+  const tooltip = document.createElement('div');
+  tooltip.className = 'mg-tooltip';
+  tooltip.textContent = text;
+  document.body.appendChild(tooltip);
+  
+  // Show tooltip on hover
+  element.addEventListener('mouseenter', () => {
+    const rect = element.getBoundingClientRect();
+    tooltip.style.top = `${rect.top - tooltip.offsetHeight - 10}px`;
+    tooltip.style.left = `${rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
+    tooltip.classList.add('show');
+  });
+  
+  // Hide tooltip on mouse leave
+  element.addEventListener('mouseleave', () => {
+    tooltip.classList.remove('show');
+  });
+}
+
+// Update floating button state
+function showFloatingButtonState(state, platformId) {
+  const button = document.getElementById('mg-connect-button');
+  if (!button) return;
+  
+  switch (state) {
+    case 'connecting':
+      button.classList.add('connecting');
+      button.innerHTML = `
+        <div class="mg-button-spinner"></div>
+        <span class="mg-floating-connect-text show">Connecting...</span>
+      `;
+      break;
+      
+    case 'connected':
+      button.classList.add('connected');
+      button.innerHTML = `
+        <div class="mg-check-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="mg-floating-connect-text show">Connected!</span>
+      `;
+      
+      // Remove button after showing connected state
+      setTimeout(() => {
+        button.classList.remove('show');
+        setTimeout(() => {
+          button.remove();
+        }, 300);
+      },
+      2000);
+      break;
+      
+    case 'error':
+      button.classList.add('error');
+      button.innerHTML = `
+        <div class="mg-error-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="mg-floating-connect-text show">Failed. Try again</span>
+      `;
+      
+      // Reset button after error
+      setTimeout(() => {
+        button.classList.remove('error');
+        button.disabled = false;
+        button.innerHTML = `
+          <div class="mg-floating-connect-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="mg-floating-connect-text">Connect to MainGallery</span>
+        `;
+      }, 3000);
+      break;
+  }
+}
+
+// Add CSS for the floating button and tooltip
+function injectStyles() {
   const style = document.createElement('style');
   style.textContent = `
+    /* Floating connect button - Apple-style */
     .mg-floating-connect-button {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background-color: white;
+      bottom: 24px;
+      right: 24px;
+      background-color: #ffffff;
       color: #3957ed;
       border: none;
       border-radius: 28px;
       padding: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
       font-size: 14px;
       font-weight: 500;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       display: flex;
       align-items: center;
-      gap: 8px;
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       cursor: pointer;
       z-index: 9999;
       transition: all 0.3s ease;
       opacity: 0;
       transform: translateY(20px);
       overflow: hidden;
-      width: 48px;
-      height: 48px;
     }
-    
+
     .mg-floating-connect-button.show {
       opacity: 1;
       transform: translateY(0);
     }
-    
-    .mg-button-icon {
-      position: relative;
-      width: 24px;
-      height: 24px;
-      flex-shrink: 0;
-    }
-    
-    .mg-logo-icon {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 24px;
-      height: 24px;
-      border-radius: 6px;
-      transition: opacity 0.3s ease;
-    }
-    
-    .mg-plus-icon {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 24px;
-      height: 24px;
-      stroke: currentColor;
-      fill: none;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-    
-    .mg-button-text {
-      opacity: 0;
-      width: 0;
-      white-space: nowrap;
-      transition: all 0.3s ease;
-      overflow: hidden;
-    }
-    
+
     .mg-floating-connect-button:hover {
       background-color: #3957ed;
-      color: white;
-      padding-right: 18px;
-      width: auto;
-      box-shadow: 0 4px 16px rgba(57, 87, 237, 0.25);
+      color: #ffffff;
       transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(57, 87, 237, 0.25);
+      width: auto;
+      padding-right: 18px;
     }
-    
-    .mg-floating-connect-button:hover .mg-logo-icon {
-      opacity: 0;
-    }
-    
-    .mg-floating-connect-button:hover .mg-plus-icon {
+
+    .mg-floating-connect-button:hover .mg-floating-connect-text {
       opacity: 1;
+      width: auto;
+      margin-left: 8px;
+    }
+
+    .mg-floating-connect-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .mg-floating-connect-text {
+      opacity: 0;
+      width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      transition: all 0.3s ease;
     }
     
-    .mg-floating-connect-button:hover .mg-button-text {
+    .mg-floating-connect-text.show {
       opacity: 1;
       width: auto;
       margin-left: 8px;
     }
     
-    .mg-loader-svg {
-      width: 24px;
-      height: 24px;
+    /* Button states */
+    .mg-floating-connect-button.connecting,
+    .mg-floating-connect-button.connected,
+    .mg-floating-connect-button.error {
+      width: auto;
+      padding-right: 18px;
     }
-
+    
+    .mg-floating-connect-button.connected {
+      background-color: #16a34a;
+      color: white;
+    }
+    
+    .mg-floating-connect-button.error {
+      background-color: #dc2626;
+      color: white;
+    }
+    
+    /* Spinner for connecting state */
+    .mg-button-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: mg-spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    
+    @keyframes mg-spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Tooltip */
     .mg-tooltip {
       position: fixed;
-      background-color: white;
+      background-color: #ffffff;
       color: #1e293b;
       border-radius: 12px;
       padding: 10px 14px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 13px;
       max-width: 250px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -136,142 +267,19 @@ function createFloatingConnectButton(platformId, platformName) {
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.3s ease, transform 0.3s ease;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
-    
+
     .mg-tooltip.show {
       opacity: 1;
     }
-    
-    @keyframes mg-fade-in {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    @keyframes mg-fade-out {
-      from { opacity: 1; transform: translateY(0); }
-      to { opacity: 0; transform: translateY(10px); }
-    }
-    
-    @keyframes mg-spin {
-      0% { transform: rotate(0deg); stroke-dashoffset: 60; }
-      100% { transform: rotate(360deg); stroke-dashoffset: 0; }
-    }
   `;
   
-  // Create tooltip
-  const tooltip = document.createElement('div');
-  tooltip.className = 'mg-tooltip';
-  tooltip.textContent = 'Connect this platform to MainGallery';
-  
-  // Append style, button and tooltip to document
   document.head.appendChild(style);
-  document.body.appendChild(button);
-  document.body.appendChild(tooltip);
-  
-  // Show the button with animation
-  setTimeout(() => {
-    button.classList.add('show');
-  }, 500);
-  
-  // Add tooltip logic
-  button.addEventListener('mouseenter', () => {
-    const rect = button.getBoundingClientRect();
-    tooltip.style.bottom = `${window.innerHeight - rect.top + 10}px`;
-    tooltip.style.left = `${rect.left + rect.width / 2 - 125}px`;
-    tooltip.classList.add('show');
-  });
-  
-  button.addEventListener('mouseleave', () => {
-    tooltip.classList.remove('show');
-  });
-  
-  // Handle button click
-  button.addEventListener('click', () => {
-    // Send message to background script to handle connection
-    chrome.runtime.sendMessage({
-      action: 'initiatePlatformConnection',
-      platform: platformId
-    });
-    
-    // Add loading state to button
-    const buttonIcon = button.querySelector('.mg-button-icon');
-    const buttonText = button.querySelector('.mg-button-text');
-    
-    // Replace icons with loader
-    buttonIcon.innerHTML = `
-      <svg class="mg-loader-svg" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="60" stroke-dashoffset="0"></circle>
-      </svg>
-    `;
-    
-    // Add animation to loader
-    const loaderSvg = buttonIcon.querySelector('.mg-loader-svg');
-    loaderSvg.style.animation = 'mg-spin 1s linear infinite';
-    
-    // Update text and show it
-    buttonText.textContent = 'Connecting...';
-    buttonText.style.opacity = '1';
-    buttonText.style.width = 'auto';
-    buttonText.style.marginLeft = '8px';
-    
-    // Update button styles for loading state
-    button.style.width = 'auto';
-    button.style.paddingRight = '18px';
-    button.style.pointerEvents = 'none';
-    
-    // After a delay, show success and remove
-    setTimeout(() => {
-      // Update to success state
-      buttonIcon.innerHTML = `
-        <svg class="mg-loader-svg" viewBox="0 0 24 24" width="24" height="24">
-          <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-        </svg>
-      `;
-      buttonText.textContent = 'Connected!';
-      button.style.backgroundColor = '#16a34a';
-      button.style.color = 'white';
-      
-      // After showing success, auto-redirect to MainGallery
-      setTimeout(() => {
-        chrome.runtime.sendMessage({ action: 'openGallery' });
-        
-        // Remove button with animation
-        button.style.opacity = '0';
-        button.style.transform = 'translateY(20px)';
-        tooltip.style.opacity = '0';
-        
-        // Remove from DOM after animation
-        setTimeout(() => {
-          button.remove();
-          tooltip.remove();
-        }, 300);
-      }, 1500);
-    }, 2000);
-  });
-  
-  // Return the button element
-  return button;
 }
 
-// Remove the floating button if it exists
-function removeFloatingConnectButton() {
-  const button = document.querySelector('.mg-floating-connect-button');
-  if (button) {
-    button.style.animation = 'mg-fade-out 0.3s forwards';
-    setTimeout(() => {
-      button.remove();
-    }, 300);
-  }
-  
-  const tooltip = document.querySelector('.mg-tooltip');
-  if (tooltip) {
-    tooltip.remove();
-  }
-}
-
-// Export these functions for use in the main content script
+// Export functions to be used from content.js
 window.mgContentInjection = {
   createFloatingConnectButton,
-  removeFloatingConnectButton
+  showFloatingButtonState,
+  injectStyles
 };

@@ -1,4 +1,3 @@
-
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery",
@@ -142,13 +141,14 @@ function isLoggedIn() {
   });
 }
 
+// ENHANCED: Improved connect platform function with immediate redirect
 async function connectPlatform(platform) {
   showState(states.connecting);
   connectingPlatformNameElem.textContent = platform.name;
   
   try {
     // Show the connecting state with the progress bar animation
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced from 1500 to 1000ms for better UX
     
     // Mark platform as connected
     chrome.storage.local.set({ [`platform_${platform.id}_connected`]: true }, function() {
@@ -163,10 +163,8 @@ async function connectPlatform(platform) {
     // Show connected status as a toast notification
     showToast(`✓ Connected to ${platform.name}`);
     
-    // After connecting, open the gallery automatically
-    setTimeout(() => {
-      openGallery();
-    }, 800);
+    // After connecting, open the gallery immediately without delay
+    openGallery();
   } catch (error) {
     console.error('Error connecting platform:', error);
     showToast('Failed to connect. Please try again.');
@@ -174,48 +172,17 @@ async function connectPlatform(platform) {
   }
 }
 
+// IMPROVED: Enhanced gallery opening function for better UX
 async function openGallery() {
   try {
     // Send a message to the background script to handle opening the gallery
     chrome.runtime.sendMessage({ action: 'openGallery' });
     
-    // Close the popup after navigating
+    // Close the popup immediately after navigation request
     window.close();
   } catch (error) {
     console.error('Error opening gallery:', error);
-  }
-}
-
-async function openAuthPage() {
-  try {
-    // Show loading state
-    showState(states.authLoading);
-    
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    let redirectUrl = '';
-    
-    if (tab && tab.url) {
-      redirectUrl = tab.url;
-    }
-    
-    // Send a message to the background script to handle opening the auth page
-    chrome.runtime.sendMessage({ 
-      action: 'openAuthPage',
-      redirectUrl: redirectUrl
-    });
-    
-    // Add a timeout to close the popup
-    setTimeout(() => {
-      window.close();
-    }, 800);
-  } catch (error) {
-    console.error('Error opening auth page:', error);
-    
-    // If there's an error, go back to not logged in state
-    showState(states.notLoggedIn);
-    
-    // Show error toast
-    showToast('Error starting login process. Please try again.');
+    showToast('Could not open gallery. Please try again.');
   }
 }
 
@@ -247,8 +214,9 @@ function showToast(message) {
   }, 3000);
 }
 
+// ENHANCED: Smarter UI update logic with autoredirect
 async function updateUI() {
-  console.log('Updating popup UI');
+  console.log('Updating popup UI with enhanced logic');
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tab.url;
   
@@ -263,21 +231,19 @@ async function updateUI() {
   // User is logged in to MainGallery
   const platform = detectPlatform(url);
   
+  // ENHANCED Smart redirect condition #1: Not on platform page but has connected platforms
   if (!platform) {
     // Check if user has any connected platforms
     const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
     
     if (hasConnectedPlatforms) {
-      // If they have connected platforms, suggest going to gallery
-      showState(states.notPlatformPage);
+      // IMMEDIATE REDIRECT: User is logged in and has connected platforms but not on platform page
+      console.log('Smart redirect: User logged in with connected platforms, redirecting to gallery');
+      openGallery();
+      return;
     } else {
-      // Show logged in message briefly
-      states.loggedInMessage.classList.remove('hidden');
-      
-      setTimeout(() => {
-        // Then show not platform page
-        showState(states.notPlatformPage);
-      }, 500);
+      // Show not platform page state
+      showState(states.notPlatformPage);
     }
     return;
   }
@@ -299,19 +265,12 @@ async function updateUI() {
   // User is logged in to both MainGallery and the platform
   const connected = await isConnected(platform.id);
   
+  // ENHANCED Smart redirect condition #2: On platform page, logged in and connected
   if (connected) {
-    if (onGalleryPage) {
-      // Auto-open gallery if on a platform gallery page and all conditions are met
-      // This creates the seamless experience requested
-      console.log('Smart redirect: All conditions met, going directly to gallery');
-      openGallery();
-      return;
-    }
-    
-    // Platform is already connected but not on gallery page
-    connectedPlatformNameElem.textContent = platform.name;
-    connectedPlatformIconElem.src = platform.icon;
-    showState(states.alreadyConnected);
+    // IMMEDIATE REDIRECT: All conditions met - logged in to MainGallery and platform, and platform is connected
+    console.log('Smart redirect: All conditions met, redirecting directly to gallery');
+    openGallery();
+    return;
   } else {
     // Platform is ready to connect
     platformNameElem.textContent = platform.name;
@@ -335,44 +294,52 @@ async function checkForAnyConnectedPlatforms() {
   });
 }
 
-// Event listeners
+// ENHANCED: On load - check for auto-redirect conditions
 document.addEventListener('DOMContentLoaded', async () => {
-  // Check if we should auto-redirect to gallery
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const url = tab.url;
-  const loggedIn = await isLoggedIn();
+  console.log('Popup loaded - checking for auto-redirect conditions');
   
-  if (loggedIn) {
-    const platform = detectPlatform(url);
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = tab.url;
+    const loggedIn = await isLoggedIn();
     
-    if (platform) {
-      const connected = await isConnected(platform.id);
-      const platformLoggedIn = isPlatformLoggedIn(url, platform.id);
-      const onGalleryPage = isGalleryPage(url, platform.id);
+    if (loggedIn) {
+      const platform = detectPlatform(url);
       
-      // Smart redirect logic - if everything is ready, go straight to gallery
-      if (connected && platformLoggedIn && onGalleryPage) {
-        console.log('Smart redirect: All conditions met, going directly to gallery');
-        openGallery();
-        return;
-      }
-    } else {
-      // Not on a platform page, check if any platforms are connected
-      const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
-      
-      if (hasConnectedPlatforms) {
-        // Auto-redirect to gallery even if not on a platform page
-        console.log('Smart redirect: Has connected platforms, going directly to gallery');
-        openGallery();
-        return;
+      if (platform) {
+        const connected = await isConnected(platform.id);
+        const platformLoggedIn = isPlatformLoggedIn(url, platform.id);
+        
+        // AUTO-REDIRECT: If user is logged in to MainGallery AND platform AND platform is connected
+        if (connected && platformLoggedIn) {
+          console.log('Auto-redirect condition met: User logged in everywhere, bypassing popup entirely');
+          // Don't even show the popup, go straight to gallery
+          openGallery();
+          return;
+        }
+      } else {
+        // Not on a platform page, check if any platforms are connected
+        const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
+        
+        if (hasConnectedPlatforms) {
+          // Auto-redirect to gallery if user has any connected platforms
+          console.log('Auto-redirect: Has connected platforms, going directly to gallery');
+          openGallery();
+          return;
+        }
       }
     }
+    
+    // If no auto-redirect occurred, update UI normally
+    updateUI();
+  } catch (error) {
+    console.error('Error during auto-redirect check:', error);
+    // Fall back to normal UI update
+    updateUI();
   }
-  
-  // If no auto-redirect occurred, update UI normally
-  updateUI();
 });
 
+// Event listeners for buttons
 loginBtn.addEventListener('click', () => {
   openAuthPage();
 });

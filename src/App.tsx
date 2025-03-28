@@ -1,98 +1,47 @@
 
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ThemeProvider } from "@/components/theme-provider";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import Index from "./pages/Index";
-import Gallery from "./pages/Gallery";
-import Detail from "./pages/Detail";
-import Platforms from "./pages/Platforms";
-import AuthPage from "./pages/AuthPage";
-import NotFound from "./pages/NotFound";
-import FeatureDetail from "./pages/FeatureDetail";
-import Start from "./pages/Start";
+import { AuthProvider } from '@/contexts/AuthContext';
 
+// Pages
+import Index from '@/pages/Index';
+import Start from '@/pages/Start';
+import FeatureDetail from '@/pages/FeatureDetail';
+import Gallery from '@/pages/Gallery';
+import Detail from '@/pages/Detail';
+import Platforms from '@/pages/Platforms';
+import AuthPage from '@/pages/AuthPage';
+import AuthCallback from '@/pages/AuthCallback';
+import NotFound from '@/pages/NotFound';
+
+// Create a QueryClient once
 const queryClient = new QueryClient();
 
-// Protected route component
-const ProtectedRoute = ({ children }) => {
-  const { user, isLoading } = useAuth();
-  
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-  
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
-  
-  return children;
-};
-
-// Home redirect component - Improved to properly redirect based on auth status
-const HomeRedirect = () => {
-  const { user, isLoading } = useAuth();
-  
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-  
-  if (user) {
-    return <Navigate to="/gallery" replace />;
-  }
-  
-  return <Index />;
-};
-
-const AppRoutes = () => {
+function App() {
   return (
-    <Routes>
-      <Route path="/" element={<HomeRedirect />} />
-      <Route path="/gallery" element={<ProtectedRoute><Gallery /></ProtectedRoute>} />
-      <Route path="/detail/:id" element={<ProtectedRoute><Detail /></ProtectedRoute>} />
-      <Route path="/platforms" element={<ProtectedRoute><Platforms /></ProtectedRoute>} />
-      <Route path="/features/:slug" element={<FeatureDetail />} />
-      <Route path="/auth" element={<AuthPage />} />
-      <Route path="/start" element={<Start />} />
-      
-      {/* Placeholder routes for footer links */}
-      <Route path="/docs" element={<NotFound />} />
-      <Route path="/api" element={<NotFound />} />
-      <Route path="/changelog" element={<NotFound />} />
-      <Route path="/status" element={<NotFound />} />
-      <Route path="/about" element={<NotFound />} />
-      <Route path="/blog" element={<NotFound />} />
-      <Route path="/privacy" element={<NotFound />} />
-      <Route path="/terms" element={<NotFound />} />
-      <Route path="/cookies" element={<NotFound />} />
-      
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <ThemeProvider defaultTheme="light" storageKey="maingallery-theme">
+          <Router>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/start" element={<Start />} />
+              <Route path="/features/:featureId" element={<FeatureDetail />} />
+              <Route path="/gallery" element={<Gallery />} />
+              <Route path="/gallery/:imageId" element={<Detail />} />
+              <Route path="/platforms" element={<Platforms />} />
+              <Route path="/auth" element={<AuthPage />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Router>
+          <Toaster />
+        </ThemeProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
-};
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+}
 
 export default App;
