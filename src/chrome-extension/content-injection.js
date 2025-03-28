@@ -18,7 +18,7 @@ function createFloatingConnectButton(platformId, platformName) {
   const icon = document.createElement('div');
   icon.className = 'mg-floating-connect-icon';
   
-  // Create icon SVG
+  // Create icon SVG - using a plus icon by default
   icon.innerHTML = `
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -28,7 +28,7 @@ function createFloatingConnectButton(platformId, platformName) {
   // Create text
   const text = document.createElement('span');
   text.className = 'mg-floating-connect-text';
-  text.textContent = `Connect to MainGallery`;
+  text.textContent = `Add to MainGallery`;
   
   // Assemble button
   button.appendChild(icon);
@@ -49,14 +49,14 @@ function createFloatingConnectButton(platformId, platformName) {
     });
     
     // Show connecting state
-    showFloatingButtonState('connecting');
+    showFloatingButtonState('connecting', platformId);
     
     // Prevent further clicks
     button.disabled = true;
   });
   
   // Add tooltip
-  createTooltip(button, `Connect ${platformName} to MainGallery`);
+  createTooltip(button, `Add to MainGallery`);
   
   // Show button with animation
   setTimeout(() => {
@@ -141,14 +141,14 @@ function showFloatingButtonState(state, platformId) {
               <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
-          <span class="mg-floating-connect-text">Connect to MainGallery</span>
+          <span class="mg-floating-connect-text">Add to MainGallery</span>
         `;
       }, 3000);
       break;
   }
 }
 
-// Add CSS for the floating button and tooltip
+// Add CSS for the floating button and tooltip - improved Apple-style design
 function injectStyles() {
   const style = document.createElement('style');
   style.textContent = `
@@ -157,66 +157,67 @@ function injectStyles() {
       position: fixed;
       bottom: 24px;
       right: 24px;
-      background-color: #ffffff;
-      color: #3957ed;
+      background-color: #7E22CE; /* Purple color like in the screenshot */
+      color: #ffffff;
       border: none;
-      border-radius: 28px;
-      padding: 12px;
+      border-radius: 50%;
+      padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
       font-size: 14px;
       font-weight: 500;
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 48px;
-      height: 48px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      width: 50px;
+      height: 50px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       cursor: pointer;
       z-index: 9999;
-      transition: all 0.3s ease;
+      transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
       opacity: 0;
-      transform: translateY(20px);
+      transform: translateY(20px) scale(0.9);
       overflow: hidden;
+      outline: none;
     }
 
     .mg-floating-connect-button.show {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateY(0) scale(1);
     }
 
     .mg-floating-connect-button:hover {
-      background-color: #3957ed;
-      color: #ffffff;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(57, 87, 237, 0.25);
-      width: auto;
-      padding-right: 18px;
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 6px 16px rgba(126, 34, 206, 0.4);
     }
 
-    .mg-floating-connect-button:hover .mg-floating-connect-text {
-      opacity: 1;
-      width: auto;
-      margin-left: 8px;
+    .mg-floating-connect-button:active {
+      transform: scale(0.95);
     }
 
     .mg-floating-connect-icon {
-      width: 20px;
-      height: 20px;
-      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
     }
 
     .mg-floating-connect-text {
+      position: absolute;
       opacity: 0;
       width: 0;
       overflow: hidden;
       white-space: nowrap;
-      transition: all 0.3s ease;
+      pointer-events: none;
     }
     
     .mg-floating-connect-text.show {
       opacity: 1;
+      position: relative;
       width: auto;
       margin-left: 8px;
+      pointer-events: auto;
     }
     
     /* Button states */
@@ -224,17 +225,26 @@ function injectStyles() {
     .mg-floating-connect-button.connected,
     .mg-floating-connect-button.error {
       width: auto;
-      padding-right: 18px;
+      padding: 0 18px;
+      border-radius: 25px;
+    }
+    
+    .mg-floating-connect-button.connecting .mg-floating-connect-text,
+    .mg-floating-connect-button.connected .mg-floating-connect-text,
+    .mg-floating-connect-button.error .mg-floating-connect-text {
+      opacity: 1;
+      position: relative;
+      width: auto;
+      margin-left: 8px;
+      pointer-events: auto;
     }
     
     .mg-floating-connect-button.connected {
       background-color: #16a34a;
-      color: white;
     }
     
     .mg-floating-connect-button.error {
       background-color: #dc2626;
-      color: white;
     }
     
     /* Spinner for connecting state */
@@ -257,16 +267,16 @@ function injectStyles() {
       position: fixed;
       background-color: #ffffff;
       color: #1e293b;
-      border-radius: 12px;
-      padding: 10px 14px;
+      border-radius: 8px;
+      padding: 8px 12px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 13px;
-      max-width: 250px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      max-width: 200px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       z-index: 10000;
       pointer-events: none;
       opacity: 0;
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      transition: opacity 0.2s ease, transform 0.2s ease;
     }
 
     .mg-tooltip.show {

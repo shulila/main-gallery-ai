@@ -55,7 +55,10 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*"],
+      "resources": [
+        "icons/*",
+        "content-injection.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

@@ -1,320 +1,174 @@
 
-import { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Button } from "@/components/ui/button";
-import { Menu, X, User, Image as ImageIcon, LogOut } from "lucide-react";
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { brandConfig } from '@/config/brandConfig';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { useToast } from '@/hooks/use-toast';
+import { useMobile } from '@/hooks/use-mobile';
+import { Menu, X, LogOut, Image, Settings, User, ExternalLink } from 'lucide-react';
 
 const Navbar = () => {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const location = useLocation();
+  const { user, logout, isLoading } = useAuth();
+  const { isMobile } = useMobile();
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
-  
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
-    };
-    
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  const { toast } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate(brandConfig.routes.home);
-  };
-
-  const isActive = (path: string) => location.pathname === path;
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const scrollToSection = (sectionId: string) => {
-    // First check if we're on the homepage
-    if (location.pathname !== brandConfig.routes.home) {
-      navigate(`${brandConfig.routes.home}#${sectionId}`);
-      return;
-    }
-    
-    const section = document.getElementById(sectionId);
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth' });
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out",
+      });
+      navigate('/');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      toast({
+        variant: "destructive",
+        title: "Logout failed",
+        description: "Please try again later."
+      });
     }
   };
 
-  const handleLogoClick = (e: React.MouseEvent) => {
-    if (location.pathname === brandConfig.routes.home) {
-      e.preventDefault();
-      scrollToTop();
-    }
-  };
-
-  const handleHomeClick = (e: React.MouseEvent) => {
-    if (location.pathname === brandConfig.routes.home) {
-      e.preventDefault();
-      scrollToTop();
-    }
-  };
-
-  const handleHowItWorksClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    scrollToSection('how-it-works');
-  };
-
-  const handleAuth = (tab: string) => {
-    navigate(`${brandConfig.routes.auth}?tab=${tab}`);
+  const toggleMenu = () => {
+    setIsOpen(!isOpen);
   };
 
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-      isScrolled ? 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-md shadow-subtle' : 'bg-transparent'
-    }`}>
-      <div className="container mx-auto px-4 md:px-6 py-4">
-        <div className="flex items-center justify-between">
-          <Link 
-            to={brandConfig.routes.home} 
-            className="flex items-center space-x-2"
-            onClick={handleLogoClick}
-          >
-            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-              <ImageIcon className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-xl font-medium">{brandConfig.name}</span>
-          </Link>
-          
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
-            {/* Only show Home and How It Works for non-logged in users */}
-            {!user && (
-              <>
-                <Link 
-                  to={brandConfig.routes.home} 
-                  className={`text-sm font-medium transition-colors hover:text-primary ${
-                    isActive(brandConfig.routes.home) ? 'text-primary' : 'text-foreground/80'
-                  }`}
-                  onClick={handleHomeClick}
-                >
-                  Home
-                </Link>
-                <a 
-                  href="#how-it-works"
-                  className="text-sm font-medium transition-colors hover:text-primary text-foreground/80"
-                  onClick={handleHowItWorksClick}
-                >
-                  How It Works
-                </a>
-              </>
-            )}
-            {user && (
-              <Link to={brandConfig.routes.gallery} className={`text-sm font-medium transition-colors hover:text-primary ${
-                isActive(brandConfig.routes.gallery) ? 'text-primary' : 'text-foreground/80'
-              }`}>
+    <header className="fixed top-0 left-0 right-0 bg-background/80 backdrop-blur-md border-b border-border/40 z-50">
+      <nav className="container mx-auto px-4 flex items-center justify-between h-16">
+        <Link to={user ? "/gallery" : "/"} className="flex items-center gap-2">
+          <div className="bg-primary w-10 h-10 flex items-center justify-center rounded-lg">
+            <Image className="text-white w-6 h-6" />
+          </div>
+          <span className="font-bold text-xl">MainGallery</span>
+        </Link>
+
+        {/* Mobile menu button */}
+        {isMobile && (
+          <Button variant="ghost" size="icon" onClick={toggleMenu} className="md:hidden">
+            {isOpen ? <X /> : <Menu />}
+          </Button>
+        )}
+
+        {/* Desktop navigation */}
+        <div className={`items-center gap-2 md:flex ${isMobile ? 'hidden' : 'flex'}`}>
+          {!isLoading && user ? (
+            <>
+              <Link to="/gallery" className="hover:text-primary transition-colors px-3 py-2">
                 My Gallery
               </Link>
-            )}
-            {user ? (
-              <Link 
-                to={brandConfig.routes.platforms} 
-                className={`text-sm font-medium transition-colors hover:text-primary ${
-                  isActive(brandConfig.routes.platforms) ? 'text-primary' : 'text-foreground/80'
-                }`}
-              >
-                Connected Platforms
+              
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={user.user_metadata?.avatar_url || undefined} />
+                            <AvatarFallback className="bg-primary/10">
+                              {user.email?.charAt(0).toUpperCase() || user.user_metadata?.name?.charAt(0).toUpperCase() || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>
+                          {user.user_metadata?.name || user.email || 'Account'}
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => navigate('/gallery')}>
+                          <Image className="mr-2 h-4 w-4" />
+                          <span>My Gallery</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate('/platforms')}>
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          <span>Platform Manager</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <Settings className="mr-2 h-4 w-4" />
+                          <span>Settings</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={handleLogout}>
+                          <LogOut className="mr-2 h-4 w-4" />
+                          <span>Log out</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Account</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </>
+          ) : (
+            <>
+              <Link to="/auth" className="hover:text-primary transition-colors px-3 py-2">
+                Login
               </Link>
-            ) : (
-              <Link 
-                to={brandConfig.routes.home} 
-                className={`text-sm font-medium transition-colors hover:text-primary ${
-                  isActive(brandConfig.routes.platforms) ? 'text-primary' : 'text-foreground/80'
-                }`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollToSection('platforms');
-                }}
-              >
-                Platforms
-              </Link>
-            )}
-          </nav>
-          
-          {/* Authentication Buttons */}
-          <div className="hidden md:flex items-center space-x-4">
-            {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="rounded-full">
-                    <User className="h-4 w-4 mr-2" />
-                    {user.email?.split('@')[0] || 'Account'}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate(brandConfig.routes.gallery)}>
-                    My Gallery
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate(brandConfig.routes.platforms)}>
-                    Connected Platforms
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut}>
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Log out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button asChild>
+                <Link to="/auth?signup=true">Sign up</Link>
+              </Button>
+            </>
+          )}
+        </div>
+
+        {/* Mobile navigation */}
+        {isMobile && isOpen && (
+          <div className="absolute top-16 left-0 right-0 bg-background border-b border-border/40 px-4 py-3 flex flex-col gap-2 md:hidden">
+            {!isLoading && user ? (
+              <>
+                <div className="flex items-center gap-2 p-2">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={user.user_metadata?.avatar_url || undefined} />
+                    <AvatarFallback className="bg-primary/10">
+                      {user.email?.charAt(0).toUpperCase() || user.user_metadata?.name?.charAt(0).toUpperCase() || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{user.user_metadata?.name || 'User'}</p>
+                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                  </div>
+                </div>
+                <Link to="/gallery" className="hover:bg-accent hover:text-accent-foreground rounded-md px-3 py-2 transition-colors" onClick={toggleMenu}>
+                  My Gallery
+                </Link>
+                <Link to="/platforms" className="hover:bg-accent hover:text-accent-foreground rounded-md px-3 py-2 transition-colors" onClick={toggleMenu}>
+                  Platform Manager
+                </Link>
+                <Button variant="ghost" className="justify-start px-3" onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </Button>
+              </>
             ) : (
               <>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="rounded-full" 
-                  onClick={() => handleAuth('login')}
-                >
-                  Log in
-                </Button>
-                <Button 
-                  size="sm" 
-                  className="rounded-full" 
-                  onClick={() => handleAuth('signup')}
-                >
-                  Sign up
+                <Link to="/auth" className="hover:bg-accent hover:text-accent-foreground rounded-md px-3 py-2 transition-colors" onClick={toggleMenu}>
+                  Login
+                </Link>
+                <Button asChild onClick={toggleMenu}>
+                  <Link to="/auth?signup=true">Sign up</Link>
                 </Button>
               </>
             )}
           </div>
-          
-          {/* Mobile Menu Button */}
-          <button 
-            className="md:hidden rounded-md p-2 text-foreground/80 hover:bg-secondary"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-      </div>
-      
-      {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden bg-background border-t border-border/50 py-4 animate-fade-in">
-          <div className="container mx-auto px-4">
-            <nav className="flex flex-col space-y-4">
-              {/* Only show Home and How It Works for non-logged in users in mobile menu too */}
-              {!user && (
-                <>
-                  <Link 
-                    to={brandConfig.routes.home}
-                    className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                    onClick={(e) => {
-                      setIsMobileMenuOpen(false);
-                      handleHomeClick(e);
-                    }}
-                  >
-                    <ImageIcon size={18} />
-                    <span>Home</span>
-                  </Link>
-                  <a 
-                    href="#how-it-works"
-                    className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                    onClick={(e) => {
-                      setIsMobileMenuOpen(false);
-                      handleHowItWorksClick(e);
-                    }}
-                  >
-                    <ImageIcon size={18} />
-                    <span>How It Works</span>
-                  </a>
-                </>
-              )}
-              {user && (
-                <Link 
-                  to={brandConfig.routes.gallery}
-                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  <ImageIcon size={18} />
-                  <span>My Gallery</span>
-                </Link>
-              )}
-              {user ? (
-                <Link 
-                  to={brandConfig.routes.platforms}
-                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  <User size={18} />
-                  <span>Connected Platforms</span>
-                </Link>
-              ) : (
-                <a
-                  href="#platforms"
-                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-secondary"
-                  onClick={(e) => {
-                    setIsMobileMenuOpen(false);
-                    e.preventDefault();
-                    scrollToSection('platforms');
-                  }}
-                >
-                  <User size={18} />
-                  <span>Platforms</span>
-                </a>
-              )}
-              <div className="pt-4 mt-4 border-t border-border/50 flex flex-col space-y-2">
-                {user ? (
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start" 
-                    size="sm"
-                    onClick={() => {
-                      handleSignOut();
-                      setIsMobileMenuOpen(false);
-                    }}
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Log out
-                  </Button>
-                ) : (
-                  <>
-                    <Button 
-                      variant="outline" 
-                      className="w-full justify-start" 
-                      size="sm"
-                      onClick={() => {
-                        handleAuth('login');
-                        setIsMobileMenuOpen(false);
-                      }}
-                    >
-                      Log in
-                    </Button>
-                    <Button 
-                      className="w-full justify-start" 
-                      size="sm"
-                      onClick={() => {
-                        handleAuth('signup');
-                        setIsMobileMenuOpen(false);
-                      }}
-                    >
-                      Sign up
-                    </Button>
-                  </>
-                )}
-              </div>
-            </nav>
-          </div>
-        </div>
-      )}
+        )}
+      </nav>
     </header>
   );
 };

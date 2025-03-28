@@ -27,95 +27,13 @@
         <div class="social-buttons">
           <button id="google-login-btn" class="social-btn google-btn">
             <img src="icons/google-icon.svg" alt="Google">
-            Google
+            <span>Google</span>
           </button>
           <button id="microsoft-login-btn" class="social-btn microsoft-btn">
             <img src="icons/microsoft-icon.svg" alt="Microsoft">
-            Microsoft
+            <span>Microsoft</span>
           </button>
         </div>
-      </div>
-    </div>
-    
-    <!-- Logged in but not on platform page -->
-    <div id="logged-in-message" class="state hidden">
-      <div class="success-message">
-        <svg viewBox="0 0 24 24" width="24" height="24" class="check-icon">
-          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path>
-        </svg>
-        <p>Connected to Main Gallery</p>
-      </div>
-    </div>
-    
-    <div id="not-platform-page" class="state hidden">
-      <p>Visit a supported AI platform to save your creations to MainGallery.</p>
-      <div class="platforms">
-        <p>Supported platforms:</p>
-        <ul>
-          <li>Midjourney</li>
-          <li>DALL·E</li>
-          <li>Stable Diffusion</li>
-          <li>Runway</li>
-          <li>Pika</li>
-          <li>Leonardo.ai</li>
-        </ul>
-      </div>
-      <button id="view-my-gallery-btn" class="primary-btn">
-        <svg viewBox="0 0 24 24" width="20" height="20" class="gallery-icon">
-          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5-7l-3 3.72L9 13l-3 4h12l-4-5z"></path>
-        </svg>
-        Go to My Gallery
-      </button>
-    </div>
-    
-    <!-- Platform-specific states -->
-    <!-- Not logged in to platform -->
-    <div id="not-platform-logged-in" class="state hidden">
-      <div class="platform-info">
-        <img id="platform-icon-not-logged" src="" alt="Platform Icon">
-        <div>
-          <h2 id="platform-name-not-logged">Platform</h2>
-          <p class="platform-status warning">Please log in to this platform first</p>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Ready to connect -->
-    <div id="ready-to-connect" class="state hidden">
-      <div class="platform-info">
-        <img id="platform-icon" src="" alt="Platform Icon">
-        <div>
-          <h2 id="platform-name">Platform</h2>
-          <p id="platform-status">Ready to connect</p>
-        </div>
-      </div>
-      <button id="connect-btn" class="primary-btn">Add to Main Gallery</button>
-    </div>
-    
-    <!-- Already connected -->
-    <div id="already-connected" class="state hidden">
-      <div class="platform-info connected">
-        <img id="connected-platform-icon" src="" alt="Platform Icon">
-        <div>
-          <h2 id="connected-platform-name">Platform</h2>
-          <p class="connected-status">
-            <svg viewBox="0 0 24 24" width="16" height="16" class="check-icon-small">
-              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path>
-            </svg>
-            Connected
-          </p>
-        </div>
-      </div>
-      <button id="view-gallery-btn" class="primary-btn">Open Main Gallery</button>
-    </div>
-    
-    <!-- Connecting state -->
-    <div id="connecting" class="state hidden">
-      <div class="loading-container">
-        <div class="loading-progress">
-          <div class="loading-progress-bar"></div>
-        </div>
-        <p>Connecting to <span id="connecting-platform-name">platform</span>...</p>
       </div>
     </div>
     
