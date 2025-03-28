@@ -26,6 +26,7 @@ const PLATFORMS = {
       /midjourney\.com\/organize/,
       /midjourney\.com\/feed/,
       /midjourney\.com\/app/,
+      /midjourney\.com\/archive/,
       /discord\.com\/channels.*midjourney/
     ]
   },
@@ -119,7 +120,9 @@ const PLATFORMS = {
     galleryPagePatterns: [
       /leonardo\.ai\/gallery/,
       /leonardo\.ai\/generations/,
-      /leonardo\.ai\/library/
+      /leonardo\.ai\/library/,
+      /leonardo\.ai\/create/,
+      /app\.leonardo\.ai/
     ]
   }
 };
@@ -254,7 +257,7 @@ function checkPlatformLogin(platform) {
   });
 }
 
-// Create floating connect button with hover effect
+// Create floating connect button with Apple-like refined styling
 function createFloatingConnectButton() {
   // Remove existing button if present
   if (addedElements.floatingButton) {
@@ -290,24 +293,24 @@ function createFloatingConnectButton() {
     transition: opacity 0.3s ease, transform 0.3s ease;
   `;
   
-  // Create the actual button
+  // Create the actual button - Apple-style design
   const button = document.createElement('button');
   button.className = 'mg-floating-connect-button';
   
-  // Apply Apple-inspired styling
+  // Apply refined Apple-inspired styling
   button.style.cssText = `
     background-color: white;
     color: ${UI.colors.primary};
     border: none;
-    border-radius: ${UI.borderRadius};
-    padding: ${UI.spacing.md} ${UI.spacing.lg};
+    border-radius: 28px;
+    padding: ${UI.spacing.md};
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 14px;
     font-weight: 500;
     display: flex;
     align-items: center;
     gap: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
     cursor: pointer;
     transition: all 0.3s ease;
     min-width: 48px;
@@ -316,22 +319,36 @@ function createFloatingConnectButton() {
     white-space: nowrap;
   `;
   
-  // Create icon
-  const iconSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  iconSvg.setAttribute("width", "20");
-  iconSvg.setAttribute("height", "20");
-  iconSvg.setAttribute("viewBox", "0 0 24 24");
-  iconSvg.setAttribute("fill", "none");
-  iconSvg.setAttribute("stroke", "currentColor");
-  iconSvg.setAttribute("stroke-width", "2");
-  iconSvg.setAttribute("stroke-linecap", "round");
-  iconSvg.setAttribute("stroke-linejoin", "round");
-  iconSvg.style.transition = "all 0.3s ease";
+  // Create logo icon
+  const logoImg = document.createElement('img');
+  logoImg.src = chrome.runtime.getURL('icons/icon48.png');
+  logoImg.alt = 'MainGallery';
+  logoImg.style.cssText = `
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+  `;
+  
+  // Create plus icon that will appear on hover
+  const plusIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  plusIcon.setAttribute("width", "20");
+  plusIcon.setAttribute("height", "20");
+  plusIcon.setAttribute("viewBox", "0 0 24 24");
+  plusIcon.setAttribute("fill", "none");
+  plusIcon.setAttribute("stroke", "currentColor");
+  plusIcon.setAttribute("stroke-width", "2");
+  plusIcon.setAttribute("stroke-linecap", "round");
+  plusIcon.setAttribute("stroke-linejoin", "round");
+  plusIcon.style.cssText = `
+    display: none;
+    transition: all 0.3s ease;
+  `;
   
   // Create plus icon path
   const plusPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
   plusPath.setAttribute("d", "M12 5v14M5 12h14");
-  iconSvg.appendChild(plusPath);
+  plusIcon.appendChild(plusPath);
   
   // Create text span that will appear on hover
   const textSpan = document.createElement('span');
@@ -339,41 +356,77 @@ function createFloatingConnectButton() {
   textSpan.style.cssText = `
     opacity: 0;
     width: 0;
+    margin-left: 0;
     transform: translateX(-10px);
     transition: all 0.3s ease;
+    font-size: 14px;
+    white-space: nowrap;
   `;
   
   // Append elements
-  button.appendChild(iconSvg);
+  button.appendChild(logoImg);
+  button.appendChild(plusIcon);
   button.appendChild(textSpan);
   buttonContainer.appendChild(button);
+  
+  // Create tooltip
+  const tooltip = document.createElement('div');
+  tooltip.className = 'mg-tooltip';
+  tooltip.textContent = 'Connect this platform to MainGallery';
+  tooltip.style.cssText = `
+    position: fixed;
+    background-color: white;
+    color: #1e293b;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 13px;
+    max-width: 250px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: ${UI.zIndex + 1};
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+  document.body.appendChild(tooltip);
   
   // Add hover effects
   button.addEventListener('mouseenter', () => {
     button.style.backgroundColor = UI.colors.primary;
     button.style.color = 'white';
     button.style.transform = 'translateY(-2px)';
-    button.style.boxShadow = '0 4px 12px rgba(57, 87, 237, 0.25)';
+    button.style.boxShadow = '0 4px 16px rgba(57, 87, 237, 0.25)';
     button.style.width = 'auto';
     button.style.paddingRight = '18px';
-    iconSvg.style.transform = 'rotate(180deg)';
+    logoImg.style.display = 'none';
+    plusIcon.style.display = 'block';
     textSpan.style.opacity = '1';
     textSpan.style.width = 'auto';
     textSpan.style.marginLeft = '8px';
     textSpan.style.transform = 'translateX(0)';
+    
+    // Position and show tooltip
+    const rect = button.getBoundingClientRect();
+    tooltip.style.bottom = `${window.innerHeight - rect.top + 10}px`;
+    tooltip.style.left = `${rect.left + rect.width / 2 - 125}px`;
+    tooltip.style.opacity = '1';
   });
   
   button.addEventListener('mouseleave', () => {
     button.style.backgroundColor = 'white';
     button.style.color = UI.colors.primary;
     button.style.transform = 'translateY(0)';
-    button.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+    button.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.1)';
     button.style.paddingRight = '12px';
-    iconSvg.style.transform = 'rotate(0deg)';
+    logoImg.style.display = 'block';
+    plusIcon.style.display = 'none';
     textSpan.style.opacity = '0';
     textSpan.style.width = '0';
     textSpan.style.marginLeft = '0';
     textSpan.style.transform = 'translateX(-10px)';
+    
+    // Hide tooltip
+    tooltip.style.opacity = '0';
   });
   
   // Add click handler
@@ -385,15 +438,27 @@ function createFloatingConnectButton() {
     }, 100);
     
     // Convert to loading state
-    iconSvg.innerHTML = '';
+    plusIcon.style.display = 'none';
+    logoImg.style.display = 'none';
+    
+    const loaderSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    loaderSvg.setAttribute("width", "20");
+    loaderSvg.setAttribute("height", "20");
+    loaderSvg.setAttribute("viewBox", "0 0 24 24");
+    loaderSvg.style.animation = "mg-spin 1s linear infinite";
+    
     const circlePath = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     circlePath.setAttribute("cx", "12");
     circlePath.setAttribute("cy", "12");
     circlePath.setAttribute("r", "10");
+    circlePath.setAttribute("fill", "none");
+    circlePath.setAttribute("stroke", "currentColor");
+    circlePath.setAttribute("stroke-width", "2");
     circlePath.setAttribute("stroke-dasharray", "60");
     circlePath.setAttribute("stroke-dashoffset", "0");
-    circlePath.style.animation = "mg-spin 1s linear infinite";
-    iconSvg.appendChild(circlePath);
+    loaderSvg.appendChild(circlePath);
+    
+    button.insertBefore(loaderSvg, plusIcon);
     
     textSpan.textContent = "Connecting...";
     textSpan.style.opacity = '1';
@@ -424,12 +489,33 @@ function createFloatingConnectButton() {
     button.style.backgroundColor = '#16a34a';
     button.style.color = 'white';
     
+    // Replace loader with checkmark
+    loaderSvg.remove();
+    const checkSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    checkSvg.setAttribute("width", "20");
+    checkSvg.setAttribute("height", "20");
+    checkSvg.setAttribute("viewBox", "0 0 24 24");
+    checkSvg.setAttribute("fill", "none");
+    checkSvg.setAttribute("stroke", "currentColor");
+    checkSvg.setAttribute("stroke-width", "2");
+    checkSvg.setAttribute("stroke-linecap", "round");
+    checkSvg.setAttribute("stroke-linejoin", "round");
+    
+    const checkPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    checkPath.setAttribute("d", "M20 6L9 17l-5-5");
+    checkSvg.appendChild(checkPath);
+    button.insertBefore(checkSvg, plusIcon);
+    
     setTimeout(() => {
       buttonContainer.style.opacity = '0';
       buttonContainer.style.transform = 'translateY(20px)';
       
       setTimeout(() => {
         buttonContainer.remove();
+        tooltip.remove();
+        
+        // Open gallery automatically after connection succeeds
+        chrome.runtime.sendMessage({ action: 'openGallery' });
       }, 300);
     }, 1500);
   });
@@ -510,10 +596,10 @@ async function updateUI() {
   state.isGalleryPage = isGalleryPage();
   
   // Create or update the floating button (only if not connected)
-  if (!state.isPlatformConnected) {
+  if (state.isLoggedInToGallery && state.isLoggedInToPlatform && !state.isPlatformConnected && state.isGalleryPage) {
     createFloatingConnectButton();
   } else if (addedElements.floatingButton) {
-    // Remove the button if already connected
+    // Remove the button if already connected or not on gallery page
     addedElements.floatingButton.remove();
     addedElements.floatingButton = null;
   }
@@ -664,6 +750,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else {
       sendResponse({ isLoggedIn: false });
     }
+  } else if (message.action === 'isGalleryPage') {
+    // Check if current page is a gallery page
+    sendResponse({ isGalleryPage: state.isGalleryPage });
   } else if (message.action === 'showConnectButton') {
     // Show floating connect button if appropriate
     if (state.isGalleryPage && state.isLoggedInToPlatform && !state.isPlatformConnected) {

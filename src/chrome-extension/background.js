@@ -67,7 +67,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// Listen for clicks on the extension icon in the toolbar - IMPROVED LOGIC
+// IMPROVED SMART LOGIC: Logic for extension icon clicks
 chrome.action.onClicked.addListener(async (tab) => {
   console.log('Extension icon clicked in toolbar');
   
@@ -87,8 +87,22 @@ chrome.action.onClicked.addListener(async (tab) => {
     // We're on a supported platform, check if it's connected
     const isConnected = await isPlatformConnected(platformId);
     
+    // Check if user is logged in to the platform
+    const isPlatformLoggedIn = await checkIfUserIsLoggedInToPlatform(tab.id, platformId);
+    
+    // Check if current page is a gallery page
+    const isGalleryPage = await checkIfGalleryPage(tab.id, platformId);
+    
+    if (isConnected && isPlatformLoggedIn && isGalleryPage) {
+      // Smart behavior: If user is logged into MainGallery, logged into the platform,
+      // the platform is connected, and we're on a valid gallery page - go straight to gallery
+      console.log('User fully authenticated and on gallery page - bypassing popup');
+      openGallery();
+      return;
+    }
+    
     if (isConnected) {
-      // If already connected, bypass popup and go straight to gallery
+      // If already connected but not on gallery page, bypass popup and go to gallery
       console.log('Platform already connected, opening gallery directly');
       openGallery();
       return;
@@ -109,6 +123,42 @@ chrome.action.onClicked.addListener(async (tab) => {
   // For all other cases, let the popup open normally
   console.log('Opening popup for platform connection or non-platform page');
 });
+
+// Helper function to check if user is logged into platform
+async function checkIfUserIsLoggedInToPlatform(tabId, platformId) {
+  return new Promise(resolve => {
+    chrome.tabs.sendMessage(tabId, { 
+      action: 'checkPlatformLogin',
+      platformId: platformId
+    }, response => {
+      if (chrome.runtime.lastError) {
+        console.log('Could not check platform login:', chrome.runtime.lastError.message);
+        resolve(false);
+        return;
+      }
+      
+      resolve(response && response.isLoggedIn);
+    });
+  });
+}
+
+// Helper function to check if current page is a gallery page
+async function checkIfGalleryPage(tabId, platformId) {
+  return new Promise(resolve => {
+    chrome.tabs.sendMessage(tabId, { 
+      action: 'isGalleryPage',
+      platformId: platformId
+    }, response => {
+      if (chrome.runtime.lastError) {
+        console.log('Could not check if gallery page:', chrome.runtime.lastError.message);
+        resolve(false);
+        return;
+      }
+      
+      resolve(response && response.isGalleryPage);
+    });
+  });
+}
 
 // Check if user has any connected platforms
 async function checkForAnyConnectedPlatforms() {

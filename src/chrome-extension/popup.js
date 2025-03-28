@@ -1,3 +1,4 @@
+
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery",
@@ -18,37 +19,43 @@ const PLATFORMS = {
     name: 'Midjourney',
     icon: 'icons/midjourney.png',
     urlPatterns: [/midjourney\.com/, /discord\.com\/channels.*midjourney/],
-    tokenStorageKey: 'midjourney_token'
+    tokenStorageKey: 'midjourney_token',
+    galleryPages: [/midjourney\.com\/organize/, /midjourney\.com\/archive/, /midjourney\.com\/feed/]
   },
   dalle: {
     name: 'DALL·E',
     icon: 'icons/dalle.png',
     urlPatterns: [/openai\.com/],
-    tokenStorageKey: 'dalle_token'
+    tokenStorageKey: 'dalle_token',
+    galleryPages: [/openai\.com\/create/, /openai\.com\/collection/]
   },
   stableDiffusion: {
     name: 'Stable Diffusion',
     icon: 'icons/stablediffusion.png',
     urlPatterns: [/dreamstudio\.ai/, /stability\.ai/],
-    tokenStorageKey: 'sd_token'
+    tokenStorageKey: 'sd_token',
+    galleryPages: [/dreamstudio\.ai\/gallery/, /dreamstudio\.ai\/workspace/]
   },
   runway: {
     name: 'Runway',
     icon: 'icons/runway.png',
     urlPatterns: [/runwayml\.com/],
-    tokenStorageKey: 'runway_token'
+    tokenStorageKey: 'runway_token',
+    galleryPages: [/runwayml\.com\/projects/, /runwayml\.com\/assets/]
   },
   pika: {
     name: 'Pika',
     icon: 'icons/pika.png',
     urlPatterns: [/pika\.art/],
-    tokenStorageKey: 'pika_token'
+    tokenStorageKey: 'pika_token',
+    galleryPages: [/pika\.art\/profile/, /pika\.art\/videos/]
   },
   leonardo: {
     name: 'Leonardo.ai',
     icon: 'icons/leonardo.png',
     urlPatterns: [/leonardo\.ai/],
-    tokenStorageKey: 'leonardo_token'
+    tokenStorageKey: 'leonardo_token',
+    galleryPages: [/leonardo\.ai\/gallery/, /leonardo\.ai\/generations/, /leonardo\.ai\/library/, /app\.leonardo\.ai/]
   }
 };
 
@@ -67,10 +74,7 @@ const states = {
 const loginBtn = document.getElementById('login-btn');
 const connectBtn = document.getElementById('connect-btn');
 const viewGalleryBtn = document.getElementById('view-gallery-btn');
-const viewMyGalleryBtns = document.querySelectorAll('.view-my-gallery-btn, #view-my-gallery-btn2');
-const firstTimeTip = document.getElementById('first-time-tip');
-const pinExtensionTip = document.getElementById('pin-extension-tip');
-const closeTipBtns = document.querySelectorAll('.close-tip');
+const viewMyGalleryBtn = document.getElementById('view-my-gallery-btn');
 
 const platformNameElem = document.getElementById('platform-name');
 const platformIconElem = document.getElementById('platform-icon');
@@ -79,10 +83,6 @@ const platformIconNotLoggedElem = document.getElementById('platform-icon-not-log
 const connectedPlatformNameElem = document.getElementById('connected-platform-name');
 const connectedPlatformIconElem = document.getElementById('connected-platform-icon');
 const connectingPlatformNameElem = document.getElementById('connecting-platform-name');
-
-// OAuth login buttons
-const googleLoginBtn = document.getElementById('google-login-btn');
-const facebookLoginBtn = document.getElementById('facebook-login-btn');
 
 // Helper functions
 function hideAllStates() {
@@ -105,20 +105,21 @@ function detectPlatform(url) {
   return null;
 }
 
-function isPlatformLoggedIn(url, platformId) {
-  // This is a placeholder. In a real-world scenario, you would have more
-  // sophisticated checks based on DOM elements or API calls to verify login state
+function isGalleryPage(url, platformId) {
+  const platform = PLATFORMS[platformId];
+  if (!platform || !platform.galleryPages) return false;
   
-  // For Midjourney, check for specific DOM elements that indicate login
+  return platform.galleryPages.some(pattern => pattern.test(url));
+}
+
+function isPlatformLoggedIn(url, platformId) {
+  // This is a simplified check - in production would need more robust detection
   if (platformId === 'midjourney') {
-    // Simplified check - in a real implementation, you would send a message
-    // to the content script to check for user-specific elements
-    return url.includes('discord.com/channels') && !url.includes('login');
+    return url.includes('midjourney.com') && !url.includes('login');
   }
   
-  // For Leonardo, check for specific paths that indicate login
   if (platformId === 'leonardo') {
-    return !url.includes('/login') && !url.includes('/signup');
+    return url.includes('leonardo.ai') && !url.includes('login') && !url.includes('signup');
   }
   
   // Default case - assume logged in if not on login/signup pages
@@ -147,10 +148,7 @@ async function connectPlatform(platform) {
   
   try {
     // Show the connecting state with the progress bar animation
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // In a production environment, this would make a real API call
-    // to connect the user's platform account
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
     // Mark platform as connected
     chrome.storage.local.set({ [`platform_${platform.id}_connected`]: true }, function() {
@@ -162,40 +160,17 @@ async function connectPlatform(platform) {
       platform: platform.id
     });
     
-    // Show connected status as a small badge/notification
+    // Show connected status as a toast notification
     showToast(`✓ Connected to ${platform.name}`);
     
     // After connecting, open the gallery automatically
     setTimeout(() => {
       openGallery();
-    }, 1000);
+    }, 800);
   } catch (error) {
     console.error('Error connecting platform:', error);
     showToast('Failed to connect. Please try again.');
     updateUI();
-  }
-}
-
-async function disconnectPlatform(platform) {
-  try {
-    // Add a slight delay to show the processing
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Mark platform as disconnected
-    chrome.storage.local.set({ [`platform_${platform.id}_connected`]: false }, function() {
-      console.log(`Platform ${platform.id} connection state saved: false`);
-    });
-    
-    chrome.runtime.sendMessage({
-      action: 'platformDisconnected',
-      platform: platform.id
-    });
-    
-    showToast(`✓ Disconnected from ${platform.name}`);
-    updateUI();
-  } catch (error) {
-    console.error('Error disconnecting platform:', error);
-    showToast('Failed to disconnect. Please try again.');
   }
 }
 
@@ -209,21 +184,6 @@ async function openGallery() {
   } catch (error) {
     console.error('Error opening gallery:', error);
   }
-}
-
-function getAuthUrlWithRedirect(currentUrl) {
-  if (!currentUrl) return `${AUTH_URL}?from=extension`;
-  
-  // Set from=extension param to trigger the appropriate flow
-  const params = new URLSearchParams();
-  params.set('from', 'extension');
-  
-  // Add redirect if provided
-  if (currentUrl) {
-    params.set('redirect', currentUrl);
-  }
-  
-  return `${AUTH_URL}?${params.toString()}`;
 }
 
 async function openAuthPage() {
@@ -247,7 +207,7 @@ async function openAuthPage() {
     // Add a timeout to close the popup
     setTimeout(() => {
       window.close();
-    }, 1000);
+    }, 800);
   } catch (error) {
     console.error('Error opening auth page:', error);
     
@@ -257,63 +217,6 @@ async function openAuthPage() {
     // Show error toast
     showToast('Error starting login process. Please try again.');
   }
-}
-
-function handleTipClose(tipElement) {
-  if (!tipElement) return;
-  
-  // Animate out before hiding
-  tipElement.style.animation = 'fadeOut 0.3s forwards';
-  
-  setTimeout(() => {
-    tipElement.classList.add('hidden');
-    
-    // Remember that we've closed this tip
-    const tipId = tipElement.id;
-    chrome.storage.local.set({ [`${tipId}_closed`]: true });
-  }, 300);
-}
-
-function checkTipsVisibility() {
-  chrome.storage.local.get(['first-time-tip_closed', 'pin-extension-tip_closed', 'popup_opened_before', 'main_gallery_auth_token'], function(result) {
-    // Only show the first-time tip if not closed before and user is not logged in
-    if (!result.popup_opened_before && !result['first-time-tip_closed'] && !result.main_gallery_auth_token) {
-      if (firstTimeTip) {
-        firstTimeTip.classList.remove('hidden');
-      }
-    }
-    
-    // Show the pin extension tip only if not closed before
-    if (!result['pin-extension-tip_closed'] && pinExtensionTip) {
-      chrome.storage.local.get(['pin_prompt_shown'], function(pinResult) {
-        if (!pinResult.pin_prompt_shown) {
-          pinExtensionTip.classList.remove('hidden');
-          promptPinExtension();
-          chrome.storage.local.set({ pin_prompt_shown: true });
-        }
-      });
-    }
-    
-    // Record that the popup has been opened
-    if (!result.popup_opened_before) {
-      chrome.storage.local.set({ popup_opened_before: true });
-    }
-  });
-}
-
-// Function to prompt user to pin the extension
-function promptPinExtension() {
-  chrome.storage.local.get(['pin_prompt_shown'], function(result) {
-    if (!result.pin_prompt_shown && pinExtensionTip) {
-      pinExtensionTip.classList.remove('hidden');
-      
-      // Also show a toast notification
-      showToast('📌 Tip: Pin this extension for quick access');
-      
-      // Mark as shown
-      chrome.storage.local.set({ pin_prompt_shown: true });
-    }
-  });
 }
 
 // Show toast notification
@@ -353,17 +256,6 @@ async function updateUI() {
   if (!loggedIn) {
     // User is not logged in to MainGallery
     showState(states.notLoggedIn);
-    
-    // Hide the OAuth buttons that aren't ready yet
-    const oauthSection = document.querySelector('.oauth-options');
-    if (oauthSection) {
-      const comingSoonText = oauthSection.querySelector('.coming-soon');
-      if (comingSoonText) {
-        comingSoonText.style.display = 'none';
-      }
-    }
-    
-    checkTipsVisibility();
     return;
   }
   
@@ -384,10 +276,13 @@ async function updateUI() {
       setTimeout(() => {
         // Then show not platform page
         showState(states.notPlatformPage);
-      }, 1000);
+      }, 800);
     }
     return;
   }
+  
+  // Check if the user is on a platform gallery page
+  const onGalleryPage = isGalleryPage(url, platform.id);
   
   // Check if the user is logged in to the platform
   const platformLoggedIn = isPlatformLoggedIn(url, platform.id);
@@ -404,23 +299,23 @@ async function updateUI() {
   const connected = await isConnected(platform.id);
   
   if (connected) {
-    // Platform is already connected
+    if (onGalleryPage) {
+      // Auto-open gallery if on a platform gallery page and all conditions are met
+      // This creates the seamless experience requested
+      openGallery();
+      return;
+    }
+    
+    // Platform is already connected but not on gallery page
     connectedPlatformNameElem.textContent = platform.name;
     connectedPlatformIconElem.src = platform.icon;
     showState(states.alreadyConnected);
-    
-    // Automatically open gallery after a short delay
-    setTimeout(() => {
-      openGallery();
-    }, 1500);
   } else {
     // Platform is ready to connect
     platformNameElem.textContent = platform.name;
     platformIconElem.src = platform.icon;
     showState(states.readyToConnect);
   }
-  
-  checkTipsVisibility();
 }
 
 // Helper function to check if user has any connected platforms
@@ -438,53 +333,47 @@ async function checkForAnyConnectedPlatforms() {
   });
 }
 
-// OAuth login handlers (placeholders for now)
-function handleGoogleLogin() {
-  // Note: These are just placeholders until OAuth is fully implemented
-  // Show auth loading state instead of toast
-  showState(states.authLoading);
-  
-  // Send message to background to handle opening auth page
-  chrome.runtime.sendMessage({ 
-    action: 'openAuthPage',
-    redirectUrl: window.location.href,
-    provider: 'google'
-  });
-  
-  // Close popup after a short delay
-  setTimeout(() => {
-    window.close();
-  }, 1000);
-}
-
-function handleFacebookLogin() {
-  // Note: These are just placeholders until OAuth is fully implemented
-  // Show auth loading state instead of toast
-  showState(states.authLoading);
-  
-  // Send message to background to handle opening auth page
-  chrome.runtime.sendMessage({ 
-    action: 'openAuthPage',
-    redirectUrl: window.location.href,
-    provider: 'facebook'
-  });
-  
-  // Close popup after a short delay
-  setTimeout(() => {
-    window.close();
-  }, 1000);
-}
-
 // Event listeners
-document.addEventListener('DOMContentLoaded', updateUI);
+document.addEventListener('DOMContentLoaded', async () => {
+  // Check if we should auto-redirect to gallery
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const url = tab.url;
+  const loggedIn = await isLoggedIn();
+  
+  if (loggedIn) {
+    const platform = detectPlatform(url);
+    
+    if (platform) {
+      const connected = await isConnected(platform.id);
+      const platformLoggedIn = isPlatformLoggedIn(url, platform.id);
+      const onGalleryPage = isGalleryPage(url, platform.id);
+      
+      // Smart redirect logic - if everything is ready, go straight to gallery
+      if (connected && platformLoggedIn && onGalleryPage) {
+        console.log('Smart redirect: All conditions met, going directly to gallery');
+        openGallery();
+        return;
+      }
+    } else {
+      // Not on a platform page, check if any platforms are connected
+      const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
+      
+      if (hasConnectedPlatforms) {
+        // Optional: Uncomment to auto-redirect to gallery even if not on a platform page
+        // console.log('Smart redirect: Has connected platforms, going directly to gallery');
+        // openGallery();
+        // return;
+      }
+    }
+  }
+  
+  // If no auto-redirect occurred, update UI normally
+  updateUI();
+});
 
 loginBtn.addEventListener('click', () => {
   openAuthPage();
 });
-
-// OAuth button listeners
-googleLoginBtn.addEventListener('click', handleGoogleLogin);
-facebookLoginBtn.addEventListener('click', handleFacebookLogin);
 
 connectBtn.addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -498,20 +387,8 @@ viewGalleryBtn.addEventListener('click', () => {
   openGallery();
 });
 
-viewMyGalleryBtns.forEach(button => {
-  button.addEventListener('click', () => {
-    openGallery();
-  });
-});
-
-// Tip close buttons
-closeTipBtns.forEach(btn => {
-  btn.addEventListener('click', (event) => {
-    const tipElement = event.target.closest('.tip-box');
-    if (tipElement) {
-      handleTipClose(tipElement);
-    }
-  });
+viewMyGalleryBtn.addEventListener('click', () => {
+  openGallery();
 });
 
 // Listen for messages from background script

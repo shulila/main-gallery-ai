@@ -1,5 +1,6 @@
 
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import PlatformIntegration from '@/components/PlatformIntegration';
 import Footer from '@/components/Footer';
@@ -8,6 +9,7 @@ import ConnectedPlatforms from '@/components/ConnectedPlatforms';
 
 const Platforms = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // Scroll to top on page load
   useEffect(() => {
@@ -22,8 +24,8 @@ const Platforms = () => {
           {user ? (
             // Logged in user sees the connected platforms management view
             <>
-              <h1 className="text-3xl font-bold mb-2 text-center">My Connected Platforms</h1>
-              <p className="text-muted-foreground text-center mb-8">Manage your AI platforms and connections</p>
+              <h1 className="text-3xl font-bold mb-2 text-center">Platform Manager</h1>
+              <p className="text-muted-foreground text-center mb-8">Connect and manage your AI platforms</p>
               <ConnectedPlatforms />
             </>
           ) : (

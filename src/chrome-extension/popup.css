@@ -26,7 +26,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .logo {
@@ -38,6 +38,7 @@ body {
 .logo img {
   width: 28px;
   height: 28px;
+  border-radius: 8px;
 }
 
 .logo h1 {
@@ -53,55 +54,13 @@ body {
   margin-bottom: 24px;
 }
 
-/* Tip boxes */
-.tip-box {
-  background-color: #f8f9fa;
-  border-left: 3px solid #3957ed;
-  padding: 14px 18px;
-  margin-bottom: 18px;
-  border-radius: 16px;
-  position: relative;
-  animation: fadeIn 0.5s ease-out;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.pin-tip {
-  background-color: #fff8e6;
-  border-left: 3px solid #f59e0b;
-}
-
-.tip-box p {
-  margin: 0;
-  color: #1e293b;
-  font-size: 13px;
-  padding-right: 20px;
-  font-weight: 400;
-}
-
-.close-tip {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 50%;
-}
-
-.close-tip:hover {
-  color: #64748b;
-  background: rgba(148, 163, 184, 0.1);
-}
-
 /* Text styling */
 p {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   color: #4b5563;
   font-weight: 400;
   font-size: 14px;
+  line-height: 1.6;
 }
 
 h2 {
@@ -111,7 +70,7 @@ h2 {
   color: #1e293b;
 }
 
-/* Button styling */
+/* Button styling - Apple-style refinement */
 .primary-btn, .secondary-btn {
   display: flex;
   align-items: center;
@@ -125,6 +84,8 @@ h2 {
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
 }
 
 .primary-btn {
@@ -138,6 +99,11 @@ h2 {
   box-shadow: 0 4px 12px rgba(57, 87, 237, 0.2);
 }
 
+.primary-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(57, 87, 237, 0.2);
+}
+
 .secondary-btn {
   background-color: #f1f5f9;
   color: #1e293b;
@@ -147,21 +113,6 @@ h2 {
 .secondary-btn:hover {
   background-color: #e2e8f0;
   transform: translateY(-1px);
-}
-
-.text-btn {
-  background: none;
-  border: none;
-  color: #6b7280;
-  padding: 8px 12px;
-  font-size: 13px;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.text-btn:hover {
-  color: #374151;
 }
 
 /* SVG Icons */
@@ -190,6 +141,12 @@ h2 {
   border-radius: 16px;
   background-color: #f8fafc;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.platform-info:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
 .platform-info img {
@@ -217,12 +174,6 @@ h2 {
   align-items: center;
   color: #16a34a !important;
   font-weight: 500;
-}
-
-.info-text {
-  font-size: 13px;
-  color: #64748b;
-  margin-bottom: 18px;
 }
 
 /* Platform list */
@@ -261,22 +212,6 @@ h2 {
   margin-right: 4px;
 }
 
-/* Button rows */
-.button-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.button-row .primary-btn {
-  flex: 3;
-}
-
-.button-row .text-btn {
-  flex: 1;
-}
-
 /* Success message */
 .success-message {
   display: flex;
@@ -289,62 +224,6 @@ h2 {
   color: #16a34a;
   margin-bottom: 18px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-}
-
-/* OAuth section */
-.oauth-options {
-  margin-top: 18px;
-  text-align: center;
-}
-
-.oauth-options p {
-  font-size: 13px;
-  color: #64748b;
-  margin-bottom: 10px;
-}
-
-.oauth-buttons {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-bottom: 10px;
-}
-
-.oauth-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 16px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background-color: #ffffff;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 13px;
-  font-weight: 500;
-  gap: 8px;
-  flex: 1;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-}
-
-.oauth-btn:hover {
-  background-color: #f8fafc;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-}
-
-.google {
-  color: #4285F4;
-}
-
-.facebook {
-  color: #1877F2;
-}
-
-.coming-soon {
-  font-size: 11px;
-  color: #94a3b8;
-  margin-top: 6px;
 }
 
 /* Loading indicators */
@@ -438,7 +317,7 @@ h2 {
   100% { width: 100%; }
 }
 
-/* Floating button for contextual connections */
+/* Floating button for contextual connections - Apple-style */
 .floating-connect-button {
   position: fixed;
   bottom: 20px;
@@ -447,18 +326,21 @@ h2 {
   color: #3957ed;
   border: none;
   border-radius: 28px;
-  padding: 12px 18px;
+  padding: 12px;
   font-size: 14px;
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   z-index: 9999;
   transition: all 0.3s ease;
   opacity: 0;
   transform: translateY(20px);
+  overflow: hidden;
 }
 
 .floating-connect-button.show {
@@ -471,11 +353,28 @@ h2 {
   color: #ffffff;
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(57, 87, 237, 0.25);
+  width: auto;
+  padding-right: 18px;
+}
+
+.floating-connect-button:hover .floating-connect-text {
+  opacity: 1;
+  width: auto;
+  margin-left: 8px;
 }
 
 .floating-connect-icon {
   width: 20px;
   height: 20px;
+  flex-shrink: 0;
+}
+
+.floating-connect-text {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: all 0.3s ease;
 }
 
 /* Tooltip styles */
