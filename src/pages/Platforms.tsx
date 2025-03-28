@@ -85,7 +85,7 @@ const Platforms = () => {
               return {
                 ...platform,
                 isConnected,
-                status: isConnected ? 'connected' : 'disconnected',
+                status: isConnected ? 'connected' as const : 'disconnected' as const,
                 lastSync: isConnected ? new Date().toISOString() : undefined
               };
             })
@@ -101,15 +101,18 @@ const Platforms = () => {
     if (user) {
       checkPlatformConnections();
     }
-  }, [user]);
+  }, [user, platforms]);
 
   // Detect if extension is installed
   const detectExtension = async (): Promise<boolean> => {
     try {
       // Try to send a message to the extension
       // This will throw an error if the extension is not installed
-      await chrome.runtime.sendMessage({ action: 'isInstalled' });
-      return true;
+      if (window.chrome && window.chrome.runtime) {
+        await window.chrome.runtime.sendMessage({ action: 'isInstalled' });
+        return true;
+      }
+      return false;
     } catch (error) {
       console.log('Extension not detected:', error);
       return false;

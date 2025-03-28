@@ -1,7 +1,7 @@
 
 interface Chrome {
   runtime: {
-    sendMessage: (extensionId: string, message: any, callback?: (response: any) => void) => void;
+    sendMessage: (extensionId: string | undefined, message: any, callback?: (response: any) => void) => void;
     getURL: (path: string) => string;
     lastError?: {
       message: string;
