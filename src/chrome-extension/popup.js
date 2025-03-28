@@ -1,4 +1,7 @@
 
+// Import the Midjourney API functions
+import { authenticateWithMidjourney, fetchMidjourneyImages } from './utils/midjourney-api.js';
+
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery",
@@ -16,12 +19,17 @@ const AUTH_URL = `${BRAND.urls.baseUrl}${BRAND.urls.auth}`;
 // DOM elements
 const states = {
   notLoggedIn: document.getElementById('not-logged-in'),
-  authLoading: document.getElementById('auth-loading')
+  authLoading: document.getElementById('auth-loading'),
+  loggedIn: document.getElementById('logged-in')
 };
 
 const loginBtn = document.getElementById('login-btn');
 const googleLoginBtn = document.getElementById('google-login-btn');
 const microsoftLoginBtn = document.getElementById('microsoft-login-btn');
+const logoutBtn = document.getElementById('logout-btn');
+const testMidjourneyAuthBtn = document.getElementById('test-midjourney-auth');
+const testMidjourneyImagesBtn = document.getElementById('test-midjourney-images');
+const testResult = document.getElementById('test-result');
 
 // Helper functions
 function hideAllStates() {
@@ -77,8 +85,8 @@ async function checkAuthAndRedirect() {
     const loggedIn = await isLoggedIn();
     
     if (loggedIn) {
-      console.log('User is logged in, redirecting to gallery');
-      openGallery();
+      console.log('User is logged in, showing logged-in state');
+      showState(states.loggedIn);
       return true;
     }
     
@@ -142,6 +150,51 @@ function openAuthWithProvider(provider) {
   }
 }
 
+// Log out the user
+function logout() {
+  chrome.runtime.sendMessage({ action: 'logout' }, response => {
+    showState(states.notLoggedIn);
+    showToast('You have been logged out', 'info');
+  });
+}
+
+// Show test results
+function showTestResult(data) {
+  if (testResult) {
+    const pre = testResult.querySelector('pre');
+    pre.textContent = JSON.stringify(data, null, 2);
+    testResult.classList.remove('hidden');
+  }
+}
+
+// Test Midjourney Authentication
+async function testMidjourneyAuth() {
+  try {
+    showToast('Testing Midjourney authentication...', 'info');
+    const result = await authenticateWithMidjourney();
+    showTestResult(result);
+    showToast('Authentication test complete!', 'success');
+  } catch (error) {
+    console.error('Midjourney auth test error:', error);
+    showTestResult({ error: error.message });
+    showToast('Authentication test failed', 'error');
+  }
+}
+
+// Test fetching Midjourney images
+async function testMidjourneyImages() {
+  try {
+    showToast('Fetching Midjourney images...', 'info');
+    const result = await fetchMidjourneyImages({ limit: 5 });
+    showTestResult(result);
+    showToast('Images fetched successfully!', 'success');
+  } catch (error) {
+    console.error('Midjourney images test error:', error);
+    showTestResult({ error: error.message });
+    showToast('Failed to fetch images', 'error');
+  }
+}
+
 // Immediately check auth status and redirect if logged in
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Popup loaded, checking auth status');
@@ -165,6 +218,18 @@ if (microsoftLoginBtn) {
   microsoftLoginBtn.addEventListener('click', () => {
     openAuthWithProvider('azure');
   });
+}
+
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', logout);
+}
+
+if (testMidjourneyAuthBtn) {
+  testMidjourneyAuthBtn.addEventListener('click', testMidjourneyAuth);
+}
+
+if (testMidjourneyImagesBtn) {
+  testMidjourneyImagesBtn.addEventListener('click', testMidjourneyImages);
 }
 
 // Listen for messages from background script

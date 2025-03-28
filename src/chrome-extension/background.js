@@ -1,5 +1,4 @@
-
-import { setupAuthCallbackListener, openAuthPage, openAuthWithProvider, isLoggedIn } from './utils/auth.js';
+import { setupAuthCallbackListener, openAuthPage, openAuthWithProvider, isLoggedIn, logout } from './utils/auth.js';
 import { debugPlatformDetection, getGalleryUrl } from './utils/common.js';
 
 // Set up auth callback listener
@@ -109,6 +108,12 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     case 'checkLoginStatus':
       isLoggedIn().then(loggedIn => {
         sendResponse({ isLoggedIn: loggedIn });
+      });
+      return true; // Will respond asynchronously
+      
+    case 'logout':
+      logout().then(() => {
+        sendResponse({ success: true });
       });
       return true; // Will respond asynchronously
   }

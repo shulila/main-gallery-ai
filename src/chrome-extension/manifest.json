@@ -24,7 +24,8 @@
     "https://*.pika.art/*",
     "https://*.leonardo.ai/*",
     "https://*.placeholder.com/*",
-    "https://discord.com/channels/*"
+    "https://discord.com/channels/*",
+    "https://ovhriawcqvcpagcaidlb.supabase.co/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -50,7 +51,8 @@
     }
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "web_accessible_resources": [
     {

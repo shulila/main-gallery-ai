@@ -66,6 +66,25 @@
         <p>Signing in...</p>
       </div>
     </div>
+    
+    <!-- Logged in state -->
+    <div id="logged-in" class="state hidden">
+      <h2>Welcome to MainGallery</h2>
+      
+      <!-- Test section for Midjourney -->
+      <div class="test-section">
+        <h3>Midjourney Test</h3>
+        <div class="action-buttons">
+          <button id="test-midjourney-auth" class="secondary-btn">Test Auth</button>
+          <button id="test-midjourney-images" class="secondary-btn">Fetch Images</button>
+        </div>
+        <div id="test-result" class="result-box hidden">
+          <pre></pre>
+        </div>
+      </div>
+      
+      <button id="logout-btn" class="text-btn">Sign Out</button>
+    </div>
   </div>
   <script src="popup.js"></script>
 </body>
