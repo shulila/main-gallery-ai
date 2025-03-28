@@ -109,7 +109,8 @@ const Platforms = () => {
       // Try to send a message to the extension
       // This will throw an error if the extension is not installed
       if (window.chrome && window.chrome.runtime) {
-        await window.chrome.runtime.sendMessage({ action: 'isInstalled' });
+        // Fix: Add the required extensionId parameter (undefined for same extension)
+        await window.chrome.runtime.sendMessage(undefined, { action: 'isInstalled' });
         return true;
       }
       return false;
