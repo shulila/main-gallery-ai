@@ -18,7 +18,7 @@ import { useMobile } from '@/hooks/use-mobile';
 import { Menu, X, LogOut, Image, Settings, User, ExternalLink } from 'lucide-react';
 
 const Navbar = () => {
-  const { user, logout, isLoading } = useAuth();
+  const { user, signOut: logout, isLoading } = useAuth();
   const { isMobile } = useMobile();
   const navigate = useNavigate();
   const { toast } = useToast();
