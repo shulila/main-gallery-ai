@@ -1,3 +1,4 @@
+
 // This script runs in the context of the AI platform websites
 console.log('MainGallery: Content script loaded and running');
 
@@ -20,7 +21,13 @@ const PLATFORMS = {
     loginCheck: {
       selectors: ['.user-name', '.userInfo-regGGv'],
       waitTime: 5000
-    }
+    },
+    galleryPagePatterns: [
+      /midjourney\.com\/organize/,
+      /midjourney\.com\/feed/,
+      /midjourney\.com\/app/,
+      /discord\.com\/channels.*midjourney/
+    ]
   },
   dalle: {
     name: 'DALL·E',
@@ -34,7 +41,11 @@ const PLATFORMS = {
     loginCheck: {
       selectors: ['.user-menu', '.avatar'],
       waitTime: 4000
-    }
+    },
+    galleryPagePatterns: [
+      /openai\.com\/create/,
+      /openai\.com\/collection/
+    ]
   },
   stableDiffusion: {
     name: 'Stable Diffusion',
@@ -48,7 +59,11 @@ const PLATFORMS = {
     loginCheck: {
       selectors: ['.user-profile', '.user-info'],
       waitTime: 4000
-    }
+    },
+    galleryPagePatterns: [
+      /dreamstudio\.ai\/gallery/,
+      /dreamstudio\.ai\/workspace/
+    ]
   },
   runway: {
     name: 'Runway',
@@ -62,7 +77,11 @@ const PLATFORMS = {
     loginCheck: {
       selectors: ['.user-menu', '.user-avatar'],
       waitTime: 4000
-    }
+    },
+    galleryPagePatterns: [
+      /runwayml\.com\/projects/,
+      /runwayml\.com\/assets/
+    ]
   },
   pika: {
     name: 'Pika',
@@ -76,7 +95,11 @@ const PLATFORMS = {
     loginCheck: {
       selectors: ['.user-avatar', '.user-dropdown'],
       waitTime: 4000
-    }
+    },
+    galleryPagePatterns: [
+      /pika\.art\/profile/,
+      /pika\.art\/videos/
+    ]
   },
   leonardo: {
     name: 'Leonardo.ai',
@@ -92,7 +115,12 @@ const PLATFORMS = {
     loginCheck: {
       selectors: ['.user-avatar', '.user-profile', '.account-menu', '.avatar', '.user-name'],
       waitTime: 4000
-    }
+    },
+    galleryPagePatterns: [
+      /leonardo\.ai\/gallery/,
+      /leonardo\.ai\/generations/,
+      /leonardo\.ai\/library/
+    ]
   }
 };
 
@@ -138,23 +166,13 @@ let state = {
 function isGalleryPage() {
   const url = window.location.href;
   
-  // Check if current URL matches gallery patterns
-  if (state.platformId === 'midjourney') {
-    return url.includes('/organize') || url.includes('/feed');
-  } else if (state.platformId === 'dalle') {
-    return url.includes('/create') || url.includes('/collection');
-  } else if (state.platformId === 'leonardo') {
-    return url.includes('/gallery') || url.includes('/generations');
-  } else if (state.platformId === 'stableDiffusion') {
-    return url.includes('/gallery') || url.includes('/workspace');
-  } else if (state.platformId === 'runway') {
-    return url.includes('/projects') || url.includes('/assets');
-  } else if (state.platformId === 'pika') {
-    return url.includes('/profile') || url.includes('/videos');
+  if (!state.platform || !state.platformId) {
+    return false;
   }
   
-  // By default, for unknown patterns, return false - safer than showing buttons everywhere
-  return false;
+  // Check gallery page patterns for current platform
+  const galleryPatterns = state.platform.galleryPagePatterns || [];
+  return galleryPatterns.some(pattern => pattern.test(url));
 }
 
 // Check if a platform is connected
@@ -234,45 +252,6 @@ function checkPlatformLogin(platform) {
       }
     }, 500);
   });
-}
-
-// Find suitable container for our button
-function findContainer(platform) {
-  const selectors = platform.selectors;
-  
-  // Try each selector in order of preference
-  for (const key in selectors) {
-    const element = document.querySelector(selectors[key]);
-    if (element) {
-      console.log(`MainGallery: Found container using selector "${key}": ${selectors[key]}`);
-      return element;
-    }
-  }
-  
-  // If no specific container found, try some general containers
-  const generalSelectors = [
-    'header', 
-    'nav', 
-    '.navbar', 
-    '.toolbar', 
-    '.app-bar',
-    '.controls',
-    'main',
-    '.content',
-    '.container'
-  ];
-  
-  for (const selector of generalSelectors) {
-    const element = document.querySelector(selector);
-    if (element) {
-      console.log(`MainGallery: Found container using general selector: ${selector}`);
-      return element;
-    }
-  }
-  
-  // Last resort: body
-  console.log('MainGallery: No specific container found, using body');
-  return document.body;
 }
 
 // Create floating connect button with hover effect
@@ -473,13 +452,33 @@ function createFloatingConnectButton() {
 // Handle adding to gallery
 async function handleAddToGallery() {
   // Get current content from the page
-  // This is a placeholder - in a real extension, we would get the actual content
+  // In a real implementation, this would collect image URLs and prompt data
+  // For this demo, we'll use placeholder data for visualization
+  
+  // Collect images from the platform's gallery
+  const images = Array.from(document.querySelectorAll('img'))
+    .filter(img => {
+      // Filter for images that are likely to be AI generated content
+      // This is a simplified approach and would be more sophisticated in production
+      const src = img.src || '';
+      const width = img.width || 0;
+      const height = img.height || 0;
+      
+      // Only consider reasonably sized images, not icons or thumbnails
+      return (width > 150 && height > 150 && !src.includes('icon') && !src.includes('logo'));
+    })
+    .slice(0, 5) // Limit to first 5 matching images
+    .map(img => img.src);
+  
+  // Build data packet to send
   const data = {
     platformId: state.platformId,
-    imageUrl: 'https://placeholder.com/image.jpg', // Placeholder
-    prompt: 'Placeholder prompt',
+    imageUrls: images.length > 0 ? images : ['https://placeholder.com/image.jpg'], // Fallback if no images found
+    prompt: 'Collected from ' + state.platform.name,
     timestamp: new Date().toISOString()
   };
+  
+  console.log('Collected gallery data:', data);
   
   // Send message to background script
   return new Promise((resolve) => {
@@ -510,21 +509,13 @@ async function updateUI() {
   state.isPlatformConnected = state.platformId ? await isPlatformConnected(state.platformId) : false;
   state.isGalleryPage = isGalleryPage();
   
-  // Remove existing main button (not showing inside the platforms anymore)
-  if (addedElements.button) {
-    addedElements.button.remove();
-    addedElements.button = null;
-  }
-  
   // Create or update the floating button (only if not connected)
   if (!state.isPlatformConnected) {
     createFloatingConnectButton();
-  }
-  
-  // Remove onboarding tooltip if user is already logged in
-  if (state.isLoggedInToGallery && addedElements.onboarding) {
-    addedElements.onboarding.remove();
-    addedElements.onboarding = null;
+  } else if (addedElements.floatingButton) {
+    // Remove the button if already connected
+    addedElements.floatingButton.remove();
+    addedElements.floatingButton = null;
   }
 }
 
@@ -660,6 +651,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.platformId === state.platformId) {
       state.isPlatformConnected = true;
       updateUI();
+    }
+    sendResponse({ success: true });
+  } else if (message.action === 'checkPlatformLogin') {
+    // Check if user is logged in to platform
+    if (state.platform) {
+      checkPlatformLogin(state.platform).then(isLoggedIn => {
+        state.isLoggedInToPlatform = isLoggedIn;
+        sendResponse({ isLoggedIn: isLoggedIn });
+      });
+      return true; // Will respond asynchronously
+    } else {
+      sendResponse({ isLoggedIn: false });
+    }
+  } else if (message.action === 'showConnectButton') {
+    // Show floating connect button if appropriate
+    if (state.isGalleryPage && state.isLoggedInToPlatform && !state.isPlatformConnected) {
+      createFloatingConnectButton();
     }
     sendResponse({ success: true });
   }

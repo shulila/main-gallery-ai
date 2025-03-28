@@ -1,4 +1,3 @@
-
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery",
