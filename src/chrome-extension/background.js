@@ -1,4 +1,3 @@
-
 import { createNotification } from './utils/notifications.js';
 import { 
   handlePlatformConnection, 
@@ -9,7 +8,7 @@ import {
   detectPlatformLogin,
   isPlatformConnected
 } from './utils/platforms.js';
-import { setupAuthCallbackListener, openAuthPage, isLoggedIn } from './utils/auth.js';
+import { setupAuthCallbackListener, openAuthPage, openAuthWithProvider, isLoggedIn } from './utils/auth.js';
 import { debugPlatformDetection, getGalleryUrl } from './utils/common.js';
 
 // Set up auth callback listener
@@ -74,62 +73,16 @@ chrome.action.onClicked.addListener(async (tab) => {
   // Check if user is logged in to MainGallery
   const loggedIn = await isLoggedIn();
   
-  if (!loggedIn) {
-    // If not logged in, open popup for authentication
-    console.log('User not logged in, opening popup');
-    return; // Allow default popup to open
+  if (loggedIn) {
+    // If user is logged in, go directly to gallery
+    console.log('User is logged in, opening gallery directly');
+    openGallery();
+    return;
   }
   
-  // Check if we're on a supported platform
-  const platformId = tab.url ? debugPlatformDetection(tab.url) : null;
-  
-  if (platformId) {
-    // We're on a supported platform, check if it's connected
-    const isConnected = await isPlatformConnected(platformId);
-    
-    // Check if user is logged in to the platform
-    const isPlatformLoggedIn = await checkIfUserIsLoggedInToPlatform(tab.id, platformId);
-    
-    // Check if current page is a gallery page
-    const isGalleryPage = await checkIfGalleryPage(tab.id, platformId);
-    
-    if (isConnected && isPlatformLoggedIn && isGalleryPage) {
-      // Smart behavior: If user is logged into MainGallery, logged into the platform,
-      // the platform is connected, and we're on a valid gallery page - go straight to gallery
-      console.log('User fully authenticated and on gallery page - bypassing popup and opening gallery directly');
-      openGallery();
-      return;
-    }
-    
-    if (isConnected) {
-      // If already connected but not on gallery page, bypass popup and go to gallery
-      console.log('Platform already connected, opening gallery directly');
-      openGallery();
-      return;
-    }
-    
-    // Handle case where everything is ready but platform not connected yet
-    if (isPlatformLoggedIn && isGalleryPage && !isConnected) {
-      // Show the floating connect button (handled by content script)
-      // but still allow the popup to open as fallback
-      console.log('Ready to connect platform - allowing popup to show connection UI');
-      // The content script will already show the floating button
-    }
-  } else {
-    // Not on a supported platform but user is logged in
-    // Check if user has any connected platforms
-    const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
-    
-    if (hasConnectedPlatforms) {
-      // If user has any connected platforms, go straight to gallery
-      console.log('User has connected platforms, opening gallery directly');
-      openGallery();
-      return;
-    }
-  }
-  
-  // For all other cases, let the popup open normally
-  console.log('Opening popup for platform connection or non-platform page');
+  // User is not logged in, open auth page
+  console.log('User not logged in, opening auth page');
+  openAuthPage();
 });
 
 // Helper function to check if user is logged into platform
@@ -253,7 +206,11 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       break;
       
     case 'openAuthPage':
-      openAuthPage(message.redirectUrl);
+      openAuthPage();
+      break;
+      
+    case 'openAuthWithProvider':
+      openAuthWithProvider(message.provider);
       break;
       
     case 'checkLoginStatus':

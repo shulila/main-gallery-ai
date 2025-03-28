@@ -71,6 +71,8 @@ const states = {
 };
 
 const loginBtn = document.getElementById('login-btn');
+const googleLoginBtn = document.getElementById('google-login-btn');
+const microsoftLoginBtn = document.getElementById('microsoft-login-btn');
 const connectBtn = document.getElementById('connect-btn');
 const viewGalleryBtn = document.getElementById('view-gallery-btn');
 const viewMyGalleryBtn = document.getElementById('view-my-gallery-btn');
@@ -186,6 +188,28 @@ async function openGallery() {
   }
 }
 
+// Open auth page for specific provider
+function openAuthWithProvider(provider) {
+  try {
+    showState(states.authLoading);
+    
+    // Store redirect path in session storage
+    sessionStorage.setItem('oauth_redirect', '/gallery');
+    
+    chrome.runtime.sendMessage({
+      action: 'openAuthWithProvider',
+      provider: provider
+    });
+    
+    // Close the popup after initiating OAuth
+    setTimeout(() => window.close(), 500);
+  } catch (error) {
+    console.error(`Error opening ${provider} auth:`, error);
+    showToast(`Could not open ${provider} login. Please try again.`);
+    updateUI();
+  }
+}
+
 // Show toast notification
 function showToast(message) {
   // Remove any existing toasts
@@ -228,55 +252,11 @@ async function updateUI() {
     return;
   }
   
-  // User is logged in to MainGallery
-  const platform = detectPlatform(url);
-  
-  // ENHANCED Smart redirect condition #1: Not on platform page but has connected platforms
-  if (!platform) {
-    // Check if user has any connected platforms
-    const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
-    
-    if (hasConnectedPlatforms) {
-      // IMMEDIATE REDIRECT: User is logged in and has connected platforms but not on platform page
-      console.log('Smart redirect: User logged in with connected platforms, redirecting to gallery');
-      openGallery();
-      return;
-    } else {
-      // Show not platform page state
-      showState(states.notPlatformPage);
-    }
-    return;
-  }
-  
-  // Check if the user is on a platform gallery page
-  const onGalleryPage = isGalleryPage(url, platform.id);
-  
-  // Check if the user is logged in to the platform
-  const platformLoggedIn = isPlatformLoggedIn(url, platform.id);
-  
-  if (!platformLoggedIn) {
-    // User is not logged in to the platform
-    platformNameNotLoggedElem.textContent = platform.name;
-    platformIconNotLoggedElem.src = platform.icon;
-    showState(states.notPlatformLoggedIn);
-    return;
-  }
-  
-  // User is logged in to both MainGallery and the platform
-  const connected = await isConnected(platform.id);
-  
-  // ENHANCED Smart redirect condition #2: On platform page, logged in and connected
-  if (connected) {
-    // IMMEDIATE REDIRECT: All conditions met - logged in to MainGallery and platform, and platform is connected
-    console.log('Smart redirect: All conditions met, redirecting directly to gallery');
-    openGallery();
-    return;
-  } else {
-    // Platform is ready to connect
-    platformNameElem.textContent = platform.name;
-    platformIconElem.src = platform.icon;
-    showState(states.readyToConnect);
-  }
+  // ENHANCED Smart redirect condition #1: Already logged in
+  // Immediately redirect to gallery if user is already logged in
+  const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
+  openGallery();
+  return;
 }
 
 // Helper function to check if user has any connected platforms
@@ -299,35 +279,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('Popup loaded - checking for auto-redirect conditions');
   
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const url = tab.url;
     const loggedIn = await isLoggedIn();
     
     if (loggedIn) {
-      const platform = detectPlatform(url);
-      
-      if (platform) {
-        const connected = await isConnected(platform.id);
-        const platformLoggedIn = isPlatformLoggedIn(url, platform.id);
-        
-        // AUTO-REDIRECT: If user is logged in to MainGallery AND platform AND platform is connected
-        if (connected && platformLoggedIn) {
-          console.log('Auto-redirect condition met: User logged in everywhere, bypassing popup entirely');
-          // Don't even show the popup, go straight to gallery
-          openGallery();
-          return;
-        }
-      } else {
-        // Not on a platform page, check if any platforms are connected
-        const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
-        
-        if (hasConnectedPlatforms) {
-          // Auto-redirect to gallery if user has any connected platforms
-          console.log('Auto-redirect: Has connected platforms, going directly to gallery');
-          openGallery();
-          return;
-        }
-      }
+      // AUTO-REDIRECT: If user is logged in to MainGallery, bypass popup entirely
+      console.log('Auto-redirect condition met: User logged in, bypassing popup entirely');
+      openGallery();
+      return;
     }
     
     // If no auto-redirect occurred, update UI normally
@@ -344,6 +302,18 @@ loginBtn.addEventListener('click', () => {
   openAuthPage();
 });
 
+if (googleLoginBtn) {
+  googleLoginBtn.addEventListener('click', () => {
+    openAuthWithProvider('google');
+  });
+}
+
+if (microsoftLoginBtn) {
+  microsoftLoginBtn.addEventListener('click', () => {
+    openAuthWithProvider('azure');
+  });
+}
+
 connectBtn.addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const platform = detectPlatform(tab.url);
@@ -359,6 +329,12 @@ viewGalleryBtn.addEventListener('click', () => {
 viewMyGalleryBtn.addEventListener('click', () => {
   openGallery();
 });
+
+// Add helper function for opening auth page
+function openAuthPage() {
+  chrome.runtime.sendMessage({ action: 'openAuthPage' });
+  window.close();
+}
 
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message) => {
