@@ -166,8 +166,10 @@ async function connectPlatform(platform) {
     // Show connected status as a small badge/notification
     showToast(`✓ Connected to ${platform.name}`);
     
-    // Update UI to show the connect status
-    updateUI();
+    // After connecting, open the gallery automatically
+    setTimeout(() => {
+      openGallery();
+    }, 1000);
   } catch (error) {
     console.error('Error connecting platform:', error);
     showToast('Failed to connect. Please try again.');
@@ -352,6 +354,16 @@ async function updateUI() {
   if (!loggedIn) {
     // User is not logged in to MainGallery
     showState(states.notLoggedIn);
+    
+    // Hide the OAuth buttons that aren't ready yet
+    const oauthSection = document.querySelector('.oauth-options');
+    if (oauthSection) {
+      const comingSoonText = oauthSection.querySelector('.coming-soon');
+      if (comingSoonText) {
+        comingSoonText.style.display = 'none';
+      }
+    }
+    
     checkTipsVisibility();
     return;
   }
@@ -360,13 +372,21 @@ async function updateUI() {
   const platform = detectPlatform(url);
   
   if (!platform) {
-    // Show logged in message briefly
-    states.loggedInMessage.classList.remove('hidden');
+    // Check if user has any connected platforms
+    const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
     
-    setTimeout(() => {
-      // Then show not platform page
+    if (hasConnectedPlatforms) {
+      // If they have connected platforms, suggest going to gallery
       showState(states.notPlatformPage);
-    }, 1000);
+    } else {
+      // Show logged in message briefly
+      states.loggedInMessage.classList.remove('hidden');
+      
+      setTimeout(() => {
+        // Then show not platform page
+        showState(states.notPlatformPage);
+      }, 1000);
+    }
     return;
   }
   
@@ -389,6 +409,11 @@ async function updateUI() {
     connectedPlatformNameElem.textContent = platform.name;
     connectedPlatformIconElem.src = platform.icon;
     showState(states.alreadyConnected);
+    
+    // Automatically open gallery after a short delay
+    setTimeout(() => {
+      openGallery();
+    }, 1500);
   } else {
     // Platform is ready to connect
     platformNameElem.textContent = platform.name;
@@ -399,13 +424,56 @@ async function updateUI() {
   checkTipsVisibility();
 }
 
+// Helper function to check if user has any connected platforms
+async function checkForAnyConnectedPlatforms() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(null, function(items) {
+      const platformKeys = Object.keys(items).filter(key => 
+        key.startsWith('platform_') && key.endsWith('_connected')
+      );
+      
+      const hasConnected = platformKeys.some(key => items[key] === true);
+      console.log('Connected platforms check:', hasConnected ? 'Has connected platforms' : 'No connected platforms');
+      resolve(hasConnected);
+    });
+  });
+}
+
 // OAuth login handlers (placeholders for now)
 function handleGoogleLogin() {
-  showToast('Google login coming soon');
+  // Note: These are just placeholders until OAuth is fully implemented
+  // Show auth loading state instead of toast
+  showState(states.authLoading);
+  
+  // Send message to background to handle opening auth page
+  chrome.runtime.sendMessage({ 
+    action: 'openAuthPage',
+    redirectUrl: window.location.href,
+    provider: 'google'
+  });
+  
+  // Close popup after a short delay
+  setTimeout(() => {
+    window.close();
+  }, 1000);
 }
 
 function handleFacebookLogin() {
-  showToast('Facebook login coming soon');
+  // Note: These are just placeholders until OAuth is fully implemented
+  // Show auth loading state instead of toast
+  showState(states.authLoading);
+  
+  // Send message to background to handle opening auth page
+  chrome.runtime.sendMessage({ 
+    action: 'openAuthPage',
+    redirectUrl: window.location.href,
+    provider: 'facebook'
+  });
+  
+  // Close popup after a short delay
+  setTimeout(() => {
+    window.close();
+  }, 1000);
 }
 
 // Event listeners

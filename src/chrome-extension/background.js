@@ -67,7 +67,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// Listen for clicks on the extension icon in the toolbar
+// Listen for clicks on the extension icon in the toolbar - IMPROVED LOGIC
 chrome.action.onClicked.addListener(async (tab) => {
   console.log('Extension icon clicked in toolbar');
   
@@ -93,11 +93,37 @@ chrome.action.onClicked.addListener(async (tab) => {
       openGallery();
       return;
     }
+  } else {
+    // Not on a supported platform but user is logged in
+    // Check if user has any connected platforms
+    const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
+    
+    if (hasConnectedPlatforms) {
+      // If user has any connected platforms, go straight to gallery
+      console.log('User has connected platforms, opening gallery directly');
+      openGallery();
+      return;
+    }
   }
   
   // For all other cases, let the popup open normally
   console.log('Opening popup for platform connection or non-platform page');
 });
+
+// Check if user has any connected platforms
+async function checkForAnyConnectedPlatforms() {
+  return new Promise(resolve => {
+    chrome.storage.local.get(null, function(items) {
+      const platformKeys = Object.keys(items).filter(key => 
+        key.startsWith('platform_') && key.endsWith('_connected')
+      );
+      
+      const hasConnected = platformKeys.some(key => items[key] === true);
+      console.log('Connected platforms check:', hasConnected ? 'Has connected platforms' : 'No connected platforms');
+      resolve(hasConnected);
+    });
+  });
+}
 
 // Listen for auth state changes
 chrome.storage.onChanged.addListener((changes, namespace) => {

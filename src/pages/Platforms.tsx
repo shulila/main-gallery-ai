@@ -20,15 +20,17 @@ const Platforms = () => {
       <main className="pt-24">
         <div className="container mx-auto px-4 py-8">
           {user ? (
-            // Logged in user sees connected platforms management view
+            // Logged in user sees the connected platforms management view
             <>
-              <h1 className="text-3xl font-bold mb-8 text-center">Connected Platforms</h1>
+              <h1 className="text-3xl font-bold mb-2 text-center">My Connected Platforms</h1>
+              <p className="text-muted-foreground text-center mb-8">Manage your AI platforms and connections</p>
               <ConnectedPlatforms />
             </>
           ) : (
             // Not logged in user sees integration explanation
             <>
-              <h1 className="text-3xl font-bold mb-8 text-center">Platform Integrations</h1>
+              <h1 className="text-3xl font-bold mb-2 text-center">Platform Integrations</h1>
+              <p className="text-muted-foreground text-center mb-8">Connect your favorite AI platforms to MainGallery</p>
               <PlatformIntegration />
             </>
           )}

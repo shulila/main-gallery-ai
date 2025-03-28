@@ -11,7 +11,6 @@ const PLATFORMS = {
     name: 'Midjourney',
     urlPatterns: [/midjourney\.com/, /discord\.com\/channels.*midjourney/],
     selectors: {
-      // Different locations where we can inject our button
       gallery: 'main .gallery',
       header: '.Header_headerWrapper__HXZoP',
       messageToolbar: '.message-toolbar', 
@@ -19,9 +18,8 @@ const PLATFORMS = {
       chatInput: '.chatContent-3KubbW'
     },
     loginCheck: {
-      // Elements that indicate the user is logged in
       selectors: ['.user-name', '.userInfo-regGGv'],
-      waitTime: 5000 // How long to wait for login elements to appear
+      waitTime: 5000
     }
   },
   dalle: {
@@ -84,23 +82,16 @@ const PLATFORMS = {
     name: 'Leonardo.ai',
     urlPatterns: [/leonardo\.ai/],
     selectors: {
-      // Attempt to find the gallery container with different possible selectors
       gallery: '.react-photo-album, .image-grid, .gallery-view',
-      // Potential headers or nav areas
       header: '.header, .navbar, nav, .appbar, .app-header',
-      // Toolbar areas
       toolbar: '.toolbar, .tools, .controls, .action-bar',
-      // Main content wrappers
       contentWrapper: '.content, main, .main-content, .page-content',
-      // Common canvas areas
       canvas: '.canvas-area, .workspace, .editor',
-      // Generation panel
       generationPanel: '.generation-panel, .sidebar, .control-panel',
     },
     loginCheck: {
-      // Elements that might indicate a user is logged in
       selectors: ['.user-avatar', '.user-profile', '.account-menu', '.avatar', '.user-name'],
-      waitTime: 4000 // Wait time in ms for login elements to appear
+      waitTime: 4000
     }
   }
 };
@@ -117,13 +108,20 @@ const UI = {
     shadow: '0 2px 5px rgba(0,0,0,0.2)'
   },
   zIndex: 9999,
-  transitions: '0.3s ease all'
+  transitions: '0.3s ease all',
+  borderRadius: '16px',
+  spacing: {
+    sm: '8px',
+    md: '12px',
+    lg: '16px'
+  }
 };
 
 // Track the elements we've added
 let addedElements = {
   button: null,
-  onboarding: null
+  onboarding: null,
+  floatingButton: null
 };
 
 // State management
@@ -132,8 +130,32 @@ let state = {
   platformId: null,
   isLoggedInToGallery: false,
   isLoggedInToPlatform: false,
-  isPlatformConnected: false
+  isPlatformConnected: false,
+  isGalleryPage: false
 };
+
+// Check if current page is a gallery page (not login, explore, etc)
+function isGalleryPage() {
+  const url = window.location.href;
+  
+  // Check if current URL matches gallery patterns
+  if (state.platformId === 'midjourney') {
+    return url.includes('/organize') || url.includes('/feed');
+  } else if (state.platformId === 'dalle') {
+    return url.includes('/create') || url.includes('/collection');
+  } else if (state.platformId === 'leonardo') {
+    return url.includes('/gallery') || url.includes('/generations');
+  } else if (state.platformId === 'stableDiffusion') {
+    return url.includes('/gallery') || url.includes('/workspace');
+  } else if (state.platformId === 'runway') {
+    return url.includes('/projects') || url.includes('/assets');
+  } else if (state.platformId === 'pika') {
+    return url.includes('/profile') || url.includes('/videos');
+  }
+  
+  // By default, for unknown patterns, return false - safer than showing buttons everywhere
+  return false;
+}
 
 // Check if a platform is connected
 function isPlatformConnected(platformId) {
@@ -253,141 +275,197 @@ function findContainer(platform) {
   return document.body;
 }
 
-// Create the Main Gallery button
-function createButton({ action = 'add', isVisible = true, disabled = false, platformLoggedIn = true }) {
+// Create floating connect button with hover effect
+function createFloatingConnectButton() {
   // Remove existing button if present
-  if (addedElements.button) {
-    addedElements.button.remove();
-    addedElements.button = null;
+  if (addedElements.floatingButton) {
+    addedElements.floatingButton.remove();
+    addedElements.floatingButton = null;
+  }
+  
+  // Only show on gallery pages
+  if (!state.isGalleryPage) {
+    return null;
+  }
+  
+  // Only show if user is logged in to MainGallery but platform not connected
+  if (!state.isLoggedInToGallery || state.isPlatformConnected) {
+    return null;
+  }
+  
+  // Only show if user is logged in to the platform
+  if (!state.isLoggedInToPlatform) {
+    return null;
   }
   
   // Create button container
   const buttonContainer = document.createElement('div');
-  buttonContainer.className = 'main-gallery-button-container';
-  buttonContainer.style.position = 'fixed';
-  buttonContainer.style.bottom = '20px';
-  buttonContainer.style.right = '20px';
-  buttonContainer.style.zIndex = UI.zIndex;
-  buttonContainer.style.display = isVisible ? 'block' : 'none';
+  buttonContainer.className = 'mg-floating-connect-button-container';
+  buttonContainer.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: ${UI.zIndex};
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  `;
   
   // Create the actual button
   const button = document.createElement('button');
-  button.className = 'main-gallery-button';
-  button.disabled = disabled;
+  button.className = 'mg-floating-connect-button';
   
-  // Determine button text and style based on action
-  let buttonText, buttonStyle;
-  
-  if (!platformLoggedIn) {
-    // User needs to log in to platform first
-    buttonText = `Please log in to ${state.platform?.name || 'platform'} first`;
-    buttonStyle = `
-      background-color: #f0f0f0;
-      color: #6b7280;
-      cursor: not-allowed;
-    `;
-    button.disabled = true;
-  } else if (action === 'add') {
-    // Default: "Add to Main Gallery"
-    buttonText = 'Add to Main Gallery';
-    buttonStyle = `
-      background-color: ${UI.colors.primary};
-      color: ${UI.colors.text};
-      cursor: pointer;
-    `;
-  } else if (action === 'go') {
-    // "Go to Main Gallery"
-    buttonText = 'Go to Main Gallery';
-    buttonStyle = `
-      background-color: #16a34a;
-      color: ${UI.colors.text};
-      cursor: pointer;
-    `;
-  } else if (action === 'login') {
-    // "Login to Main Gallery"
-    buttonText = 'Login to Main Gallery';
-    buttonStyle = `
-      background-color: ${UI.colors.primary};
-      color: ${UI.colors.text};
-      cursor: pointer;
-    `;
-  }
-  
-  button.innerHTML = buttonText;
-  
-  // Apply styles
+  // Apply Apple-inspired styling
   button.style.cssText = `
-    ${buttonStyle}
-    padding: 8px 16px;
-    border-radius: 20px;
+    background-color: white;
+    color: ${UI.colors.primary};
     border: none;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    border-radius: ${UI.borderRadius};
+    padding: ${UI.spacing.md} ${UI.spacing.lg};
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 14px;
     font-weight: 500;
-    box-shadow: ${UI.colors.shadow};
-    transition: ${UI.transitions};
-    outline: none;
     display: flex;
     align-items: center;
-    justify-content: center;
-    min-width: 160px;
-    height: 40px;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 48px;
+    height: 48px;
+    overflow: hidden;
     white-space: nowrap;
   `;
   
-  // Add hover effect
-  button.addEventListener('mouseover', () => {
-    if (!button.disabled) {
-      button.style.transform = 'translateY(-2px)';
-      button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-      
-      if (action === 'add') {
-        button.style.backgroundColor = UI.colors.hover;
-      } else if (action === 'go') {
-        button.style.backgroundColor = '#15803d';
-      } else if (action === 'login') {
-        button.style.backgroundColor = UI.colors.hover;
-      }
-    }
-  });
+  // Create icon
+  const iconSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  iconSvg.setAttribute("width", "20");
+  iconSvg.setAttribute("height", "20");
+  iconSvg.setAttribute("viewBox", "0 0 24 24");
+  iconSvg.setAttribute("fill", "none");
+  iconSvg.setAttribute("stroke", "currentColor");
+  iconSvg.setAttribute("stroke-width", "2");
+  iconSvg.setAttribute("stroke-linecap", "round");
+  iconSvg.setAttribute("stroke-linejoin", "round");
+  iconSvg.style.transition = "all 0.3s ease";
   
-  button.addEventListener('mouseout', () => {
-    button.style.transform = 'translateY(0)';
-    button.style.boxShadow = UI.colors.shadow;
-    
-    if (action === 'add') {
-      button.style.backgroundColor = UI.colors.primary;
-    } else if (action === 'go') {
-      button.style.backgroundColor = '#16a34a';
-    } else if (action === 'login') {
-      button.style.backgroundColor = UI.colors.primary;
-    }
-  });
+  // Create plus icon path
+  const plusPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  plusPath.setAttribute("d", "M12 5v14M5 12h14");
+  iconSvg.appendChild(plusPath);
   
-  // Add click handler based on action
-  button.addEventListener('click', async () => {
-    if (button.disabled) return;
-    
-    if (action === 'add') {
-      // Send message to add current content to gallery
-      handleAddToGallery();
-    } else if (action === 'go') {
-      // Send message to open gallery
-      chrome.runtime.sendMessage({ action: 'openGallery' });
-    } else if (action === 'login') {
-      // Send message to open auth page
-      chrome.runtime.sendMessage({ 
-        action: 'openAuthPage',
-        redirectUrl: window.location.href
-      });
-    }
-  });
+  // Create text span that will appear on hover
+  const textSpan = document.createElement('span');
+  textSpan.textContent = `Add to MainGallery`;
+  textSpan.style.cssText = `
+    opacity: 0;
+    width: 0;
+    transform: translateX(-10px);
+    transition: all 0.3s ease;
+  `;
   
+  // Append elements
+  button.appendChild(iconSvg);
+  button.appendChild(textSpan);
   buttonContainer.appendChild(button);
+  
+  // Add hover effects
+  button.addEventListener('mouseenter', () => {
+    button.style.backgroundColor = UI.colors.primary;
+    button.style.color = 'white';
+    button.style.transform = 'translateY(-2px)';
+    button.style.boxShadow = '0 4px 12px rgba(57, 87, 237, 0.25)';
+    button.style.width = 'auto';
+    button.style.paddingRight = '18px';
+    iconSvg.style.transform = 'rotate(180deg)';
+    textSpan.style.opacity = '1';
+    textSpan.style.width = 'auto';
+    textSpan.style.marginLeft = '8px';
+    textSpan.style.transform = 'translateX(0)';
+  });
+  
+  button.addEventListener('mouseleave', () => {
+    button.style.backgroundColor = 'white';
+    button.style.color = UI.colors.primary;
+    button.style.transform = 'translateY(0)';
+    button.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+    button.style.paddingRight = '12px';
+    iconSvg.style.transform = 'rotate(0deg)';
+    textSpan.style.opacity = '0';
+    textSpan.style.width = '0';
+    textSpan.style.marginLeft = '0';
+    textSpan.style.transform = 'translateX(-10px)';
+  });
+  
+  // Add click handler
+  button.addEventListener('click', async () => {
+    // Show click animation
+    button.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+      button.style.transform = 'scale(1)';
+    }, 100);
+    
+    // Convert to loading state
+    iconSvg.innerHTML = '';
+    const circlePath = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circlePath.setAttribute("cx", "12");
+    circlePath.setAttribute("cy", "12");
+    circlePath.setAttribute("r", "10");
+    circlePath.setAttribute("stroke-dasharray", "60");
+    circlePath.setAttribute("stroke-dashoffset", "0");
+    circlePath.style.animation = "mg-spin 1s linear infinite";
+    iconSvg.appendChild(circlePath);
+    
+    textSpan.textContent = "Connecting...";
+    textSpan.style.opacity = '1';
+    textSpan.style.width = 'auto';
+    textSpan.style.marginLeft = '8px';
+    
+    // Add the spin animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes mg-spin {
+        0% { transform: rotate(0deg); stroke-dashoffset: 60; }
+        100% { transform: rotate(360deg); stroke-dashoffset: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Send message to initiate platform connection
+    chrome.runtime.sendMessage({
+      action: 'initiatePlatformConnection',
+      platform: state.platformId
+    });
+    
+    // Then handle the connection
+    await handleAddToGallery();
+    
+    // Show success and remove button
+    textSpan.textContent = "Connected!";
+    button.style.backgroundColor = '#16a34a';
+    button.style.color = 'white';
+    
+    setTimeout(() => {
+      buttonContainer.style.opacity = '0';
+      buttonContainer.style.transform = 'translateY(20px)';
+      
+      setTimeout(() => {
+        buttonContainer.remove();
+      }, 300);
+    }, 1500);
+  });
+  
+  // Add to document and animate in
   document.body.appendChild(buttonContainer);
   
-  // Store reference to the button
-  addedElements.button = buttonContainer;
+  // Animate in after a short delay
+  setTimeout(() => {
+    buttonContainer.style.opacity = '1';
+    buttonContainer.style.transform = 'translateY(0)';
+  }, 300);
+  
+  // Store reference
+  addedElements.floatingButton = buttonContainer;
   
   return buttonContainer;
 }
@@ -404,170 +482,21 @@ async function handleAddToGallery() {
   };
   
   // Send message to background script
-  chrome.runtime.sendMessage({
-    action: 'addToGallery',
-    data: data
-  }, function(response) {
-    if (response && response.success) {
-      console.log('Successfully added to gallery:', response);
-      // Update UI to show success
-      updateUI();
-    } else {
-      console.error('Failed to add to gallery:', response?.error || 'Unknown error');
-    }
-  });
-}
-
-// Create onboarding tooltip
-function createOnboardingTooltip() {
-  // If already exists, remove it first
-  if (addedElements.onboarding) {
-    addedElements.onboarding.remove();
-    addedElements.onboarding = null;
-  }
-  
-  // Check if we already showed onboarding and user has closed it
-  chrome.storage.local.get(['onboarding_shown'], result => {
-    if (result.onboarding_shown) {
-      console.log('MainGallery: Onboarding tooltip already shown and closed by user');
-      return;
-    }
-    
-    // Also check if user is already logged in - if so, don't show onboarding
-    isLoggedInToGallery().then(loggedIn => {
-      if (loggedIn) {
-        console.log('MainGallery: User already logged in, not showing onboarding');
-        // Make sure we mark it as shown to not show again
-        chrome.storage.local.set({ onboarding_shown: true });
-        return;
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({
+      action: 'addToGallery',
+      data: data
+    }, function(response) {
+      if (response && response.success) {
+        console.log('Successfully added to gallery:', response);
+        // Update UI to show success
+        state.isPlatformConnected = true;
+        updateUI();
+        resolve(true);
+      } else {
+        console.error('Failed to add to gallery:', response?.error || 'Unknown error');
+        resolve(false);
       }
-      
-      // Create the tooltip element
-      const onboarding = document.createElement('div');
-      onboarding.className = 'main-gallery-onboarding';
-      
-      onboarding.style.cssText = `
-        position: fixed;
-        bottom: 80px;
-        right: 20px;
-        width: 300px;
-        background-color: ${UI.colors.bgLight};
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        padding: 16px;
-        z-index: ${UI.zIndex};
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        color: ${UI.colors.textDark};
-        transition: ${UI.transitions};
-        opacity: 0;
-        transform: translateY(20px);
-      `;
-      
-      const onboardingHeader = document.createElement('div');
-      onboardingHeader.style.cssText = `
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 12px;
-      `;
-      
-      const title = document.createElement('h3');
-      title.style.cssText = `
-        font-size: 16px;
-        font-weight: 600;
-        margin: 0;
-      `;
-      title.textContent = 'Welcome to Main Gallery!';
-      
-      const closeButton = document.createElement('button');
-      closeButton.style.cssText = `
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 18px;
-        color: #6b7280;
-      `;
-      closeButton.innerHTML = '&times;';
-      
-      onboardingHeader.appendChild(title);
-      onboardingHeader.appendChild(closeButton);
-      
-      const content = document.createElement('p');
-      content.style.cssText = `
-        font-size: 14px;
-        line-height: 1.5;
-        margin: 0 0 12px;
-      `;
-      content.textContent = `To collect your ${state.platform?.name || 'AI'} creations, login to Main Gallery. You'll only need to do this once.`;
-      
-      const actionButton = document.createElement('button');
-      actionButton.style.cssText = `
-        background-color: ${UI.colors.primary};
-        color: ${UI.colors.text};
-        border: none;
-        border-radius: 6px;
-        padding: 8px 12px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        width: 100%;
-        transition: ${UI.transitions};
-      `;
-      actionButton.textContent = 'Login to Main Gallery';
-      
-      onboarding.appendChild(onboardingHeader);
-      onboarding.appendChild(content);
-      onboarding.appendChild(actionButton);
-      
-      document.body.appendChild(onboarding);
-      
-      // Animate in
-      setTimeout(() => {
-        onboarding.style.opacity = '1';
-        onboarding.style.transform = 'translateY(0)';
-      }, 100);
-      
-      // Add event listeners
-      actionButton.addEventListener('click', () => {
-        // Send message to open auth page
-        chrome.runtime.sendMessage({ 
-          action: 'openAuthPage',
-          redirectUrl: window.location.href
-        });
-        
-        // Remember that the user saw this
-        chrome.storage.local.set({ onboarding_shown: true });
-        
-        // Remove tooltip with animation
-        onboarding.style.opacity = '0';
-        onboarding.style.transform = 'translateY(20px)';
-        setTimeout(() => onboarding.remove(), 300);
-      });
-      
-      closeButton.addEventListener('click', () => {
-        onboarding.classList.remove('show');
-        setTimeout(() => onboarding.remove(), 300);
-        
-        // Remember that the user closed it
-        chrome.storage.local.set({ onboarding_shown: true });
-      });
-      
-      // Store reference
-      addedElements.onboarding = onboarding;
-      
-      // Auto-hide after 15 seconds if user doesn't interact
-      setTimeout(() => {
-        if (addedElements.onboarding) {
-          addedElements.onboarding.style.opacity = '0';
-          addedElements.onboarding.style.transform = 'translateY(20px)';
-          setTimeout(() => {
-            if (addedElements.onboarding) {
-              addedElements.onboarding.remove();
-              addedElements.onboarding = null;
-            }
-          }, 300);
-        }
-      }, 15000);
     });
   });
 }
@@ -579,42 +508,24 @@ async function updateUI() {
   // Check login and platform connection status
   state.isLoggedInToGallery = await isLoggedInToGallery();
   state.isPlatformConnected = state.platformId ? await isPlatformConnected(state.platformId) : false;
+  state.isGalleryPage = isGalleryPage();
   
-  // Define button action based on state
-  let buttonAction, isVisible, isDisabled;
-  
-  if (!state.isLoggedInToPlatform) {
-    // User needs to log in to platform first
-    buttonAction = 'add';
-    isVisible = true;
-    isDisabled = true;
-  } else if (!state.isLoggedInToGallery) {
-    // User needs to log in to Main Gallery
-    buttonAction = 'login';
-    isVisible = true;
-    isDisabled = false;
-    
-    // Show onboarding tooltip if first time
-    createOnboardingTooltip();
-  } else if (state.isPlatformConnected) {
-    // User is connected, offer to go to gallery
-    buttonAction = 'go';
-    isVisible = true;
-    isDisabled = false;
-  } else {
-    // Default: offer to add to gallery
-    buttonAction = 'add';
-    isVisible = true;
-    isDisabled = false;
+  // Remove existing main button (not showing inside the platforms anymore)
+  if (addedElements.button) {
+    addedElements.button.remove();
+    addedElements.button = null;
   }
   
-  // Create or update button
-  createButton({ 
-    action: buttonAction, 
-    isVisible: isVisible, 
-    disabled: isDisabled,
-    platformLoggedIn: state.isLoggedInToPlatform
-  });
+  // Create or update the floating button (only if not connected)
+  if (!state.isPlatformConnected) {
+    createFloatingConnectButton();
+  }
+  
+  // Remove onboarding tooltip if user is already logged in
+  if (state.isLoggedInToGallery && addedElements.onboarding) {
+    addedElements.onboarding.remove();
+    addedElements.onboarding = null;
+  }
 }
 
 // Initialize extension UI
@@ -636,6 +547,10 @@ async function initialize() {
   state.isLoggedInToPlatform = await checkPlatformLogin(state.platform);
   console.log(`MainGallery: User is ${state.isLoggedInToPlatform ? '' : 'not '}logged in to ${state.platform.name}`);
   
+  // Check if current page is a gallery page
+  state.isGalleryPage = isGalleryPage();
+  console.log(`MainGallery: Current page is ${state.isGalleryPage ? '' : 'not '}a gallery page`);
+  
   // Initialize UI for first time
   updateUI();
   
@@ -654,10 +569,26 @@ async function initialize() {
 function setupMutationObserver() {
   // Create an observer that will check if our elements have been removed
   const observer = new MutationObserver((mutations) => {
-    // Check if our button has been removed
-    if (addedElements.button && !document.contains(addedElements.button)) {
-      console.log('MainGallery: Button was removed, re-adding');
-      addedElements.button = null;
+    // Check if our elements have been removed
+    for (const key in addedElements) {
+      if (addedElements[key] && !document.contains(addedElements[key])) {
+        console.log(`MainGallery: ${key} was removed, re-adding`);
+        addedElements[key] = null;
+        updateUI();
+      }
+    }
+    
+    // Check if URL has changed (SPA navigation)
+    const urlHasChanged = mutations.some(mutation => {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'href') {
+        return true;
+      }
+      return false;
+    });
+    
+    if (urlHasChanged) {
+      console.log('MainGallery: URL changed, updating gallery page status');
+      state.isGalleryPage = isGalleryPage();
       updateUI();
     }
     
@@ -701,7 +632,8 @@ function setupMutationObserver() {
   observer.observe(document.body, { 
     childList: true, 
     subtree: true,
-    attributes: false,
+    attributes: true,
+    attributeFilter: ['href'],
     characterData: false
   });
 }
@@ -723,6 +655,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message.isLoggedIn) {
       state.isPlatformConnected = false;
     }
+  } else if (message.action === 'platformConnected') {
+    console.log(`MainGallery: Platform ${message.platformId} connected`);
+    if (message.platformId === state.platformId) {
+      state.isPlatformConnected = true;
+      updateUI();
+    }
+    sendResponse({ success: true });
   }
   
   return true;
