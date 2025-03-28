@@ -6,7 +6,7 @@ const FUNCTION_BASE_URL = "https://ovhriawcqvcpagcaidlb.supabase.co/functions/v1
 
 /**
  * Calls the Midjourney Edge Function with the specified action and parameters
- * @param {string} action - The action to perform (authenticate, fetchUserImages, generateImage)
+ * @param {string} action - The action to perform (authenticate, fetchUserImages, generateImage, checkJobStatus)
  * @param {Object} params - The parameters for the action
  * @returns {Promise<Object>} The API response
  */
@@ -82,6 +82,23 @@ export async function generateMidjourneyImage(prompt, options = {}) {
   
   return callMidjourneyAPI('generateImage', {
     prompt,
+    ...options
+  });
+}
+
+/**
+ * Checks the status of a Midjourney generation job
+ * @param {string} jobId - The job ID to check
+ * @param {Object} options - Additional options
+ * @returns {Promise<Object>} The job status
+ */
+export async function checkMidjourneyJobStatus(jobId, options = {}) {
+  if (!jobId) {
+    throw new Error('Job ID is required');
+  }
+  
+  return callMidjourneyAPI('checkJobStatus', {
+    jobId,
     ...options
   });
 }

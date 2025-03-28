@@ -1,6 +1,11 @@
 
 // Import the Midjourney API functions
-import { authenticateWithMidjourney, fetchMidjourneyImages } from './utils/midjourney-api.js';
+import { 
+  authenticateWithMidjourney, 
+  fetchMidjourneyImages, 
+  generateMidjourneyImage,
+  checkMidjourneyJobStatus 
+} from './utils/midjourney-api.js';
 
 // Brand configuration to align with the main app
 const BRAND = {
@@ -29,7 +34,12 @@ const microsoftLoginBtn = document.getElementById('microsoft-login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const testMidjourneyAuthBtn = document.getElementById('test-midjourney-auth');
 const testMidjourneyImagesBtn = document.getElementById('test-midjourney-images');
+const testMidjourneyGenerateBtn = document.getElementById('test-midjourney-generate');
+const testMidjourneyJobBtn = document.getElementById('test-midjourney-job');
 const testResult = document.getElementById('test-result');
+
+// Store the last generated job ID
+let lastGeneratedJobId = null;
 
 // Helper functions
 function hideAllStates() {
@@ -195,6 +205,51 @@ async function testMidjourneyImages() {
   }
 }
 
+// Test generating a Midjourney image
+async function testMidjourneyGenerate() {
+  try {
+    showToast('Generating Midjourney image...', 'info');
+    const testPrompt = "Futuristic cityscape with neon lights and flying cars";
+    const result = await generateMidjourneyImage(testPrompt, {
+      width: 1024,
+      height: 1024,
+      promptStrength: 7.5
+    });
+    
+    // Save the job ID for status checking
+    if (result && result.jobId) {
+      lastGeneratedJobId = result.jobId;
+    }
+    
+    showTestResult(result);
+    showToast('Generation job started!', 'success');
+  } catch (error) {
+    console.error('Midjourney generation test error:', error);
+    showTestResult({ error: error.message });
+    showToast('Failed to start generation job', 'error');
+  }
+}
+
+// Test checking a Midjourney job status
+async function testMidjourneyJobStatus() {
+  try {
+    // Use the last job ID if available, otherwise create a mock one
+    const jobId = lastGeneratedJobId || `mock-job-${Date.now()}`;
+    
+    showToast('Checking job status...', 'info');
+    const result = await checkMidjourneyJobStatus(jobId, {
+      originalPrompt: "Futuristic cityscape with neon lights and flying cars"
+    });
+    
+    showTestResult(result);
+    showToast('Job status retrieved!', 'success');
+  } catch (error) {
+    console.error('Midjourney job status test error:', error);
+    showTestResult({ error: error.message });
+    showToast('Failed to check job status', 'error');
+  }
+}
+
 // Immediately check auth status and redirect if logged in
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Popup loaded, checking auth status');
@@ -230,6 +285,14 @@ if (testMidjourneyAuthBtn) {
 
 if (testMidjourneyImagesBtn) {
   testMidjourneyImagesBtn.addEventListener('click', testMidjourneyImages);
+}
+
+if (testMidjourneyGenerateBtn) {
+  testMidjourneyGenerateBtn.addEventListener('click', testMidjourneyGenerate);
+}
+
+if (testMidjourneyJobBtn) {
+  testMidjourneyJobBtn.addEventListener('click', testMidjourneyJobStatus);
 }
 
 // Listen for messages from background script
