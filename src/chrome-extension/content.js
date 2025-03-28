@@ -265,20 +265,25 @@ function createFloatingConnectButton() {
     addedElements.floatingButton = null;
   }
   
-  // Only show on gallery pages
+  // Only show on gallery pages - THIS IS CRITICAL
   if (!state.isGalleryPage) {
+    console.log('MainGallery: Not on a gallery page, not showing floating button');
     return null;
   }
   
   // Only show if user is logged in to MainGallery but platform not connected
   if (!state.isLoggedInToGallery || state.isPlatformConnected) {
+    console.log('MainGallery: User not logged in or platform already connected, not showing floating button');
     return null;
   }
   
   // Only show if user is logged in to the platform
   if (!state.isLoggedInToPlatform) {
+    console.log('MainGallery: User not logged in to platform, not showing floating button');
     return null;
   }
+  
+  console.log('MainGallery: Creating floating connect button - all conditions met');
   
   // Create button container
   const buttonContainer = document.createElement('div');
@@ -430,7 +435,11 @@ function createFloatingConnectButton() {
   });
   
   // Add click handler
-  button.addEventListener('click', async () => {
+  button.addEventListener('click', async (e) => {
+    // Stop event propagation
+    e.preventDefault();
+    e.stopPropagation();
+    
     // Show click animation
     button.style.transform = 'scale(0.95)';
     setTimeout(() => {
@@ -505,6 +514,9 @@ function createFloatingConnectButton() {
     checkPath.setAttribute("d", "M20 6L9 17l-5-5");
     checkSvg.appendChild(checkPath);
     button.insertBefore(checkSvg, plusIcon);
+    
+    // Update state to reflect connection
+    state.isPlatformConnected = true;
     
     setTimeout(() => {
       buttonContainer.style.opacity = '0';
@@ -595,11 +607,20 @@ async function updateUI() {
   state.isPlatformConnected = state.platformId ? await isPlatformConnected(state.platformId) : false;
   state.isGalleryPage = isGalleryPage();
   
-  // Create or update the floating button (only if not connected)
+  console.log('MainGallery: Updated state:', {
+    isLoggedInToGallery: state.isLoggedInToGallery,
+    isLoggedInToPlatform: state.isLoggedInToPlatform,
+    isPlatformConnected: state.isPlatformConnected,
+    isGalleryPage: state.isGalleryPage
+  });
+  
+  // Create or update the floating button (only if all conditions are met)
   if (state.isLoggedInToGallery && state.isLoggedInToPlatform && !state.isPlatformConnected && state.isGalleryPage) {
+    console.log('MainGallery: All conditions met for floating button - creating it');
     createFloatingConnectButton();
   } else if (addedElements.floatingButton) {
-    // Remove the button if already connected or not on gallery page
+    // Remove the button if conditions are not met
+    console.log('MainGallery: Conditions for floating button not met - removing it');
     addedElements.floatingButton.remove();
     addedElements.floatingButton = null;
   }
@@ -752,10 +773,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   } else if (message.action === 'isGalleryPage') {
     // Check if current page is a gallery page
-    sendResponse({ isGalleryPage: state.isGalleryPage });
+    const isGalleryPage = state.isGalleryPage;
+    console.log(`MainGallery: Checking if gallery page: ${isGalleryPage}`);
+    sendResponse({ isGalleryPage: isGalleryPage });
   } else if (message.action === 'showConnectButton') {
     // Show floating connect button if appropriate
     if (state.isGalleryPage && state.isLoggedInToPlatform && !state.isPlatformConnected) {
+      console.log('MainGallery: Showing connect button');
       createFloatingConnectButton();
     }
     sendResponse({ success: true });

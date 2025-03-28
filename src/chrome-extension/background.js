@@ -67,7 +67,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// IMPROVED SMART LOGIC: Logic for extension icon clicks
+// IMPROVED SMART LOGIC: Extension icon click handler with direct gallery open optimization
 chrome.action.onClicked.addListener(async (tab) => {
   console.log('Extension icon clicked in toolbar');
   
@@ -96,7 +96,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     if (isConnected && isPlatformLoggedIn && isGalleryPage) {
       // Smart behavior: If user is logged into MainGallery, logged into the platform,
       // the platform is connected, and we're on a valid gallery page - go straight to gallery
-      console.log('User fully authenticated and on gallery page - bypassing popup');
+      console.log('User fully authenticated and on gallery page - bypassing popup and opening gallery directly');
       openGallery();
       return;
     }
@@ -106,6 +106,14 @@ chrome.action.onClicked.addListener(async (tab) => {
       console.log('Platform already connected, opening gallery directly');
       openGallery();
       return;
+    }
+    
+    // Handle case where everything is ready but platform not connected yet
+    if (isPlatformLoggedIn && isGalleryPage && !isConnected) {
+      // Show the floating connect button (handled by content script)
+      // but still allow the popup to open as fallback
+      console.log('Ready to connect platform - allowing popup to show connection UI');
+      // The content script will already show the floating button
     }
   } else {
     // Not on a supported platform but user is logged in

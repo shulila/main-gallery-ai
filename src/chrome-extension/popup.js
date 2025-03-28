@@ -248,6 +248,7 @@ function showToast(message) {
 }
 
 async function updateUI() {
+  console.log('Updating popup UI');
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tab.url;
   
@@ -276,7 +277,7 @@ async function updateUI() {
       setTimeout(() => {
         // Then show not platform page
         showState(states.notPlatformPage);
-      }, 800);
+      }, 500);
     }
     return;
   }
@@ -302,6 +303,7 @@ async function updateUI() {
     if (onGalleryPage) {
       // Auto-open gallery if on a platform gallery page and all conditions are met
       // This creates the seamless experience requested
+      console.log('Smart redirect: All conditions met, going directly to gallery');
       openGallery();
       return;
     }
@@ -359,10 +361,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       const hasConnectedPlatforms = await checkForAnyConnectedPlatforms();
       
       if (hasConnectedPlatforms) {
-        // Optional: Uncomment to auto-redirect to gallery even if not on a platform page
-        // console.log('Smart redirect: Has connected platforms, going directly to gallery');
-        // openGallery();
-        // return;
+        // Auto-redirect to gallery even if not on a platform page
+        console.log('Smart redirect: Has connected platforms, going directly to gallery');
+        openGallery();
+        return;
       }
     }
   }
