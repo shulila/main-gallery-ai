@@ -96,7 +96,8 @@ async function checkAuthAndRedirect() {
     
     if (loggedIn) {
       console.log('User is logged in, showing logged-in state');
-      showState(states.loggedIn);
+      // Immediately redirect to gallery instead of showing popup
+      openGallery();
       return true;
     }
     

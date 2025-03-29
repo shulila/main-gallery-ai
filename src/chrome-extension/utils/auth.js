@@ -1,4 +1,3 @@
-
 // Authentication utilities for MainGallery extension
 
 // Open auth page with redirect
@@ -141,8 +140,13 @@ export function setupAuthCallbackListener() {
                   }
                   
                   // If we have a redirect URL, navigate back to it
+                  // Otherwise, open the gallery directly
                   if (redirect) {
                     chrome.tabs.create({ url: redirect });
+                  } else {
+                    // Open gallery after successful login
+                    const galleryUrl = "https://main-gallery-hub.lovable.app/gallery";
+                    chrome.tabs.create({ url: galleryUrl });
                   }
                 });
               }, 500);
@@ -196,6 +200,10 @@ export function setupAuthCallbackListener() {
                 chrome.tabs.remove(callbackTab.id);
                 if (redirect) {
                   chrome.tabs.create({ url: redirect });
+                } else {
+                  // Open gallery after successful login
+                  const galleryUrl = "https://main-gallery-hub.lovable.app/gallery";
+                  chrome.tabs.create({ url: galleryUrl });
                 }
               }, 500);
             });
@@ -230,4 +238,3 @@ export function logout() {
     });
   });
 }
-
