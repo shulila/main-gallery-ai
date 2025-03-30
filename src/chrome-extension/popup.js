@@ -30,7 +30,6 @@ const states = {
 
 const loginBtn = document.getElementById('login-btn');
 const googleLoginBtn = document.getElementById('google-login-btn');
-const microsoftLoginBtn = document.getElementById('microsoft-login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const testMidjourneyAuthBtn = document.getElementById('test-midjourney-auth');
 const testMidjourneyImagesBtn = document.getElementById('test-midjourney-images');
@@ -142,7 +141,7 @@ function openAuthPage() {
   }
 }
 
-// Open auth with specific provider (Google or Microsoft)
+// Open auth with specific provider (Google)
 function openAuthWithProvider(provider) {
   try {
     showState(states.authLoading);
@@ -267,12 +266,6 @@ if (loginBtn) {
 if (googleLoginBtn) {
   googleLoginBtn.addEventListener('click', () => {
     openAuthWithProvider('google');
-  });
-}
-
-if (microsoftLoginBtn) {
-  microsoftLoginBtn.addEventListener('click', () => {
-    openAuthWithProvider('azure');
   });
 }
 

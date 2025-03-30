@@ -39,7 +39,7 @@ const Auth = ({
   const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOAuthLoading] = useState(false);
-  const { signIn, signUp, signInWithGoogle, signInWithMicrosoft } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
   
   // Set the active tab based on initialTab prop or query parameter
   useEffect(() => {
@@ -183,39 +183,6 @@ const Auth = ({
     }
   };
 
-  const handleMicrosoftSignIn = async () => {
-    setOAuthLoading(true);
-    try {
-      await signInWithMicrosoft();
-      
-      // Get parameters from query string
-      const searchParams = new URLSearchParams(location.search);
-      const redirectParam = searchParams.get('redirect');
-      
-      if (redirectParam) {
-        // Handle redirect after successful OAuth login
-        if (redirectParam.startsWith('chrome-extension://') || 
-            redirectParam.startsWith('http://') || 
-            redirectParam.startsWith('https://')) {
-          window.location.href = redirectParam;
-        } else {
-          navigate(redirectParam);
-        }
-      } else {
-        navigate(redirectTo);
-      }
-    } catch (error) {
-      console.error('Microsoft sign in error:', error);
-      toast({
-        title: "Microsoft sign in failed",
-        description: error.message || "Unable to sign in with Microsoft",
-        variant: "destructive",
-      });
-    } finally {
-      setOAuthLoading(false);
-    }
-  };
-
   // OAuth sign-in buttons
   const renderOAuthButtons = () => {
     return (
@@ -246,34 +213,6 @@ const Auth = ({
             />
           </svg>
           Continue with Google
-        </Button>
-        
-        <Button 
-          type="button" 
-          variant="outline" 
-          className="w-full flex items-center gap-2 font-normal"
-          onClick={handleMicrosoftSignIn}
-          disabled={oauthLoading}
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" className="text-gray-700">
-            <path
-              fill="#f25022"
-              d="M11.4 24H0V12.6h11.4V24z"
-            />
-            <path
-              fill="#00a4ef"
-              d="M24 24H12.6V12.6H24V24z"
-            />
-            <path
-              fill="#7fba00"
-              d="M11.4 11.4H0V0h11.4v11.4z"
-            />
-            <path
-              fill="#ffb900"
-              d="M24 11.4H12.6V0H24v11.4z"
-            />
-          </svg>
-          Continue with Microsoft
         </Button>
       </div>
     );
