@@ -37,25 +37,40 @@ const AuthCallback = () => {
           return;
         }
 
-        // Handle hash fragment (used by some OAuth providers like Google)
+        // Handle hash fragment (used by OAuth providers like Google)
         if (location.hash) {
-          console.log('Hash fragment detected in callback URL');
+          console.log('Hash fragment detected in callback URL:', location.hash);
+          
+          // Extract user info if available - specifically for Chrome extension auth flow
+          const params = new URLSearchParams(location.hash.substring(1));
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          const userEmail = params.get('email');
           
           // For Chrome extension auth flow
-          if (window.opener === null && location.hash.includes('access_token')) {
-            console.log('Extension flow detected, auto-closing window not possible');
+          if (window.opener === null && accessToken) {
+            console.log('Extension flow detected with access token');
             
-            // Extract tokens
-            const params = new URLSearchParams(location.hash.substring(1));
-            const accessToken = params.get('access_token');
-            const tokenType = params.get('token_type');
-            
-            if (accessToken && tokenType) {
-              console.log('Access token found, redirecting to gallery');
-              navigate('/gallery');
-            } else {
-              setError('Invalid authentication response');
+            // Store auth data in localStorage for extension to access
+            try {
+              localStorage.setItem('main_gallery_auth_token', JSON.stringify({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                timestamp: Date.now()
+              }));
+              
+              if (userEmail) {
+                localStorage.setItem('main_gallery_user_email', userEmail);
+              }
+              
+              console.log('Access token stored in localStorage for extension to access');
+            } catch (storageError) {
+              console.error('Error storing auth data:', storageError);
             }
+            
+            // In extension flow, just navigate to the gallery
+            console.log('Redirecting to gallery');
+            navigate('/gallery');
           } else {
             console.log('Regular web app flow with hash, redirecting to gallery');
             // We know the auth update was handled by Supabase client, just navigate

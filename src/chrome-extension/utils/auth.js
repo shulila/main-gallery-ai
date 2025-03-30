@@ -1,7 +1,5 @@
 
 // Auth utilities for Chrome extension
-const supabaseUrl = 'https://ovhriawcqvcpagcaidlb.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U';
 
 // Hardcoded Google OAuth Client ID - PRODUCTION ONLY
 const GOOGLE_CLIENT_ID = '242032861157-q1nf91k8d4lp0goopnquqg2g6em581c6.apps.googleusercontent.com';
@@ -13,7 +11,6 @@ const getProductionRedirectUrl = () => {
 
 // Set up a listener for auth callback
 export function setupAuthCallbackListener() {
-  // Use tabs.onUpdated instead of webNavigation
   try {
     const redirectPattern = '*://main-gallery-hub.lovable.app/auth/callback*';
     
@@ -29,20 +26,22 @@ export function setupAuthCallbackListener() {
         const url = new URL(tab.url);
         const accessToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('access_token') : null;
         const refreshToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('refresh_token') : null;
+        const userEmail = url.hash ? new URLSearchParams(url.hash.substring(1)).get('email') : null;
         
         // If we have tokens, validate and store them
         if (accessToken) {
           console.log('Auth tokens detected, will store session');
           
-          // Store basic token info for extension usage
+          // Store token info and user email for extension usage
           chrome.storage.sync.set({
             'main_gallery_auth_token': {
               access_token: accessToken,
               refresh_token: refreshToken,
               timestamp: Date.now()
-            }
+            },
+            'main_gallery_user_email': userEmail || 'User'
           }, () => {
-            console.log('Auth token stored in extension storage');
+            console.log('Auth token and user info stored in extension storage');
             
             // Close the auth tab after successful login
             setTimeout(() => {
@@ -87,9 +86,9 @@ export function openAuthPage(tabId = null, options = {}) {
 }
 
 // Construct Google OAuth URL directly
-function constructGoogleOAuthUrl(redirectUrl, stateParam) {
-  // Use our hardcoded client ID
-  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true&state=${stateParam}`;
+function constructGoogleOAuthUrl(redirectUrl) {
+  // Build URL directly with the hardcoded client ID - NO localhost in redirectUrl
+  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true`;
 }
 
 // Handle OAuth sign-in with provider
@@ -99,15 +98,9 @@ export function openAuthWithProvider(provider) {
     const redirectUrl = getProductionRedirectUrl();
     console.log(`Opening ${provider} auth with redirect to:`, redirectUrl);
     
-    // Generate a state param for security
-    const stateParam = Math.random().toString(36).substring(2, 15);
-    
-    // Store this state param for verification later
-    chrome.storage.local.set({ 'oauth_state': stateParam });
-    
     if (provider === 'google') {
       // Create Google OAuth URL directly - avoiding Supabase client
-      const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl, stateParam);
+      const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl);
       
       // Open the OAuth URL in a new tab
       chrome.tabs.create({ url: googleOAuthUrl });

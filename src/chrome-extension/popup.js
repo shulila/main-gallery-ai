@@ -38,7 +38,19 @@ function showState(state) {
 function isLoggedIn() {
   return new Promise(resolve => {
     chrome.storage.sync.get(['main_gallery_auth_token'], result => {
-      resolve(!!result.main_gallery_auth_token);
+      const token = result.main_gallery_auth_token;
+      
+      // Check if token exists and is not too old (24 hours validity)
+      if (token && (Date.now() - token.timestamp < 24 * 60 * 60 * 1000)) {
+        resolve(true);
+      } else {
+        // Token doesn't exist or is expired
+        if (token) {
+          // Clear expired token
+          chrome.storage.sync.remove(['main_gallery_auth_token']);
+        }
+        resolve(false);
+      }
     });
   });
 }

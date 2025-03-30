@@ -7,11 +7,14 @@ import { useToast } from '@/hooks/use-toast';
 const supabaseUrl = 'https://ovhriawcqvcpagcaidlb.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U';
 
-// Get the correct production URL for auth redirects - avoid localhost
+// Get the correct production URL for auth redirects - NEVER use localhost
 const getProductionAuthRedirectUrl = () => {
   // Always use the production URL, never use window.location.origin
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
+
+// Hardcoded Google OAuth Client ID - PRODUCTION ONLY
+const GOOGLE_CLIENT_ID = '242032861157-q1nf91k8d4lp0goopnquqg2g6em581c6.apps.googleusercontent.com';
 
 // Create a single Supabase client instance to be used throughout the app
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -27,6 +30,11 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 console.log('Supabase URL:', supabaseUrl);
 console.log('Supabase client initialized');
 console.log('Auth redirect URL:', getProductionAuthRedirectUrl());
+
+// Direct Google OAuth URL construction
+const constructGoogleOAuthUrl = (redirectUrl) => {
+  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true`;
+};
 
 type AuthContextType = {
   session: Session | null;
@@ -58,6 +66,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           (_event, session) => {
             setSession(session);
             setUser(session?.user ?? null);
+            
+            // Also store email in localStorage for extension to access
+            if (session?.user?.email) {
+              try {
+                localStorage.setItem('main_gallery_user_email', session.user.email);
+              } catch (err) {
+                console.error('Error storing user email:', err);
+              }
+            }
           }
         );
         
@@ -65,6 +82,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
         setUser(session?.user ?? null);
+        
+        // Also store email in localStorage for extension to access
+        if (session?.user?.email) {
+          try {
+            localStorage.setItem('main_gallery_user_email', session.user.email);
+          } catch (err) {
+            console.error('Error storing user email:', err);
+          }
+        }
         
         return () => subscription.unsubscribe();
       } catch (error) {
@@ -161,24 +187,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       
       // Always use the production URL for the redirect, never use window.location.origin
-      const redirectTo = getProductionAuthRedirectUrl();
+      const redirectUrl = getProductionAuthRedirectUrl();
       
-      console.log('Starting Google login with redirect to:', redirectTo);
+      console.log('Starting Google login with redirect to:', redirectUrl);
       
-      // Always pass the production URL for redirectTo
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo,
-          queryParams: {
-            prompt: 'select_account', // Force Google account selection
-          }
-        }
-      });
+      // INSTEAD of using Supabase OAuth, manually construct and open the URL
+      // This works better with Chrome extension
+      const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl);
       
-      if (error) {
-        throw error;
-      }
+      // Navigate to Google OAuth URL
+      window.location.href = googleOAuthUrl;
+      
+      // No need for error handling here since we're navigating away
     } catch (error: any) {
       console.error('Google login error:', error);
       toast({
@@ -199,6 +219,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (error) {
         throw error;
+      }
+      
+      // Also clear localStorage items used by extension
+      try {
+        localStorage.removeItem('main_gallery_auth_token');
+        localStorage.removeItem('main_gallery_user_email');
+      } catch (err) {
+        console.error('Error clearing localStorage:', err);
       }
       
       toast({
