@@ -25,7 +25,8 @@
     "https://*.leonardo.ai/*",
     "https://*.placeholder.com/*",
     "https://discord.com/channels/*",
-    "https://ovhriawcqvcpagcaidlb.supabase.co/*"
+    "https://ovhriawcqvcpagcaidlb.supabase.co/*",
+    "https://main-gallery-hub.lovable.app/*"
   ],
   "action": {
     "default_popup": "popup.html",

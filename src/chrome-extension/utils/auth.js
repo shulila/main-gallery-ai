@@ -1,8 +1,8 @@
 
 // Auth utilities for Chrome extension
 
-// Hardcoded Google OAuth Client ID - PRODUCTION ONLY
-const GOOGLE_CLIENT_ID = '242032861157-q1nf91k8d4lp0goopnquqg2g6em581c6.apps.googleusercontent.com';
+// Updated Google OAuth Client ID - this is the correct one from Google Cloud Console
+const GOOGLE_CLIENT_ID = '242032861157-umrm7n18v4kvk84okgl362nj9abef8kj.apps.googleusercontent.com';
 
 // Get the production auth callback URL - NEVER use localhost
 const getProductionRedirectUrl = () => {
@@ -20,7 +20,7 @@ export function setupAuthCallbackListener() {
       if (changeInfo.status === 'complete' && tab.url && 
           tab.url.includes('main-gallery-hub.lovable.app/auth/callback')) {
         
-        console.log('Auth navigation detected:', tab.url);
+        console.log('Auth callback detected:', tab.url);
         
         // Get auth token from the URL
         const url = new URL(tab.url);
@@ -43,12 +43,27 @@ export function setupAuthCallbackListener() {
           }, () => {
             console.log('Auth token and user info stored in extension storage');
             
+            // Also store in localStorage for web app access if possible
+            try {
+              localStorage.setItem('main_gallery_auth_token', JSON.stringify({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                timestamp: Date.now()
+              }));
+              localStorage.setItem('main_gallery_user_email', userEmail || 'User');
+            } catch (err) {
+              console.error('Error setting localStorage:', err);
+            }
+            
             // Close the auth tab after successful login
             setTimeout(() => {
               chrome.tabs.remove(tabId);
               
               // Open gallery in a new tab
               chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery' });
+              
+              // Send message to update UI in popup if open
+              chrome.runtime.sendMessage({ action: 'updateUI' });
             }, 1000);
           });
         }
@@ -87,8 +102,9 @@ export function openAuthPage(tabId = null, options = {}) {
 
 // Construct Google OAuth URL directly
 function constructGoogleOAuthUrl(redirectUrl) {
-  // Build URL directly with the hardcoded client ID - NO localhost in redirectUrl
-  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true`;
+  // Build URL directly with the corrected client ID - NO localhost in redirectUrl
+  const stateParam = Math.random().toString(36).substring(2, 15);
+  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true&state=${stateParam}`;
 }
 
 // Handle OAuth sign-in with provider
@@ -114,21 +130,69 @@ export function openAuthWithProvider(provider) {
   }
 }
 
-// Check if user is logged in
+// Check if user is logged in - improved to check both extension storage and localStorage
 export function isLoggedIn() {
   return new Promise((resolve) => {
     // Check if token exists in storage
     chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
-      resolve(!!result.main_gallery_auth_token);
+      if (result.main_gallery_auth_token) {
+        resolve(true);
+      } else {
+        // If not in extension storage, try localStorage as fallback
+        try {
+          const localToken = localStorage.getItem('main_gallery_auth_token');
+          if (localToken) {
+            // If found in localStorage, also sync to extension storage
+            const parsedToken = JSON.parse(localToken);
+            chrome.storage.sync.set({
+              'main_gallery_auth_token': parsedToken
+            });
+            
+            // Also get user email if available
+            const userEmail = localStorage.getItem('main_gallery_user_email');
+            if (userEmail) {
+              chrome.storage.sync.set({
+                'main_gallery_user_email': userEmail
+              });
+            }
+            
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        } catch (err) {
+          console.error('Error checking localStorage:', err);
+          resolve(false);
+        }
+      }
     });
   });
 }
 
-// Get user email if available
+// Get user email if available - improved to check both sources
 export function getUserEmail() {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(['main_gallery_auth_token', 'main_gallery_user_email'], (result) => {
-      resolve(result.main_gallery_user_email || null);
+    chrome.storage.sync.get(['main_gallery_user_email'], (result) => {
+      if (result.main_gallery_user_email) {
+        resolve(result.main_gallery_user_email);
+      } else {
+        // Try localStorage as fallback
+        try {
+          const userEmail = localStorage.getItem('main_gallery_user_email');
+          if (userEmail) {
+            // Also sync to extension storage
+            chrome.storage.sync.set({
+              'main_gallery_user_email': userEmail
+            });
+            resolve(userEmail);
+          } else {
+            resolve(null);
+          }
+        } catch (err) {
+          console.error('Error checking localStorage for email:', err);
+          resolve(null);
+        }
+      }
     });
   });
 }
@@ -136,10 +200,20 @@ export function getUserEmail() {
 // Log out from all platforms
 export function logout() {
   try {
-    // Clear local storage token
+    // Clear both extension storage and localStorage
     return new Promise((resolve) => {
       chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-        console.log('Successfully logged out');
+        console.log('Successfully logged out from extension storage');
+        
+        // Also clear localStorage if possible
+        try {
+          localStorage.removeItem('main_gallery_auth_token');
+          localStorage.removeItem('main_gallery_user_email');
+          console.log('Successfully logged out from localStorage');
+        } catch (err) {
+          console.error('Error clearing localStorage:', err);
+        }
+        
         resolve(true);
       });
     });

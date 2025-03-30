@@ -1,3 +1,4 @@
+
 // Import functions from other modules - avoid dynamic imports in MV3
 // Use standard JS function declarations and move code from imported files
 
@@ -16,6 +17,7 @@ function setupAuthCallbackListener() {
         const url = new URL(tab.url);
         const accessToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('access_token') : null;
         const refreshToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('refresh_token') : null;
+        const userEmail = url.hash ? new URLSearchParams(url.hash.substring(1)).get('email') : null;
         
         // If we have tokens, validate and store them
         if (accessToken) {
@@ -27,7 +29,8 @@ function setupAuthCallbackListener() {
               access_token: accessToken,
               refresh_token: refreshToken,
               timestamp: Date.now()
-            }
+            },
+            'main_gallery_user_email': userEmail || 'User'
           }, () => {
             console.log('Auth token stored in extension storage');
             
@@ -88,8 +91,8 @@ function openAuthWithProvider(provider) {
     // Store this state param for verification later
     chrome.storage.local.set({ 'oauth_state': stateParam });
     
-    // Hardcoded Google OAuth client ID
-    const GOOGLE_CLIENT_ID = '242032861157-q1nf91k8d4lp0goopnquqg2g6em581c6.apps.googleusercontent.com';
+    // Updated Google OAuth client ID
+    const GOOGLE_CLIENT_ID = '242032861157-umrm7n18v4kvk84okgl362nj9abef8kj.apps.googleusercontent.com';
     
     if (provider === 'google') {
       // Construct the Google OAuth URL directly
@@ -107,12 +110,17 @@ function openAuthWithProvider(provider) {
   }
 }
 
-// Check if user is logged in
+// Check if user is logged in - improved to check both extension storage and localStorage
 function isLoggedIn() {
   return new Promise((resolve) => {
-    // Check if token exists in storage
+    // Check if token exists in extension storage
     chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
-      resolve(!!result.main_gallery_auth_token);
+      if (result.main_gallery_auth_token) {
+        resolve(true);
+      } else {
+        // If no token in extension storage, resolve false
+        resolve(false);
+      }
     });
   });
 }

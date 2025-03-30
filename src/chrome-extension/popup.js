@@ -1,4 +1,3 @@
-
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -35,8 +34,45 @@ function showState(state) {
   state.classList.remove('hidden');
 }
 
+// Improved function to check localStorage AND extension storage
+function checkLocalStorageForAuth() {
+  try {
+    // Check localStorage first for web session
+    const tokenStr = localStorage.getItem('main_gallery_auth_token');
+    const userEmail = localStorage.getItem('main_gallery_user_email');
+    
+    if (tokenStr) {
+      // Found web session, sync to extension storage
+      const token = JSON.parse(tokenStr);
+      
+      // Update extension storage with web session data
+      chrome.storage.sync.set({
+        'main_gallery_auth_token': token,
+        'main_gallery_user_email': userEmail || 'User'
+      }, () => {
+        console.log('Synced web session to extension');
+      });
+      
+      return true;
+    }
+  } catch (error) {
+    console.error('Error checking localStorage:', error);
+  }
+  
+  return false;
+}
+
 function isLoggedIn() {
   return new Promise(resolve => {
+    // First check if we have a web session in localStorage
+    const hasWebSession = checkLocalStorageForAuth();
+    
+    if (hasWebSession) {
+      resolve(true);
+      return;
+    }
+    
+    // Otherwise check extension storage
     chrome.storage.sync.get(['main_gallery_auth_token'], result => {
       const token = result.main_gallery_auth_token;
       
@@ -57,6 +93,18 @@ function isLoggedIn() {
 
 function getUserEmail() {
   return new Promise(resolve => {
+    // First check localStorage for web session
+    try {
+      const userEmail = localStorage.getItem('main_gallery_user_email');
+      if (userEmail) {
+        resolve(userEmail);
+        return;
+      }
+    } catch (error) {
+      console.error('Error getting email from localStorage:', error);
+    }
+    
+    // Otherwise check extension storage
     chrome.storage.sync.get(['main_gallery_user_email'], result => {
       resolve(result.main_gallery_user_email || null);
     });

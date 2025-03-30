@@ -1,150 +1,110 @@
 
-import { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 
-/**
- * Auth callback page for handling redirects from OAuth providers
- */
 const AuthCallback = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const processCallback = async () => {
+    const processAuthCallback = async () => {
       try {
-        console.log('Processing auth callback');
-        setProcessing(true);
-
-        // If there's an error parameter, handle it
-        const searchParams = new URLSearchParams(location.search);
-        const errorParam = searchParams.get('error');
-        const errorDescription = searchParams.get('error_description');
+        console.log("Processing auth callback");
         
-        if (errorParam) {
-          console.error('Auth error:', errorParam, errorDescription);
-          setError(errorDescription || 'Authentication failed');
-          return;
+        // Get hash and query parameters
+        const hash = window.location.hash;
+        const queryParams = Object.fromEntries(searchParams.entries());
+        
+        console.log("Auth callback hash:", hash);
+        console.log("Auth callback query params:", queryParams);
+        
+        if (queryParams.error) {
+          throw new Error(`Authentication error: ${queryParams.error_description || queryParams.error}`);
         }
-
-        // Check for type=recovery for password reset
-        const type = searchParams.get('type');
-        if (type === 'recovery') {
-          console.log('Password recovery flow detected');
-          navigate('/auth?recovery=true');
-          return;
-        }
-
-        // Handle hash fragment (used by OAuth providers like Google)
-        if (location.hash) {
-          console.log('Hash fragment detected in callback URL:', location.hash);
+        
+        // Handle hash fragments for token (for OAuth providers like Google)
+        if (hash && hash.includes('access_token')) {
+          const hashParams = new URLSearchParams(hash.substring(1));
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token') || '';
+          const email = hashParams.get('email') || '';
           
-          // Extract user info if available - specifically for Chrome extension auth flow
-          const params = new URLSearchParams(location.hash.substring(1));
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
-          const userEmail = params.get('email');
-          
-          // For Chrome extension auth flow
-          if (window.opener === null && accessToken) {
-            console.log('Extension flow detected with access token');
+          if (accessToken) {
+            console.log('Got access token from hash');
             
-            // Store auth data in localStorage for extension to access
-            try {
-              localStorage.setItem('main_gallery_auth_token', JSON.stringify({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                timestamp: Date.now()
-              }));
-              
-              if (userEmail) {
-                localStorage.setItem('main_gallery_user_email', userEmail);
-              }
-              
-              console.log('Access token stored in localStorage for extension to access');
-            } catch (storageError) {
-              console.error('Error storing auth data:', storageError);
+            // Store the token in localStorage for web app use
+            localStorage.setItem('main_gallery_auth_token', JSON.stringify({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+              timestamp: Date.now()
+            }));
+            
+            // Also store user email if available
+            if (email) {
+              localStorage.setItem('main_gallery_user_email', email);
             }
             
-            // In extension flow, just navigate to the gallery
-            console.log('Redirecting to gallery');
-            navigate('/gallery');
-          } else {
-            console.log('Regular web app flow with hash, redirecting to gallery');
-            // We know the auth update was handled by Supabase client, just navigate
-            navigate('/gallery');
+            // Check if this was a Chrome extension auth attempt
+            const fromExtension = queryParams.from === 'extension' || hashParams.get('from') === 'extension';
+            
+            // Determine redirect path, defaulting to gallery
+            const redirectPath = queryParams.redirect || hashParams.get('redirect') || '/gallery';
+            
+            // If from extension, we might want special handling
+            if (fromExtension) {
+              console.log('Auth from extension, closing window or redirecting');
+              
+              // Just navigate to gallery by default
+              navigate('/gallery');
+            } else {
+              // For regular web auth
+              // Check if redirect is to an external URL (like chrome-extension://)
+              if (redirectPath.startsWith('chrome-extension://') || 
+                  redirectPath.startsWith('http://') || 
+                  redirectPath.startsWith('https://')) {
+                window.location.href = redirectPath;
+              } else {
+                // For internal routes
+                navigate(redirectPath);
+              }
+            }
+            return;
           }
-        } else {
-          console.log('No hash fragment, redirecting to gallery');
-          // No hash but we got here, assume success and navigate
-          navigate('/gallery');
         }
+        
+        // Default fallback if no token handling was triggered
+        navigate("/gallery");
       } catch (err: any) {
-        console.error('Error processing auth callback:', err);
-        setError(err.message || 'An error occurred during authentication');
-      } finally {
-        setProcessing(false);
+        console.error("Auth callback error:", err);
+        setError(err.message || "Authentication failed");
+        
+        // Redirect to login page after error
+        setTimeout(() => {
+          navigate("/auth");
+        }, 3000);
       }
     };
 
-    processCallback();
-  }, [location, navigate]);
+    processAuthCallback();
+  }, [navigate, searchParams]);
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="w-full max-w-md p-8 space-y-4 bg-white rounded-lg shadow-lg">
-        {processing ? (
-          <div className="flex flex-col items-center justify-center space-y-4">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <h2 className="text-2xl font-bold text-center">
-              Completing authentication...
-            </h2>
-            <p className="text-center text-muted-foreground">
-              Please wait while we process your login
-            </p>
-          </div>
-        ) : error ? (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-center text-destructive">
-              Authentication Error
-            </h2>
-            <p className="text-center">{error}</p>
-            <div className="flex justify-center">
-              <button
-                onClick={() => navigate('/auth')}
-                className="px-4 py-2 bg-primary text-white rounded-md"
-              >
-                Return to Login
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center space-y-4">
-            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6 text-green-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-center">Login Successful</h2>
-            <p className="text-center text-muted-foreground">
-              You have been successfully authenticated. Redirecting...
-            </p>
-          </div>
-        )}
-      </div>
+    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      {error ? (
+        <div className="text-center space-y-4">
+          <h2 className="text-2xl font-bold text-red-600">Authentication Error</h2>
+          <p className="text-gray-600">{error}</p>
+          <p className="text-gray-500">Redirecting to login page...</p>
+        </div>
+      ) : (
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+          <h2 className="text-xl font-medium">Completing authentication...</h2>
+          <p className="text-gray-500">You'll be redirected shortly</p>
+        </div>
+      )}
     </div>
   );
 };

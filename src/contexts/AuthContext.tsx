@@ -13,8 +13,8 @@ const getProductionAuthRedirectUrl = () => {
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
-// Hardcoded Google OAuth Client ID - PRODUCTION ONLY
-const GOOGLE_CLIENT_ID = '242032861157-q1nf91k8d4lp0goopnquqg2g6em581c6.apps.googleusercontent.com';
+// Updated Google OAuth Client ID - PRODUCTION ONLY
+const GOOGLE_CLIENT_ID = '242032861157-umrm7n18v4kvk84okgl362nj9abef8kj.apps.googleusercontent.com';
 
 // Create a single Supabase client instance to be used throughout the app
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -30,10 +30,12 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 console.log('Supabase URL:', supabaseUrl);
 console.log('Supabase client initialized');
 console.log('Auth redirect URL:', getProductionAuthRedirectUrl());
+console.log('Google Client ID:', GOOGLE_CLIENT_ID);
 
 // Direct Google OAuth URL construction
 const constructGoogleOAuthUrl = (redirectUrl) => {
-  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true`;
+  const stateParam = Math.random().toString(36).substring(2, 15);
+  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true&state=${stateParam}`;
 };
 
 type AuthContextType = {
@@ -67,12 +69,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setSession(session);
             setUser(session?.user ?? null);
             
-            // Also store email in localStorage for extension to access
-            if (session?.user?.email) {
+            // Also store session info in localStorage for extension to access
+            if (session?.user) {
               try {
-                localStorage.setItem('main_gallery_user_email', session.user.email);
+                localStorage.setItem('main_gallery_user_email', session.user.email || 'User');
+                
+                // Store token in localStorage for extension to access
+                const tokenData = {
+                  access_token: session.access_token,
+                  refresh_token: session.refresh_token || '',
+                  timestamp: Date.now()
+                };
+                
+                localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
+                console.log('Stored auth data in localStorage for extension access');
               } catch (err) {
                 console.error('Error storing user email:', err);
+              }
+            } else {
+              // If no session, clear localStorage
+              try {
+                localStorage.removeItem('main_gallery_user_email');
+                localStorage.removeItem('main_gallery_auth_token');
+              } catch (err) {
+                console.error('Error clearing localStorage:', err);
               }
             }
           }
@@ -84,11 +104,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
         
         // Also store email in localStorage for extension to access
-        if (session?.user?.email) {
+        if (session?.user) {
           try {
-            localStorage.setItem('main_gallery_user_email', session.user.email);
+            localStorage.setItem('main_gallery_user_email', session.user.email || 'User');
+            
+            // Store token in localStorage for extension to access
+            const tokenData = {
+              access_token: session.access_token,
+              refresh_token: session.refresh_token || '',
+              timestamp: Date.now()
+            };
+            
+            localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
+            console.log('Stored auth data in localStorage for extension access');
           } catch (err) {
-            console.error('Error storing user email:', err);
+            console.error('Error storing user data:', err);
           }
         }
         
