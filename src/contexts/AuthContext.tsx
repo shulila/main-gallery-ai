@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -190,7 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectTo,
+          redirectTo,
           scopes: 'email profile',
         }
       });

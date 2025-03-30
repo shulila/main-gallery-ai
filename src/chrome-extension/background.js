@@ -1,5 +1,7 @@
+
+// Import functions from other modules
 import { setupAuthCallbackListener, openAuthPage, openAuthWithProvider, isLoggedIn, logout } from './utils/auth.js';
-import { debugPlatformDetection, getGalleryUrl } from './utils/common.js';
+import { debugPlatformDetection } from './utils/common.js';
 
 // Set up auth callback listener
 setupAuthCallbackListener();
@@ -82,7 +84,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-// Extension icon click handler with direct gallery open optimization
+// Handle icon click in toolbar
 chrome.action.onClicked.addListener(async (tab) => {
   console.log('Extension icon clicked in toolbar');
   

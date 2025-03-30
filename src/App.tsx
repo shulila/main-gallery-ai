@@ -14,6 +14,7 @@ import Detail from '@/pages/Detail';
 import Platforms from '@/pages/Platforms';
 import AuthPage from '@/pages/AuthPage';
 import AuthCallback from '@/pages/AuthCallback';
+import Settings from '@/pages/Settings';
 import NotFound from '@/pages/NotFound';
 
 // Create a QueryClient once
@@ -32,6 +33,7 @@ function App() {
               <Route path="/gallery" element={<Gallery />} />
               <Route path="/gallery/:imageId" element={<Detail />} />
               <Route path="/platforms" element={<Platforms />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="*" element={<NotFound />} />

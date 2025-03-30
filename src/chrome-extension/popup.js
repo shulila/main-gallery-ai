@@ -28,6 +28,9 @@ const testMidjourneyImagesBtn = document.getElementById('test-midjourney-images'
 const testMidjourneyGenerateBtn = document.getElementById('test-midjourney-generate');
 const testMidjourneyJobBtn = document.getElementById('test-midjourney-job');
 const testResult = document.getElementById('test-result');
+const syncStatusElement = document.getElementById('sync-status');
+const syncNowButton = document.getElementById('sync-now');
+const syncCountElement = document.getElementById('sync-image-count');
 
 // Store the last generated job ID
 let lastGeneratedJobId = null;
@@ -89,6 +92,7 @@ async function checkAuthAndRedirect() {
       console.log('User is logged in, showing logged-in state');
       // Show logged in state instead of redirecting
       showState(states.loggedIn);
+      updateSyncStatus(); // Update the Midjourney sync status
       return true;
     }
     
@@ -100,6 +104,21 @@ async function checkAuthAndRedirect() {
     showState(states.notLoggedIn);
     return false;
   }
+}
+
+// Update Midjourney sync status
+function updateSyncStatus() {
+  if (!syncStatusElement || !syncCountElement) return;
+  
+  chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
+    const images = result.midjourney_extracted_images || [];
+    const lastSync = images.length > 0 
+      ? new Date(images[0].extractedAt).toLocaleTimeString() 
+      : 'Never';
+    
+    syncStatusElement.textContent = `Last sync: ${lastSync}`;
+    syncCountElement.textContent = `${images.length} images found`;
+  });
 }
 
 // Open gallery in new tab or focus existing tab
@@ -122,7 +141,10 @@ function openGallery() {
 function openAuthPage() {
   try {
     showState(states.authLoading);
-    chrome.runtime.sendMessage({ action: 'openAuthPage' });
+    chrome.runtime.sendMessage({ 
+      action: 'openAuthPage',
+      from: 'extension'
+    });
     
     // Close popup after a short delay
     setTimeout(() => window.close(), 300);
@@ -167,6 +189,26 @@ function showTestResult(data) {
     pre.textContent = JSON.stringify(data, null, 2);
     testResult.classList.remove('hidden');
   }
+}
+
+// Trigger manual sync of Midjourney images
+function triggerMidjourneySync() {
+  chrome.tabs.query({ url: "*://www.midjourney.com/app*" }, function(tabs) {
+    if (tabs.length > 0) {
+      // There's an open Midjourney tab, send sync message
+      chrome.tabs.sendMessage(tabs[0].id, { 
+        action: 'extractMidjourneyImages',
+        forceSync: true
+      });
+      showToast('Syncing images from Midjourney...', 'info');
+      
+      // Update status after a delay
+      setTimeout(updateSyncStatus, 2000);
+    } else {
+      // No Midjourney tab open
+      showToast('No Midjourney tabs found. Please open Midjourney first.', 'error');
+    }
+  });
 }
 
 // Midjourney API integration functions
@@ -255,6 +297,10 @@ if (testMidjourneyJobBtn) {
   testMidjourneyJobBtn.addEventListener('click', testMidjourneyJobStatus);
 }
 
+if (syncNowButton) {
+  syncNowButton.addEventListener('click', triggerMidjourneySync);
+}
+
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'updateUI') {
@@ -262,5 +308,6 @@ chrome.runtime.onMessage.addListener((message) => {
   }
   else if (message.action === 'midjourneyImagesExtracted') {
     showToast(`Extracted ${message.count} images from Midjourney!`, 'success');
+    updateSyncStatus();
   }
 });
