@@ -1,3 +1,4 @@
+
 // Import functions from other modules - avoid dynamic imports in MV3
 // Use standard JS function declarations and move code from imported files
 
@@ -33,12 +34,30 @@ function setupAuthCallbackListener() {
           }, () => {
             console.log('Auth token stored in extension storage');
             
+            // Also try to store in localStorage for web access
+            try {
+              const mainWindow = chrome.extension.getBackgroundPage();
+              if (mainWindow && mainWindow.localStorage) {
+                mainWindow.localStorage.setItem('main_gallery_auth_token', JSON.stringify({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                  timestamp: Date.now()
+                }));
+                mainWindow.localStorage.setItem('main_gallery_user_email', userEmail || 'User');
+              }
+            } catch (err) {
+              console.error('Error setting localStorage from background:', err);
+            }
+            
             // Close the auth tab after successful login
             setTimeout(() => {
               chrome.tabs.remove(tabId);
               
               // Open gallery in a new tab
               chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery' });
+              
+              // Send message to update UI if popup is open
+              chrome.runtime.sendMessage({ action: 'updateUI' });
             }, 1000);
           });
         }

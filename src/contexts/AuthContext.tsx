@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -8,7 +9,6 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 // Get the correct production URL for auth redirects - NEVER use localhost
 const getProductionAuthRedirectUrl = () => {
-  // Always use the production URL, never use window.location.origin
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
@@ -82,6 +82,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 
                 localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
                 console.log('Stored auth data in localStorage for extension access');
+                
+                // Also sync to chrome.storage if in extension context
+                if (typeof chrome !== 'undefined' && chrome.storage) {
+                  try {
+                    chrome.storage.sync.set({
+                      'main_gallery_auth_token': tokenData,
+                      'main_gallery_user_email': session.user.email || 'User'
+                    }, () => {
+                      console.log('Auth data synced to chrome.storage');
+                    });
+                  } catch (err) {
+                    console.error('Error syncing to chrome.storage:', err);
+                  }
+                }
               } catch (err) {
                 console.error('Error storing user email:', err);
               }
@@ -90,6 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               try {
                 localStorage.removeItem('main_gallery_user_email');
                 localStorage.removeItem('main_gallery_auth_token');
+                
+                // Also clear chrome.storage if in extension context
+                if (typeof chrome !== 'undefined' && chrome.storage) {
+                  chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
+                }
               } catch (err) {
                 console.error('Error clearing localStorage:', err);
               }
@@ -116,6 +135,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             
             localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
             console.log('Stored auth data in localStorage for extension access');
+            
+            // Also sync to chrome.storage if in extension context
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+              try {
+                chrome.storage.sync.set({
+                  'main_gallery_auth_token': tokenData,
+                  'main_gallery_user_email': session.user.email || 'User'
+                }, () => {
+                  console.log('Auth data synced to chrome.storage');
+                });
+              } catch (err) {
+                console.error('Error syncing to chrome.storage:', err);
+              }
+            }
           } catch (err) {
             console.error('Error storing user data:', err);
           }

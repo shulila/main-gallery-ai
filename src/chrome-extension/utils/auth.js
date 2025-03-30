@@ -137,39 +137,77 @@ export function openAuthWithProvider(provider) {
 // Check if user is logged in - improved to check both extension storage and localStorage
 export function isLoggedIn() {
   return new Promise((resolve) => {
-    // Check if token exists in storage
-    chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
-      if (result.main_gallery_auth_token) {
-        resolve(true);
-      } else {
-        // If not in extension storage, try localStorage as fallback
-        try {
-          const localToken = localStorage.getItem('main_gallery_auth_token');
-          if (localToken) {
-            // If found in localStorage, also sync to extension storage
-            const parsedToken = JSON.parse(localToken);
+    // Try to get session from Supabase first if available
+    try {
+      // Check if Supabase is available
+      if (typeof window !== 'undefined' && window.supabase) {
+        window.supabase.auth.getSession().then(({ data: { session }}) => {
+          if (session) {
+            // If we have a valid Supabase session, sync it to extension storage
             chrome.storage.sync.set({
-              'main_gallery_auth_token': parsedToken
+              'main_gallery_auth_token': {
+                access_token: session.access_token,
+                refresh_token: session.refresh_token,
+                timestamp: Date.now()
+              },
+              'main_gallery_user_email': session.user?.email || 'User'
             });
-            
-            // Also get user email if available
-            const userEmail = localStorage.getItem('main_gallery_user_email');
-            if (userEmail) {
-              chrome.storage.sync.set({
-                'main_gallery_user_email': userEmail
-              });
-            }
-            
             resolve(true);
+            return;
           } else {
+            // If no Supabase session, fall back to storage checks
+            checkStorage();
+          }
+        }).catch(() => {
+          // If error checking Supabase, fall back to storage checks
+          checkStorage();
+        });
+        return;
+      } else {
+        // If Supabase not available, check storage
+        checkStorage();
+      }
+    } catch (err) {
+      // If any error, check storage
+      checkStorage();
+    }
+    
+    // Helper function to check storage options
+    function checkStorage() {
+      // Check if token exists in storage
+      chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
+        if (result.main_gallery_auth_token) {
+          resolve(true);
+        } else {
+          // If not in extension storage, try localStorage as fallback
+          try {
+            const localToken = localStorage.getItem('main_gallery_auth_token');
+            if (localToken) {
+              // If found in localStorage, also sync to extension storage
+              const parsedToken = JSON.parse(localToken);
+              chrome.storage.sync.set({
+                'main_gallery_auth_token': parsedToken
+              });
+              
+              // Also get user email if available
+              const userEmail = localStorage.getItem('main_gallery_user_email');
+              if (userEmail) {
+                chrome.storage.sync.set({
+                  'main_gallery_user_email': userEmail
+                });
+              }
+              
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          } catch (err) {
+            console.error('Error checking localStorage:', err);
             resolve(false);
           }
-        } catch (err) {
-          console.error('Error checking localStorage:', err);
-          resolve(false);
         }
-      }
-    });
+      });
+    }
   });
 }
 

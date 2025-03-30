@@ -34,16 +34,33 @@ const AuthCallback = () => {
           if (accessToken) {
             console.log('Got access token from hash');
             
-            // Store the token in localStorage for web app use
-            localStorage.setItem('main_gallery_auth_token', JSON.stringify({
+            // Prepare token data
+            const tokenData = {
               access_token: accessToken,
               refresh_token: refreshToken,
               timestamp: Date.now()
-            }));
+            };
+            
+            // Store the token in localStorage for web app use
+            localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
             
             // Also store user email if available
             if (email) {
               localStorage.setItem('main_gallery_user_email', email);
+            }
+            
+            // Sync to chrome.storage if in extension context
+            if (typeof chrome !== 'undefined' && chrome.storage) {
+              try {
+                chrome.storage.sync.set({
+                  'main_gallery_auth_token': tokenData,
+                  'main_gallery_user_email': email || 'User'
+                }, () => {
+                  console.log('Auth data synced to chrome.storage');
+                });
+              } catch (err) {
+                console.error('Error syncing to chrome.storage:', err);
+              }
             }
             
             // Check if this was a Chrome extension auth attempt

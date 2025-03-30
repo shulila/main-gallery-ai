@@ -34,6 +34,27 @@ function showState(state) {
   state.classList.remove('hidden');
 }
 
+// Create Supabase client if possible
+let supabaseClient = null;
+try {
+  if (typeof createClient !== 'undefined') {
+    const SUPABASE_URL = 'https://ovhriawcqvcpagcaidlb.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U';
+    
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: {
+        storage: localStorage,
+        persistSession: true,
+        autoRefreshToken: true
+      }
+    });
+    
+    console.log('Supabase client created in popup');
+  }
+} catch (err) {
+  console.error('Error creating Supabase client:', err);
+}
+
 // Enhanced localStorage session check
 function checkLocalStorageAuth() {
   try {
@@ -68,18 +89,63 @@ function checkLocalStorageAuth() {
   return false;
 }
 
-// Improved isLoggedIn check to handle both storage mechanisms
-function isLoggedIn() {
-  return new Promise(resolve => {
-    // First check if we have a web session in localStorage
-    const hasWebSession = checkLocalStorageAuth();
-    
-    if (hasWebSession) {
-      resolve(true);
-      return;
+// Check Supabase session if client is available
+async function checkSupabaseSession() {
+  if (supabaseClient) {
+    try {
+      console.log('Checking Supabase session');
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      
+      if (session) {
+        console.log('Valid Supabase session found:', session.user.email);
+        
+        // Sync to storage
+        const tokenData = {
+          access_token: session.access_token,
+          refresh_token: session.refresh_token || '',
+          timestamp: Date.now()
+        };
+        
+        // Store in chrome storage
+        chrome.storage.sync.set({
+          'main_gallery_auth_token': tokenData,
+          'main_gallery_user_email': session.user.email || 'User'
+        }, () => {
+          console.log('Synced Supabase session to extension storage');
+        });
+        
+        // Also store in localStorage
+        try {
+          localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
+          localStorage.setItem('main_gallery_user_email', session.user.email || 'User');
+        } catch (err) {
+          console.error('Error storing in localStorage:', err);
+        }
+        
+        return true;
+      }
+    } catch (err) {
+      console.error('Error checking Supabase session:', err);
     }
-    
-    // Otherwise check extension storage
+  }
+  
+  return false;
+}
+
+// Improved isLoggedIn check to handle both storage mechanisms
+async function isLoggedIn() {
+  // First try Supabase session
+  if (await checkSupabaseSession()) {
+    return true;
+  }
+  
+  // Then check localStorage 
+  if (checkLocalStorageAuth()) {
+    return true;
+  }
+  
+  // Finally check extension storage
+  return new Promise(resolve => {
     chrome.storage.sync.get(['main_gallery_auth_token'], result => {
       const token = result.main_gallery_auth_token;
       
@@ -115,21 +181,32 @@ function isLoggedIn() {
   });
 }
 
-// Get user email from either storage mechanism
-function getUserEmail() {
-  return new Promise(resolve => {
-    // First check localStorage for web session
+// Get user email from any available sources
+async function getUserEmail() {
+  // First try Supabase
+  if (supabaseClient) {
     try {
-      const userEmail = localStorage.getItem('main_gallery_user_email');
-      if (userEmail) {
-        resolve(userEmail);
-        return;
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session?.user?.email) {
+        return session.user.email;
       }
-    } catch (error) {
-      console.error('Error getting email from localStorage:', error);
+    } catch (err) {
+      console.error('Error getting email from Supabase:', err);
     }
-    
-    // Otherwise check extension storage
+  }
+  
+  // Then check localStorage for web session
+  try {
+    const userEmail = localStorage.getItem('main_gallery_user_email');
+    if (userEmail) {
+      return userEmail;
+    }
+  } catch (error) {
+    console.error('Error getting email from localStorage:', error);
+  }
+  
+  // Finally check extension storage
+  return new Promise(resolve => {
     chrome.storage.sync.get(['main_gallery_user_email'], result => {
       resolve(result.main_gallery_user_email || 'User');
     });
@@ -170,7 +247,7 @@ async function checkAuthAndRedirect() {
     showState(states.authLoading); // Show loading state while checking
     console.log('Checking authentication status...');
     
-    // Check authentication in both storage mechanisms
+    // Check authentication in all storage mechanisms
     const loggedIn = await isLoggedIn();
     
     if (loggedIn) {
