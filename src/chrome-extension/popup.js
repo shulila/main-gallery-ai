@@ -81,6 +81,15 @@ async function checkAuthAndRedirect() {
     if (loggedIn) {
       console.log('User is logged in, showing logged-in state');
       showState(states.loggedIn);
+      
+      // Check for any extracted images
+      chrome.storage.local.get(['midjourney_extracted_images'], (result) => {
+        const extractedImages = result.midjourney_extracted_images || [];
+        if (extractedImages.length > 0) {
+          showToast(`${extractedImages.length} Midjourney images synced to your gallery`, 'info');
+        }
+      });
+      
       return true;
     }
     
@@ -131,7 +140,7 @@ function openAuthPage() {
   }
 }
 
-// Open auth with Google provider - using direct OAuth URL construction
+// Open auth with Google provider
 function openAuthWithProvider(provider) {
   try {
     showState(states.authLoading);
@@ -192,5 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'updateUI') {
     checkAuthAndRedirect();
+  } else if (message.action === 'midjourneyImagesExtracted') {
+    showToast(`${message.count} new images extracted from Midjourney`, 'info');
   }
 });
