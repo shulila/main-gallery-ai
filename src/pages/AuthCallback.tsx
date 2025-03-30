@@ -52,14 +52,11 @@ const AuthCallback = () => {
             // Determine redirect path, defaulting to gallery
             const redirectPath = queryParams.redirect || hashParams.get('redirect') || '/gallery';
             
-            // If from extension, we might want special handling
-            if (fromExtension) {
-              console.log('Auth from extension, closing window or redirecting');
-              
-              // Just navigate to gallery by default
-              navigate('/gallery');
-            } else {
-              // For regular web auth
+            // Log the redirect path for debugging
+            console.log('Redirecting to:', redirectPath);
+            
+            // Small delay to ensure storage is complete
+            setTimeout(() => {
               // Check if redirect is to an external URL (like chrome-extension://)
               if (redirectPath.startsWith('chrome-extension://') || 
                   redirectPath.startsWith('http://') || 
@@ -69,7 +66,8 @@ const AuthCallback = () => {
                 // For internal routes
                 navigate(redirectPath);
               }
-            }
+            }, 500);
+            
             return;
           }
         }

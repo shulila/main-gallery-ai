@@ -92,11 +92,14 @@ function openAuthWithProvider(provider) {
     chrome.storage.local.set({ 'oauth_state': stateParam });
     
     // Updated Google OAuth client ID
-    const GOOGLE_CLIENT_ID = '242032861157-umrm7n18v4kvk84okgl362nj9abef8kj.apps.googleusercontent.com';
+    const GOOGLE_CLIENT_ID = '242032861157-fjjn965aou8i5bhdmb32cr2s41er0mbn.apps.googleusercontent.com';
     
     if (provider === 'google') {
       // Construct the Google OAuth URL directly
       const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true&state=${stateParam}`;
+      
+      // Log the URL for debugging
+      console.log(`Constructed Google OAuth URL:`, googleOAuthUrl);
       
       // Open the OAuth URL in a new tab
       chrome.tabs.create({ url: googleOAuthUrl });

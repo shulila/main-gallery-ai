@@ -13,8 +13,8 @@ const getProductionAuthRedirectUrl = () => {
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
-// Updated Google OAuth Client ID - PRODUCTION ONLY
-const GOOGLE_CLIENT_ID = '242032861157-umrm7n18v4kvk84okgl362nj9abef8kj.apps.googleusercontent.com';
+// Updated Google OAuth Client ID
+const GOOGLE_CLIENT_ID = '242032861157-fjjn965aou8i5bhdmb32cr2s41er0mbn.apps.googleusercontent.com';
 
 // Create a single Supabase client instance to be used throughout the app
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -220,10 +220,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const redirectUrl = getProductionAuthRedirectUrl();
       
       console.log('Starting Google login with redirect to:', redirectUrl);
+      console.log('Using Google Client ID:', GOOGLE_CLIENT_ID);
       
       // INSTEAD of using Supabase OAuth, manually construct and open the URL
       // This works better with Chrome extension
       const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl);
+      
+      // Log the URL for debugging
+      console.log('Constructed OAuth URL:', googleOAuthUrl);
       
       // Navigate to Google OAuth URL
       window.location.href = googleOAuthUrl;

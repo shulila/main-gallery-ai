@@ -34,26 +34,32 @@ function showState(state) {
   state.classList.remove('hidden');
 }
 
-// Improved function to check localStorage AND extension storage
-function checkLocalStorageForAuth() {
+// Enhanced localStorage session check
+function checkLocalStorageAuth() {
   try {
-    // Check localStorage first for web session
     const tokenStr = localStorage.getItem('main_gallery_auth_token');
-    const userEmail = localStorage.getItem('main_gallery_user_email');
-    
     if (tokenStr) {
-      // Found web session, sync to extension storage
       const token = JSON.parse(tokenStr);
       
-      // Update extension storage with web session data
-      chrome.storage.sync.set({
-        'main_gallery_auth_token': token,
-        'main_gallery_user_email': userEmail || 'User'
-      }, () => {
-        console.log('Synced web session to extension');
-      });
-      
-      return true;
+      // Check if token is valid and not expired (24 hours validity)
+      if (token && (Date.now() - token.timestamp < 24 * 60 * 60 * 1000)) {
+        console.log('Valid auth token found in localStorage');
+        
+        // Sync to Chrome storage
+        chrome.storage.sync.set({
+          'main_gallery_auth_token': token,
+          'main_gallery_user_email': localStorage.getItem('main_gallery_user_email') || 'User'
+        }, () => {
+          console.log('Synced web session to extension storage');
+        });
+        
+        return true;
+      } else {
+        console.log('Expired token found in localStorage');
+        localStorage.removeItem('main_gallery_auth_token');
+        localStorage.removeItem('main_gallery_user_email');
+        return false;
+      }
     }
   } catch (error) {
     console.error('Error checking localStorage:', error);
@@ -62,10 +68,11 @@ function checkLocalStorageForAuth() {
   return false;
 }
 
+// Improved isLoggedIn check to handle both storage mechanisms
 function isLoggedIn() {
   return new Promise(resolve => {
     // First check if we have a web session in localStorage
-    const hasWebSession = checkLocalStorageForAuth();
+    const hasWebSession = checkLocalStorageAuth();
     
     if (hasWebSession) {
       resolve(true);
@@ -78,12 +85,14 @@ function isLoggedIn() {
       
       // Check if token exists and is not too old (24 hours validity)
       if (token && (Date.now() - token.timestamp < 24 * 60 * 60 * 1000)) {
+        console.log('Valid token found in extension storage');
         resolve(true);
       } else {
         // Token doesn't exist or is expired
         if (token) {
           // Clear expired token
-          chrome.storage.sync.remove(['main_gallery_auth_token']);
+          console.log('Expired token found in extension storage');
+          chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
         }
         resolve(false);
       }
@@ -91,6 +100,7 @@ function isLoggedIn() {
   });
 }
 
+// Get user email from either storage mechanism
 function getUserEmail() {
   return new Promise(resolve => {
     // First check localStorage for web session
@@ -106,7 +116,7 @@ function getUserEmail() {
     
     // Otherwise check extension storage
     chrome.storage.sync.get(['main_gallery_user_email'], result => {
-      resolve(result.main_gallery_user_email || null);
+      resolve(result.main_gallery_user_email || 'User');
     });
   });
 }
@@ -139,11 +149,13 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
-// Check auth and update UI
+// Enhanced auth check with logging for debugging
 async function checkAuthAndRedirect() {
   try {
     showState(states.authLoading); // Show loading state while checking
+    console.log('Checking authentication status...');
     
+    // Check authentication in both storage mechanisms
     const loggedIn = await isLoggedIn();
     
     if (loggedIn) {
@@ -151,6 +163,8 @@ async function checkAuthAndRedirect() {
       
       // Get user email to display if available
       const userEmail = await getUserEmail();
+      console.log('User email:', userEmail);
+      
       if (userEmail && userEmailElement) {
         userEmailElement.textContent = userEmail;
       }
@@ -230,12 +244,20 @@ function openAuthWithProvider(provider) {
 // Log out the user
 function logout() {
   chrome.runtime.sendMessage({ action: 'logout' }, response => {
+    // Also remove from localStorage
+    try {
+      localStorage.removeItem('main_gallery_auth_token');
+      localStorage.removeItem('main_gallery_user_email');
+    } catch (err) {
+      console.error('Error clearing localStorage:', err);
+    }
+    
     showState(states.notLoggedIn);
     showToast('You have been logged out', 'info');
   });
 }
 
-// Immediately check auth status when popup opens
+// Check for auth status immediately when popup opens
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Popup loaded, checking auth status');
   checkAuthAndRedirect();
@@ -271,3 +293,9 @@ chrome.runtime.onMessage.addListener((message) => {
     showToast(`${message.count} new images extracted from Midjourney`, 'info');
   }
 });
+
+// Add periodic auth check for better synchronization
+setInterval(() => {
+  console.log('Running periodic auth check');
+  checkAuthAndRedirect();
+}, 30000); // Check every 30 seconds
