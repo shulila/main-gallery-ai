@@ -1,4 +1,3 @@
-
 // Authentication utilities for MainGallery extension
 
 // Open auth page with redirect
@@ -43,8 +42,13 @@ export function openAuthWithProvider(provider) {
   try {
     console.log(`Opening auth with provider: ${provider}`);
     
-    // Construct the URL with the provider parameter
-    let authUrl = `https://main-gallery-hub.lovable.app/auth?from=extension&provider=${provider}`;
+    // Update to use the Supabase OAuth flow directly
+    // Instead of redirecting to our auth page, we'll redirect directly to the Supabase OAuth endpoint
+    const baseUrl = 'https://main-gallery-hub.lovable.app';
+    const redirectTo = `${baseUrl}/auth/callback`;
+    
+    // Construct the URL with the provider parameter for Supabase
+    let authUrl = `https://ovhriawcqvcpagcaidlb.supabase.co/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectTo)}`;
     
     // Add timestamp to prevent caching
     authUrl += `&t=${Date.now()}`;

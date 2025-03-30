@@ -162,26 +162,28 @@ h2 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   background-color: white;
   color: #333;
   border: 1px solid #ddd;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.2s, box-shadow 0.2s;
   font-size: 14px;
+  width: 100%;
+  font-weight: 500;
 }
 
 .social-btn:hover {
   background-color: #f5f5f5;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .social-btn:active {
   background-color: #eee;
 }
 
-.social-btn svg {
+.social-btn svg, .social-btn img {
   flex-shrink: 0;
 }
 

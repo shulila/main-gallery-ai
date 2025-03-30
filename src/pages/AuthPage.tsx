@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
@@ -244,6 +244,7 @@ const AuthPage = () => {
                         variant="link" 
                         className="text-sm text-primary p-0 h-auto" 
                         onClick={() => setIsForgotPasswordMode(true)}
+                        type="button"
                       >
                         Forgot password?
                       </Button>

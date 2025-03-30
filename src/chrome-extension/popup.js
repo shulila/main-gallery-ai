@@ -89,7 +89,7 @@ async function checkAuthAndRedirect() {
     if (loggedIn) {
       console.log('User is logged in, showing logged-in state');
       // Immediately redirect to gallery instead of showing popup
-      openGallery();
+      showState(states.loggedIn);
       return true;
     }
     
@@ -192,7 +192,7 @@ function showTestResult(data) {
 // These functions will communicate with the background script which handles the actual API calls
 
 // Test Midjourney Authentication
-async function testMidjourneyAuth() {
+function testMidjourneyAuth() {
   try {
     showToast('Testing Midjourney authentication...', 'info');
     
@@ -210,7 +210,7 @@ async function testMidjourneyAuth() {
 }
 
 // Test fetching Midjourney images
-async function testMidjourneyImages() {
+function testMidjourneyImages() {
   try {
     showToast('Fetching Midjourney images...', 'info');
     
@@ -229,7 +229,7 @@ async function testMidjourneyImages() {
 }
 
 // Test generating a Midjourney image
-async function testMidjourneyGenerate() {
+function testMidjourneyGenerate() {
   try {
     showToast('Generating Midjourney image...', 'info');
     const testPrompt = "Futuristic cityscape with neon lights and flying cars";
@@ -260,7 +260,7 @@ async function testMidjourneyGenerate() {
 }
 
 // Test checking a Midjourney job status
-async function testMidjourneyJobStatus() {
+function testMidjourneyJobStatus() {
   try {
     // Use the last job ID if available, otherwise create a mock one
     const jobId = lastGeneratedJobId || `mock-job-${Date.now()}`;
@@ -284,7 +284,7 @@ async function testMidjourneyJobStatus() {
   }
 }
 
-// Immediately check auth status and redirect if logged in
+// Immediately check auth status when popup opens
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Popup loaded, checking auth status');
   checkAuthAndRedirect();
