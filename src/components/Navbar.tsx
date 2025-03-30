@@ -1,3 +1,4 @@
+
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from './ui/button';
@@ -10,13 +11,14 @@ const Navbar = () => {
   
   // Handle logo click based on auth state
   const handleLogoClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (!user) {
-      e.preventDefault();
-      // When logged out, navigate to homepage
+      // When logged out, navigate to homepage and scroll to top
       navigate('/');
       window.scrollTo(0, 0);
     } else {
-      // When logged in, navigate to gallery (this is likely already handled by the Link component)
+      // When logged in, navigate to gallery 
+      navigate('/gallery');
     }
   };
 
@@ -44,9 +46,7 @@ const Navbar = () => {
             {user ? (
               <>
                 <nav className="hidden md:flex items-center space-x-6">
-                  <Link to="/gallery" className="text-sm font-medium hover:text-primary transition-colors">
-                    Gallery
-                  </Link>
+                  {/* Removed Gallery link since logo already navigates there */}
                   <Link to="/platforms" className="text-sm font-medium hover:text-primary transition-colors">
                     Platforms
                   </Link>

@@ -176,7 +176,7 @@ async function checkAndShowUI() {
   }
 }
 
-// NEW FUNCTION: Extract Midjourney images from page
+// Enhanced Midjourney image extraction with improved DOM selectors and de-duplication
 function extractMidjourneyImages() {
   console.log('Extracting Midjourney images from current page');
   
@@ -187,69 +187,121 @@ function extractMidjourneyImages() {
       return null;
     }
     
-    // Wait a moment to ensure the page is fully loaded
-    setTimeout(() => {
-      // This is a POC implementation - actual selectors will need to be adjusted
-      // based on the real DOM structure of Midjourney's web app
-      
-      // Collection to store extracted images
-      const extractedImages = [];
-      
-      // Find all image containers on the page
-      // These selectors are examples and will need to be updated based on actual DOM structure
-      const imageContainers = document.querySelectorAll('.card, .image-container, .grid-item');
-      
-      console.log(`Found ${imageContainers.length} potential image containers`);
-      
-      // Process each container to extract information
-      imageContainers.forEach((container, index) => {
-        try {
-          // Extract image URL (different sites may have different structures)
-          const imageElement = container.querySelector('img, .image, [role="img"]');
-          const imageUrl = imageElement ? (imageElement.src || imageElement.dataset.src) : null;
-          
-          // Extract prompt if available
-          const promptElement = container.querySelector('.prompt, .description, .caption');
-          const prompt = promptElement ? promptElement.textContent.trim() : null;
-          
-          // Extract date if available
-          const dateElement = container.querySelector('.date, .timestamp, time');
-          const createdAt = dateElement ? dateElement.textContent.trim() || dateElement.getAttribute('datetime') : null;
-          
-          // Extract any ID or link
-          const linkElement = container.querySelector('a') || container;
-          const linkUrl = linkElement.href || null;
-          const id = linkUrl ? linkUrl.split('/').pop() : `mj-${Date.now()}-${index}`;
-          
-          if (imageUrl) {
-            extractedImages.push({
-              id,
-              url: imageUrl,
-              prompt,
-              platform: 'midjourney',
-              createdAt: createdAt || new Date().toISOString(),
-              sourceUrl: linkUrl,
-              extractedAt: new Date().toISOString()
-            });
-          }
-        } catch (err) {
-          console.error('Error extracting data from container:', err);
-        }
-      });
-      
-      console.log(`Successfully extracted ${extractedImages.length} images from Midjourney`);
-      
-      if (extractedImages.length > 0) {
-        // Store in local storage
-        storeExtractedImages(extractedImages);
+    console.log('Starting Midjourney image extraction...');
+    
+    // Collection to store extracted images
+    const extractedImages = [];
+    
+    // Find all image containers on the page
+    // Enhanced selectors to work with Midjourney's DOM structure
+    // Try multiple selector patterns to increase chances of finding images
+    const imageContainers = [
+      ...document.querySelectorAll('.card, .image-container, .grid-item, [role="img"]'), 
+      ...document.querySelectorAll('img[srcset*="midjourney"]'),
+      ...document.querySelectorAll('div[data-job-id]'),
+      ...document.querySelectorAll('figure, [role="figure"]'),
+      ...document.querySelectorAll('.gallery-item, .gallery-cell, .image-wrapper')
+    ];
+    
+    console.log(`Found ${imageContainers.length} potential image containers`);
+    
+    // Use a Set to track processed image URLs and avoid duplicates
+    const processedUrls = new Set();
+    
+    // Process each container to extract information
+    imageContainers.forEach((container, index) => {
+      try {
+        // Extract image URL with more robust selection
+        let imageElement = container.querySelector('img, [role="img"]');
+        let imageUrl = null;
         
-        // Notify about successful extraction
-        chrome.runtime.sendMessage({
-          action: 'midjourneyImagesExtracted',
-          count: extractedImages.length
-        });
+        if (imageElement) {
+          imageUrl = imageElement.src || imageElement.srcset?.split(' ')[0] || imageElement.dataset?.src;
+        } else if (container.tagName === 'IMG') {
+          imageUrl = container.src || container.srcset?.split(' ')[0] || container.dataset?.src;
+        } else {
+          // Try to find background image
+          const style = window.getComputedStyle(container);
+          const bgImage = style.backgroundImage;
+          if (bgImage && bgImage !== 'none') {
+            imageUrl = bgImage.replace(/^url\(['"](.+)['"]\)$/, '$1');
+          }
+        }
+        
+        // Skip if no valid image URL or already processed
+        if (!imageUrl || processedUrls.has(imageUrl)) return;
+        processedUrls.add(imageUrl);
+        
+        // Find the job ID - try multiple ways
+        let jobId = container.dataset?.jobId || 
+                    container.getAttribute('id') || 
+                    container.querySelector('[data-job-id]')?.dataset?.jobId;
+                    
+        // Extract prompt with improved selectors
+        let promptElement = container.querySelector('.prompt, .caption, [data-prompt], .description');
+        let prompt = null;
+        
+        if (promptElement) {
+          prompt = promptElement.textContent.trim() || promptElement.dataset?.prompt;
+        } else {
+          // Check for title or alt text as fallback
+          prompt = imageElement?.title || imageElement?.alt || container.title;
+        }
+        
+        // Extract date with improved selectors
+        let dateElement = container.querySelector('time, .date, .timestamp, [datetime]');
+        let createdAt = null;
+        
+        if (dateElement) {
+          createdAt = dateElement.datetime || dateElement.dateTime || dateElement.textContent.trim();
+        }
+        
+        // Generate a unique ID
+        const id = jobId || 
+                  container.id || 
+                  `mj-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+        
+        // Ensure we have absolute URLs
+        if (imageUrl && !imageUrl.startsWith('http')) {
+          if (imageUrl.startsWith('//')) {
+            imageUrl = 'https:' + imageUrl;
+          } else if (imageUrl.startsWith('/')) {
+            imageUrl = 'https://www.midjourney.com' + imageUrl;
+          }
+        }
+        
+        // Create image hash for deduplication
+        const imageHash = btoa(imageUrl).substring(0, 24);
+        
+        if (imageUrl) {
+          extractedImages.push({
+            id,
+            url: imageUrl,
+            prompt,
+            platform: 'midjourney',
+            createdAt: createdAt || new Date().toISOString(),
+            sourceUrl: window.location.href,
+            extractedAt: new Date().toISOString(),
+            imageHash
+          });
+        }
+      } catch (err) {
+        console.error('Error extracting data from container:', err);
       }
-    }, 2000); // Give the page time to render fully
+    });
+    
+    console.log(`Successfully extracted ${extractedImages.length} images from Midjourney`);
+    
+    if (extractedImages.length > 0) {
+      // Store in local storage
+      storeExtractedImages(extractedImages);
+      
+      // Notify about successful extraction
+      chrome.runtime.sendMessage({
+        action: 'midjourneyImagesExtracted',
+        count: extractedImages.length
+      });
+    }
     
     return true;
   } catch (error) {
@@ -258,15 +310,24 @@ function extractMidjourneyImages() {
   }
 }
 
-// Store extracted images in Chrome storage
+// Store extracted images with improved de-duplication
 function storeExtractedImages(images) {
   // First get existing images to avoid duplicates
   chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
     const existingImages = result.midjourney_extracted_images || [];
-    const existingIds = new Set(existingImages.map(img => img.id));
     
-    // Filter out duplicates
-    const newImages = images.filter(img => !existingIds.has(img.id));
+    // Create a map of existing image hashes for faster lookups
+    const existingHashes = new Set();
+    existingImages.forEach(img => {
+      const hash = img.imageHash || btoa(img.url).substring(0, 24);
+      existingHashes.add(hash);
+    });
+    
+    // Filter out duplicates based on image hash
+    const newImages = images.filter(img => {
+      const hash = img.imageHash || btoa(img.url).substring(0, 24);
+      return !existingHashes.has(hash);
+    });
     
     // Combine and store (keep most recent at the start)
     const combinedImages = [...newImages, ...existingImages];
@@ -361,93 +422,101 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep channel open for async response
 });
 
-// Initialize: inject script, notify background, and check UI conditions
+// Initialize with automatic sync for Midjourney pages
 (function initialize() {
   // Inject content script first
   injectContentScript();
   
   // Notify background script that content script has loaded
-  chrome.runtime.sendMessage({ action: 'contentScriptLoaded' }, response => {
-    if (response && response.success) {
-      console.log(`MainGallery: ${response.message}`);
-      
-      if (response.platformId && response.userLoggedIn) {
-        // If user is logged in and we're on a platform, check UI conditions
-        if (isGalleryPage(response.platformId)) {
-          chrome.storage.local.get([`platform_${response.platformId}_connected`], result => {
-            const isConnected = !!result[`platform_${response.platformId}_connected`];
-            
-            if (!isConnected) {
-              const platform = PLATFORMS[response.platformId];
-              showConnectButton(response.platformId, platform.name);
-            }
-          });
-        }
-      }
-    }
-  });
+  chrome.runtime.sendMessage({ action: 'contentScriptLoaded' });
   
   // Check UI conditions after a short delay to ensure DOM is fully loaded
   setTimeout(checkAndShowUI, 1500);
   
-  // Re-check UI conditions when page visibility changes or after navigation
+  // Re-check UI conditions when page visibility changes
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') {
       checkAndShowUI();
+      
+      // Auto-sync images when page becomes visible
+      if (window.location.href.includes('midjourney.com/app')) {
+        extractMidjourneyImages();
+      }
     }
   });
   
-  // Watch for page mutations that might indicate navigation within SPA
+  // Set up MutationObserver for continuous monitoring of DOM changes
   const observer = new MutationObserver(function(mutations) {
-    // Filter mutations to avoid too many checks
+    // Filter significant mutations to reduce processing
     const significantChanges = mutations.some(mutation => {
-      return mutation.type === 'childList' && 
-             (mutation.target === document.body || 
-              mutation.target === document.getElementById('app') ||
-              mutation.target === document.getElementById('root'));
+      return (
+        // Check for new nodes added
+        (mutation.type === 'childList' && mutation.addedNodes.length > 0) ||
+        // Or attribute changes on relevant elements
+        (mutation.type === 'attributes' && 
+         (mutation.target.tagName === 'IMG' || 
+          mutation.target.classList.contains('gallery-item') ||
+          mutation.target.hasAttribute('data-job-id')))
+      );
     });
     
-    if (significantChanges) {
-      checkAndShowUI();
+    if (significantChanges && window.location.href.includes('midjourney.com/app')) {
+      // Debounce extraction to avoid too many calls
+      if (this.extractionTimeout) {
+        clearTimeout(this.extractionTimeout);
+      }
+      
+      this.extractionTimeout = setTimeout(() => {
+        console.log('Detected DOM changes, extracting new images...');
+        extractMidjourneyImages();
+      }, 1000);
     }
-  });
-  
-  // Observe the document for significant changes
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true
   });
   
   // For Midjourney specifically, check if we're on the app page
   if (window.location.href.includes('midjourney.com/app')) {
-    console.log('On Midjourney app page, will attempt to extract images');
+    console.log('On Midjourney app page, will automatically extract images');
     
-    // Wait for page to fully load before extracting
+    // Initial extraction after page load
     window.addEventListener('load', () => {
-      setTimeout(extractMidjourneyImages, 3000);
-    });
-    
-    // Also set up MutationObserver to detect when new images are loaded
-    const observer = new MutationObserver(function(mutations) {
-      const significantChanges = mutations.some(mutation => {
-        return mutation.type === 'childList' && 
-               mutation.addedNodes.length > 0;
-      });
+      // Wait for content to load
+      setTimeout(extractMidjourneyImages, 2000);
       
-      if (significantChanges) {
-        console.log('Detected new content in Midjourney app, extracting images');
-        extractMidjourneyImages();
-      }
-    });
-    
-    // Start observing with a delay to ensure the page is ready
-    setTimeout(() => {
+      // Start observing DOM changes
       const targetNode = document.querySelector('.gallery, main, #root, #app') || document.body;
       observer.observe(targetNode, {
         childList: true,
-        subtree: true
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['src', 'srcset', 'data-src', 'data-job-id']
       });
-      console.log('Observation started for new Midjourney content');
-    }, 3000);
+      console.log('Observing Midjourney content for changes');
+      
+      // Set up periodic extraction in case some content is dynamically loaded
+      setInterval(extractMidjourneyImages, 30000); // Every 30 seconds
+    });
+    
+    // Also set up scroll detection to extract images as user scrolls
+    let lastScrollPosition = 0;
+    let scrollTimeout;
+    
+    window.addEventListener('scroll', () => {
+      // Clear previous timeout
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+      }
+      
+      // Set new timeout for extraction after scroll stops
+      scrollTimeout = setTimeout(() => {
+        const currentScrollPosition = window.scrollY;
+        
+        // Only extract if we've scrolled a significant amount
+        if (Math.abs(currentScrollPosition - lastScrollPosition) > 300) {
+          console.log('Significant scroll detected, extracting new images');
+          extractMidjourneyImages();
+          lastScrollPosition = currentScrollPosition;
+        }
+      }, 500);
+    });
   }
 })();

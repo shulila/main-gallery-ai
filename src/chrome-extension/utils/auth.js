@@ -1,253 +1,237 @@
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createClient, Session, User } from '@supabase/supabase-js';
+import { useToast } from '@/hooks/use-toast';
 
-// Authentication utilities for MainGallery extension
+// Updated with actual Supabase credentials
+const supabaseUrl = 'https://ovhriawcqvcpagcaidlb.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U';
 
-// Get the correct production URL for auth redirects
-const getProductionUrl = () => {
-  return 'https://main-gallery-hub.lovable.app';
+// Get the correct production URL for auth redirects - avoid localhost
+const getProductionAuthRedirectUrl = () => {
+  // Always use the production URL
+  return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
-// Open auth page with redirect
-export function openAuthPage(redirectUrl, options = {}) {
-  const baseUrl = getProductionUrl();
-  let authUrl = `${baseUrl}/auth?from=extension`;
-  
-  if (redirectUrl) {
-    authUrl += `&redirect=${encodeURIComponent(redirectUrl)}`;
+// Create a single Supabase client instance to be used throughout the app
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: localStorage,
+    persistSession: true,
+    autoRefreshToken: true,
+    // Correctly use the options structure for auth redirects
+    flowType: 'pkce',
+    // The redirectTo property should be set in the signInWithOAuth options instead of here
   }
-  
-  // Add forgot password parameter if needed
-  if (options.forgotPassword) {
-    authUrl += `&forgotPassword=true`;
-  }
-  
-  // Add a timestamp to prevent caching issues
-  authUrl += `&t=${Date.now()}`;
-  
-  console.log('Opening auth page with URL:', authUrl);
-  
-  chrome.tabs.create({ url: authUrl }, function(tab) {
-    if (chrome.runtime.lastError) {
-      console.error('Error opening auth page:', chrome.runtime.lastError);
-    } else {
-      console.log('Auth page opened in tab:', tab.id);
+});
+
+// For debugging purposes
+console.log('Supabase URL:', supabaseUrl);
+console.log('Supabase client initialized');
+console.log('Auth redirect URL:', getProductionAuthRedirectUrl());
+
+type AuthContextType = {
+  session: Session | null;
+  user: User | null;
+  isLoading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    // Initialize the auth state
+    const initializeAuth = async () => {
+      setIsLoading(true);
       
-      // Set up a tab monitor to detect if the tab is closed before auth completes
-      setTimeout(() => {
-        chrome.tabs.get(tab.id, function(currentTab) {
-          if (chrome.runtime.lastError) {
-            // Tab likely closed
-            console.log('Auth tab closed or error:', chrome.runtime.lastError.message);
+      try {
+        // Set up auth state listener FIRST
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          (_event, session) => {
+            setSession(session);
+            setUser(session?.user ?? null);
           }
-        });
-      }, 3000);
+        );
+        
+        // THEN check for existing session
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        return () => subscription.unsubscribe();
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    initializeAuth();
+  }, []);
+
+  const signIn = async (email: string, password: string) => {
+    try {
+      setIsLoading(true);
+      console.log('Attempting to sign in with:', email);
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Login successful",
+        description: "Welcome back!",
+      });
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login failed",
+        description: error.message || "Please check your credentials and try again",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
-  });
-}
+  };
 
-// Open auth with specific provider (Google)
-export function openAuthWithProvider(provider) {
-  try {
-    console.log(`Opening auth with provider: ${provider}`);
-    
-    // Always use the production base URL
-    const baseUrl = getProductionUrl();
-    const redirectTo = `${baseUrl}/auth/callback`;
-    
-    // Construct the URL with the provider parameter for Supabase
-    let authUrl = `https://ovhriawcqvcpagcaidlb.supabase.co/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectTo)}`;
-    
-    // Add timestamp to prevent caching
-    authUrl += `&t=${Date.now()}`;
-    
-    console.log('Opening provider auth with URL:', authUrl);
-    
-    chrome.tabs.create({ url: authUrl }, function(tab) {
-      if (chrome.runtime.lastError) {
-        console.error(`Error opening ${provider} auth:`, chrome.runtime.lastError);
-      } else {
-        console.log(`${provider} auth page opened in tab:`, tab.id);
-      }
-    });
-  } catch (error) {
-    console.error(`Error in openAuthWithProvider for ${provider}:`, error);
-  }
-}
-
-// Check if user is logged in to Main Gallery
-export function isLoggedIn() {
-  return new Promise(function(resolve) {
-    chrome.storage.sync.get(['main_gallery_auth_token'], function(result) {
-      const isLoggedIn = !!result.main_gallery_auth_token;
-      console.log('Auth check: user is logged in =', isLoggedIn);
-      resolve(isLoggedIn);
-    });
-  });
-}
-
-// Get the auth token if available
-export function getAuthToken() {
-  return new Promise(function(resolve) {
-    chrome.storage.sync.get(['main_gallery_auth_token'], function(result) {
-      resolve(result.main_gallery_auth_token || null);
-    });
-  });
-}
-
-// Handle authentication callback
-export function setupAuthCallbackListener() {
-  // Check for non-existent webNavigation API before using it
-  if (chrome.webNavigation) {
-    chrome.webNavigation.onCompleted.addListener(function(details) {
-      console.log('Navigation detected to:', details.url);
+  const signUp = async (email: string, password: string) => {
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.signUp({ email, password });
       
-      // Check if this is an auth callback URL - updated to look for production URL
-      const productionUrl = getProductionUrl();
-      if (details.url.includes('/auth/callback') && 
-          details.url.includes(productionUrl)) {
-        
-        console.log('Auth callback detected:', details.url);
-        
-        // Extract token from URL
-        try {
-          const url = new URL(details.url);
-          const token = url.searchParams.get('token');
-          
-          if (token) {
-            console.log('Token found in callback URL, storing token');
-            
-            // Store the token
-            chrome.storage.sync.set({ main_gallery_auth_token: token }, function() {
-              console.log('Authentication token saved successfully');
-              
-              // Get the redirect URL if available
-              const redirect = url.searchParams.get('redirect');
-              
-              // Notify any open popup to update UI
-              chrome.runtime.sendMessage({
-                action: 'updateUI'
-              });
-              
-              // Notify content scripts about auth state change
-              chrome.tabs.query({}, (tabs) => {
-                tabs.forEach(tab => {
-                  chrome.tabs.sendMessage(tab.id, { 
-                    action: 'authStateChanged',
-                    isLoggedIn: true
-                  }).catch(() => {
-                    // Ignore errors for tabs where content script isn't running
-                  });
-                });
-              });
-              
-              // Show success notification
-              if (chrome.notifications) {
-                chrome.notifications.create('auth-success', {
-                  type: 'basic',
-                  iconUrl: 'icons/icon128.png',
-                  title: 'MainGallery.AI Connected',
-                  message: 'You are now connected to MainGallery.AI!'
-                });
-              }
-              
-              // Close the auth tab with a small delay to ensure data is saved
-              setTimeout(() => {
-                chrome.tabs.remove(details.tabId, function() {
-                  if (chrome.runtime.lastError) {
-                    console.error('Error closing tab:', chrome.runtime.lastError);
-                  }
-                  
-                  // If we have a redirect URL, navigate back to it
-                  // Otherwise, open the gallery directly
-                  if (redirect) {
-                    chrome.tabs.create({ url: redirect });
-                  } else {
-                    // Open gallery after successful login - using deployed URL
-                    const galleryUrl = `${productionUrl}/gallery`;
-                    chrome.tabs.create({ url: galleryUrl });
-                  }
-                });
-              }, 500);
-            });
-          } else {
-            console.error('No token found in callback URL');
-          }
-        } catch (error) {
-          console.error('Error processing auth callback:', error);
-        }
+      if (error) {
+        throw error;
       }
-    }, { 
-      url: [
-        { urlContains: 'main-gallery-hub.lovable.app/auth/callback' }
-      ] 
-    });
-  } else {
-    console.warn('webNavigation API not available, auth callback listener not set up');
-    
-    // Fallback: Check for auth token periodically
-    setInterval(() => {
-      chrome.tabs.query({ url: [
-        '*://main-gallery-hub.lovable.app/auth/callback*'
-      ]}, (tabs) => {
-        if (tabs.length > 0) {
-          const callbackTab = tabs[0];
-          const url = new URL(callbackTab.url);
-          const token = url.searchParams.get('token');
-          
-          if (token) {
-            console.log('Token found in callback URL via polling, storing token');
-            
-            // Store the token
-            chrome.storage.sync.set({ main_gallery_auth_token: token }, function() {
-              console.log('Authentication token saved successfully via polling');
-              
-              // Similar logic as above, but through polling
-              // Get the redirect URL if available
-              const redirect = url.searchParams.get('redirect');
-              
-              // Notify about auth state change and close tab
-              // (similar actions as in the main callback handler)
-              chrome.runtime.sendMessage({ action: 'updateUI' });
-              
-              // Close the auth tab and potentially redirect
-              setTimeout(() => {
-                chrome.tabs.remove(callbackTab.id);
-                if (redirect) {
-                  chrome.tabs.create({ url: redirect });
-                } else {
-                  // Open gallery after successful login - using deployed URL
-                  const galleryUrl = `${getProductionUrl()}/gallery`;
-                  chrome.tabs.create({ url: galleryUrl });
-                }
-              }, 500);
-            });
-          }
-        }
+      
+      toast({
+        title: "Sign up successful",
+        description: "Please check your email to confirm your account",
       });
-    }, 2000); // Check every 2 seconds
-  }
-}
+    } catch (error: any) {
+      toast({
+        title: "Sign up failed",
+        description: error.message || "Please check your information and try again",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-// Log out user by removing auth token
-export function logout() {
-  return new Promise(function(resolve) {
-    console.log('Logging out user...');
-    
-    chrome.storage.sync.remove(['main_gallery_auth_token'], function() {
-      console.log('User logged out successfully');
+  const signOut = async () => {
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.signOut();
       
-      // Notify content scripts about auth state change
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, { 
-            action: 'authStateChanged',
-            isLoggedIn: false
-          }).catch(() => {
-            // Ignore errors for tabs where content script isn't running
-          });
-        });
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Logged out successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error signing out",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth?tab=login`,
       });
       
-      resolve();
-    });
-  });
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Password reset email sent",
+        description: "Check your inbox for a link to reset your password",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Password reset failed",
+        description: error.message || "Unable to send password reset email",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Always use the production URL for the redirect
+      const redirectTo = getProductionAuthRedirectUrl();
+      
+      console.log('Starting Google login with redirect to:', redirectTo);
+      
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectTo,
+          // Explicitly request required scopes
+          scopes: 'email profile',
+        }
+      });
+      
+      if (error) {
+        throw error;
+      }
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      toast({
+        title: "Google login failed",
+        description: error.message || "Could not authenticate with Google",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const value = {
+    session,
+    user,
+    isLoading,
+    signIn,
+    signUp,
+    signOut,
+    signInWithGoogle,
+    resetPassword
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
