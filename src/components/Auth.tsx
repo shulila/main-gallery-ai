@@ -39,7 +39,7 @@ const Auth = ({
   const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOAuthLoading] = useState(false);
-  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { signIn, signUp, signInWithGoogle, resetPassword } = useAuth();
   
   // Set the active tab based on initialTab prop or query parameter
   useEffect(() => {
@@ -183,6 +183,33 @@ const Auth = ({
     }
   };
 
+  const handleForgotPassword = async () => {
+    const email = loginForm.getValues('email');
+    if (!email) {
+      toast({
+        title: "Email required",
+        description: "Please enter your email address to reset your password",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await resetPassword(email);
+      toast({
+        title: "Password reset email sent",
+        description: "Check your inbox for instructions to reset your password",
+      });
+    } catch (error) {
+      console.error('Password reset error:', error);
+      toast({
+        title: "Password reset failed",
+        description: error.message || "Unable to send password reset email",
+        variant: "destructive",
+      });
+    }
+  };
+
   // OAuth sign-in buttons
   const renderOAuthButtons = () => {
     return (
@@ -267,7 +294,17 @@ const Auth = ({
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Password</FormLabel>
+                      <div className="flex items-center justify-between">
+                        <FormLabel>Password</FormLabel>
+                        <Button 
+                          type="button" 
+                          variant="link" 
+                          className="p-0 h-auto text-xs" 
+                          onClick={handleForgotPassword}
+                        >
+                          Forgot password?
+                        </Button>
+                      </div>
                       <FormControl>
                         <Input type="password" {...field} />
                       </FormControl>

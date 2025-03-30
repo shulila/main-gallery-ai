@@ -28,6 +28,7 @@ type AuthContextType = {
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -143,6 +144,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Add password reset functionality
+  const resetPassword = async (email: string) => {
+    try {
+      setIsLoading(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth?tab=login`,
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Password reset email sent",
+        description: "Check your inbox for a link to reset your password",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Password reset failed",
+        description: error.message || "Unable to send password reset email",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Add OAuth sign-in methods
   const signInWithGoogle = async () => {
     try {
@@ -177,7 +206,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signUp,
     signOut,
-    signInWithGoogle
+    signInWithGoogle,
+    resetPassword
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

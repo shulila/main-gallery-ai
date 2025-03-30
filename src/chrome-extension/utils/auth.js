@@ -1,4 +1,3 @@
-
 // Authentication utilities for MainGallery extension
 
 // Open auth page with redirect
@@ -39,7 +38,6 @@ export function openAuthWithProvider(provider) {
     console.log(`Opening auth with provider: ${provider}`);
     
     // Construct the URL with the provider parameter
-    // Use the deployed URL instead of localhost
     let authUrl = `https://main-gallery-hub.lovable.app/auth?from=extension&provider=${provider}`;
     
     // Add timestamp to prevent caching
