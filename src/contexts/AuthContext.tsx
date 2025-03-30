@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -9,7 +8,7 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 // Get the correct production URL for auth redirects - avoid localhost
 const getProductionAuthRedirectUrl = () => {
-  // Always use the production URL
+  // Always use the production URL, never use window.location.origin
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
@@ -19,9 +18,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-    // Correctly use the options structure for auth redirects
     flowType: 'pkce',
-    // The redirectTo property should be set in the signInWithOAuth options instead of here
   }
 });
 
@@ -194,7 +191,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         provider: 'google',
         options: {
           redirectTo: redirectTo,
-          // Explicitly request required scopes
           scopes: 'email profile',
         }
       });

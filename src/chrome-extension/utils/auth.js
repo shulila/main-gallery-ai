@@ -1,237 +1,191 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createClient, Session, User } from '@supabase/supabase-js';
-import { useToast } from '@/hooks/use-toast';
 
-// Updated with actual Supabase credentials
+// Auth utilities for Chrome extension
 const supabaseUrl = 'https://ovhriawcqvcpagcaidlb.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U';
 
-// Get the correct production URL for auth redirects - avoid localhost
-const getProductionAuthRedirectUrl = () => {
-  // Always use the production URL
+// Get the production auth callback URL - NEVER use localhost
+const getProductionRedirectUrl = () => {
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
-// Create a single Supabase client instance to be used throughout the app
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-    // Correctly use the options structure for auth redirects
-    flowType: 'pkce',
-    // The redirectTo property should be set in the signInWithOAuth options instead of here
-  }
-});
+// Create a Supabase client for authentication
+let supabaseClient = null;
 
-// For debugging purposes
-console.log('Supabase URL:', supabaseUrl);
-console.log('Supabase client initialized');
-console.log('Auth redirect URL:', getProductionAuthRedirectUrl());
-
-type AuthContextType = {
-  session: Session | null;
-  user: User | null;
-  isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
-};
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    // Initialize the auth state
-    const initializeAuth = async () => {
-      setIsLoading(true);
+// Load the Supabase library dynamically
+const loadSupabaseClient = async () => {
+  try {
+    if (!supabaseClient) {
+      // Import Supabase from CDN for Chrome extension
+      const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/+esm');
       
-      try {
-        // Set up auth state listener FIRST
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          (_event, session) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-          }
-        );
-        
-        // THEN check for existing session
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        return () => subscription.unsubscribe();
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    initializeAuth();
-  }, []);
-
-  const signIn = async (email: string, password: string) => {
-    try {
-      setIsLoading(true);
-      console.log('Attempting to sign in with:', email);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (error) {
-        throw error;
-      }
-      
-      toast({
-        title: "Login successful",
-        description: "Welcome back!",
-      });
-    } catch (error: any) {
-      console.error('Login error:', error);
-      toast({
-        title: "Login failed",
-        description: error.message || "Please check your credentials and try again",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const signUp = async (email: string, password: string) => {
-    try {
-      setIsLoading(true);
-      const { error } = await supabase.auth.signUp({ email, password });
-      
-      if (error) {
-        throw error;
-      }
-      
-      toast({
-        title: "Sign up successful",
-        description: "Please check your email to confirm your account",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Sign up failed",
-        description: error.message || "Please check your information and try again",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const signOut = async () => {
-    try {
-      setIsLoading(true);
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        throw error;
-      }
-      
-      toast({
-        title: "Logged out successfully",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error signing out",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const resetPassword = async (email: string) => {
-    try {
-      setIsLoading(true);
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth?tab=login`,
-      });
-      
-      if (error) {
-        throw error;
-      }
-      
-      toast({
-        title: "Password reset email sent",
-        description: "Check your inbox for a link to reset your password",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Password reset failed",
-        description: error.message || "Unable to send password reset email",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Always use the production URL for the redirect
-      const redirectTo = getProductionAuthRedirectUrl();
-      
-      console.log('Starting Google login with redirect to:', redirectTo);
-      
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectTo,
-          // Explicitly request required scopes
-          scopes: 'email profile',
+      supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          storage: localStorage,
+          persistSession: true,
+          autoRefreshToken: true,
+          flowType: 'pkce'
         }
       });
       
-      if (error) {
-        throw error;
-      }
-    } catch (error: any) {
-      console.error('Google login error:', error);
-      toast({
-        title: "Google login failed",
-        description: error.message || "Could not authenticate with Google",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setIsLoading(false);
+      console.log('Extension: Supabase client initialized');
     }
-  };
+    
+    return supabaseClient;
+  } catch (error) {
+    console.error('Failed to load Supabase client:', error);
+    return null;
+  }
+};
 
-  const value = {
-    session,
-    user,
-    isLoading,
-    signIn,
-    signUp,
-    signOut,
-    signInWithGoogle,
-    resetPassword
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+// Set up a listener for auth callback
+export async function setupAuthCallbackListener() {
+  const redirectPattern = '*://main-gallery-hub.lovable.app/auth/callback*';
+  
+  try {
+    // Listen for the auth callback on the redirect URL
+    chrome.webNavigation.onCompleted.addListener(async (details) => {
+      console.log('Auth navigation detected:', details.url);
+      
+      // Get auth token from the URL
+      const url = new URL(details.url);
+      const accessToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('access_token') : null;
+      const refreshToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('refresh_token') : null;
+      
+      // If we have tokens, validate and store them
+      if (accessToken) {
+        console.log('Auth tokens detected, will store session');
+        
+        // Store basic token info for extension usage
+        chrome.storage.sync.set({
+          'main_gallery_auth_token': {
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            timestamp: Date.now()
+          }
+        }, () => {
+          console.log('Auth token stored in extension storage');
+        });
+        
+        // Close the auth tab after successful login
+        chrome.tabs.query({ url: redirectPattern }, (tabs) => {
+          if (tabs && tabs.length > 0) {
+            // We'll wait a moment to ensure user sees success before closing
+            setTimeout(() => {
+              chrome.tabs.remove(tabs[0].id);
+              
+              // Open gallery in a new tab
+              chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery' });
+            }, 2000);
+          }
+        });
+      }
+    }, { url: [{ urlMatches: redirectPattern }] });
+    
+    console.log('Auth callback listener set up for:', redirectPattern);
+  } catch (error) {
+    console.error('Error setting up auth callback listener:', error);
+  }
 }
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+// Open auth page
+export function openAuthPage(tabId = null, options = {}) {
+  let authUrl = 'https://main-gallery-hub.lovable.app/auth';
+  
+  // Add any query parameters
+  const searchParams = new URLSearchParams();
+  if (options.redirect) searchParams.append('redirect', options.redirect);
+  if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
+  if (options.signup) searchParams.append('signup', 'true');
+  if (options.from) searchParams.append('from', options.from);
+  
+  const queryString = searchParams.toString();
+  if (queryString) {
+    authUrl += `?${queryString}`;
   }
-  return context;
-};
+  
+  // Open the URL
+  if (tabId) {
+    chrome.tabs.update(tabId, { url: authUrl });
+  } else {
+    chrome.tabs.create({ url: authUrl });
+  }
+  
+  console.log('Opened auth URL:', authUrl);
+}
+
+// Handle OAuth sign-in with provider
+export async function openAuthWithProvider(provider) {
+  try {
+    const supabase = await loadSupabaseClient();
+    if (!supabase) {
+      console.error('Failed to initialize Supabase client');
+      return;
+    }
+    
+    const redirectUrl = getProductionRedirectUrl();
+    console.log(`Opening ${provider} auth with redirect to:`, redirectUrl);
+    
+    // Initiate OAuth flow
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: redirectUrl,
+        scopes: 'email profile'
+      }
+    });
+    
+    if (error) {
+      console.error(`${provider} auth error:`, error);
+    }
+  } catch (error) {
+    console.error(`Error during ${provider} auth:`, error);
+  }
+}
+
+// Check if user is logged in
+export async function isLoggedIn() {
+  try {
+    // First try to get from storage for speed
+    const result = await new Promise((resolve) => {
+      chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
+        resolve(!!result.main_gallery_auth_token);
+      });
+    });
+    
+    if (result) return true;
+    
+    // If not found in storage, check with Supabase
+    const supabase = await loadSupabaseClient();
+    if (supabase) {
+      const { data } = await supabase.auth.getSession();
+      return !!data.session;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking login status:', error);
+    return false;
+  }
+}
+
+// Log out from all platforms
+export async function logout() {
+  try {
+    // Clear local storage token
+    await new Promise((resolve) => {
+      chrome.storage.sync.remove(['main_gallery_auth_token'], resolve);
+    });
+    
+    // Sign out from Supabase
+    const supabase = await loadSupabaseClient();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    
+    console.log('Successfully logged out');
+    return true;
+  } catch (error) {
+    console.error('Logout error:', error);
+    return false;
+  }
+}

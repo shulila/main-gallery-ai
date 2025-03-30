@@ -176,6 +176,20 @@ async function checkAndShowUI() {
   }
 }
 
+// Throttle function to limit execution frequency
+function throttle(func, limit) {
+  let inThrottle;
+  return function() {
+    const args = arguments;
+    const context = this;
+    if (!inThrottle) {
+      func.apply(context, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+}
+
 // Enhanced Midjourney image extraction with improved DOM selectors and de-duplication
 function extractMidjourneyImages() {
   console.log('Extracting Midjourney images from current page');
@@ -301,14 +315,23 @@ function extractMidjourneyImages() {
         action: 'midjourneyImagesExtracted',
         count: extractedImages.length
       });
+      
+      // Send images to background script for storage
+      chrome.runtime.sendMessage({
+        action: 'storeExtractedImages',
+        images: extractedImages
+      });
     }
     
-    return true;
+    return extractedImages.length > 0;
   } catch (error) {
     console.error('Error extracting Midjourney images:', error);
-    return null;
+    return false;
   }
 }
+
+// Throttled version of image extraction to avoid overloading
+const throttledExtractImages = throttle(extractMidjourneyImages, 2000);
 
 // Store extracted images with improved de-duplication
 function storeExtractedImages(images) {
@@ -341,9 +364,159 @@ function storeExtractedImages(images) {
   });
 }
 
+// Simulate infinite scroll to load more content
+function simulateInfiniteScroll() {
+  return new Promise((resolve) => {
+    const originalScrollHeight = document.body.scrollHeight;
+    let scrollAttempts = 0;
+    const maxScrollAttempts = 5;
+    
+    const scrollInterval = setInterval(() => {
+      // Scroll down incrementally
+      window.scrollTo(0, document.body.scrollHeight);
+      
+      // Check if more content has loaded
+      setTimeout(() => {
+        const newScrollHeight = document.body.scrollHeight;
+        scrollAttempts++;
+        
+        if (
+          newScrollHeight > originalScrollHeight || 
+          scrollAttempts >= maxScrollAttempts
+        ) {
+          clearInterval(scrollInterval);
+          console.log(`Scroll simulation completed after ${scrollAttempts} attempts`);
+          resolve(newScrollHeight > originalScrollHeight);
+        }
+      }, 500);
+    }, 1000);
+  });
+}
+
+// Proactively load and extract more images
+async function loadMoreAndExtract() {
+  console.log('Attempting to load more content by scrolling...');
+  
+  // Simulate scrolling to trigger lazy loading
+  const moreContentLoaded = await simulateInfiniteScroll();
+  
+  if (moreContentLoaded) {
+    console.log('More content loaded, extracting new images...');
+    // Wait a bit for any lazy-loaded images to fully render
+    setTimeout(extractMidjourneyImages, 1000);
+  } else {
+    console.log('No more content loaded or reached scroll limit');
+  }
+}
+
+// Initialize with automatic sync for Midjourney pages
+(function initialize() {
+  // Inject content script first
+  injectContentScript();
+  
+  // Notify background script that content script has loaded
+  chrome.runtime.sendMessage({ action: 'contentScriptLoaded' });
+  
+  // Check UI conditions after a short delay to ensure DOM is fully loaded
+  setTimeout(checkAndShowUI, 1500);
+  
+  // Re-check UI conditions when page visibility changes
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+      checkAndShowUI();
+      
+      // Auto-sync images when page becomes visible
+      if (window.location.href.includes('midjourney.com/app')) {
+        extractMidjourneyImages();
+      }
+    }
+  });
+  
+  // If on Midjourney app page, set up automatic extraction
+  if (window.location.href.includes('midjourney.com/app')) {
+    console.log('On Midjourney app page, setting up automatic extraction');
+    
+    // Initial extraction after page loads
+    window.addEventListener('load', () => {
+      // Wait for content to load
+      setTimeout(() => {
+        extractMidjourneyImages();
+        
+        // After initial extraction, try to load more content
+        setTimeout(loadMoreAndExtract, 2000);
+      }, 2000);
+      
+      // Set up MutationObserver to detect new content
+      const targetNode = document.querySelector('.gallery, main, #root, #app') || document.body;
+      
+      // Configure the observer
+      const observerConfig = {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['src', 'srcset', 'data-src', 'data-job-id']
+      };
+      
+      // Create an observer instance
+      const observer = new MutationObserver((mutations) => {
+        // Check if mutations include relevant changes
+        const shouldExtract = mutations.some(mutation => {
+          // New nodes added
+          if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+            return true;
+          }
+          
+          // Relevant attribute changes
+          if (mutation.type === 'attributes') {
+            const target = mutation.target;
+            return (
+              target.tagName === 'IMG' || 
+              target.classList?.contains('gallery-item') ||
+              target.hasAttribute?.('data-job-id')
+            );
+          }
+          
+          return false;
+        });
+        
+        if (shouldExtract) {
+          // Use throttled extraction
+          throttledExtractImages();
+        }
+      });
+      
+      // Start observing
+      observer.observe(targetNode, observerConfig);
+      console.log('MutationObserver set up to detect new Midjourney content');
+      
+      // Set up periodic extraction as a fallback
+      setInterval(extractMidjourneyImages, 30000); // Every 30 seconds
+    });
+    
+    // Set up scroll detection for extraction
+    let lastScrollY = window.scrollY;
+    let scrollTimeout;
+    
+    window.addEventListener('scroll', () => {
+      // Clear previous timeout
+      clearTimeout(scrollTimeout);
+      
+      // Set new timeout
+      scrollTimeout = setTimeout(() => {
+        // Only extract if significant scroll occurred
+        if (Math.abs(window.scrollY - lastScrollY) > 300) {
+          console.log('Significant scroll detected, extracting new images');
+          extractMidjourneyImages();
+          lastScrollY = window.scrollY;
+        }
+      }, 500);
+    });
+  }
+})();
+
 // Listen for messages from popup or background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Content script received message:', message);
+  console.log('Content script received message:', message.action);
   
   switch (message.action) {
     case 'platformDetected':
@@ -413,6 +586,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: !!result });
       break;
       
+    case 'loadMoreContent':
+      loadMoreAndExtract().then(result => {
+        sendResponse({ success: result });
+      });
+      return true; // Will respond asynchronously
+      
     case 'getMidjourneyDetails':
       // This will be implemented in the future for more detailed extraction
       sendResponse({ notImplemented: true });
@@ -421,102 +600,3 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   return true; // Keep channel open for async response
 });
-
-// Initialize with automatic sync for Midjourney pages
-(function initialize() {
-  // Inject content script first
-  injectContentScript();
-  
-  // Notify background script that content script has loaded
-  chrome.runtime.sendMessage({ action: 'contentScriptLoaded' });
-  
-  // Check UI conditions after a short delay to ensure DOM is fully loaded
-  setTimeout(checkAndShowUI, 1500);
-  
-  // Re-check UI conditions when page visibility changes
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible') {
-      checkAndShowUI();
-      
-      // Auto-sync images when page becomes visible
-      if (window.location.href.includes('midjourney.com/app')) {
-        extractMidjourneyImages();
-      }
-    }
-  });
-  
-  // Set up MutationObserver for continuous monitoring of DOM changes
-  const observer = new MutationObserver(function(mutations) {
-    // Filter significant mutations to reduce processing
-    const significantChanges = mutations.some(mutation => {
-      return (
-        // Check for new nodes added
-        (mutation.type === 'childList' && mutation.addedNodes.length > 0) ||
-        // Or attribute changes on relevant elements
-        (mutation.type === 'attributes' && 
-         (mutation.target.tagName === 'IMG' || 
-          mutation.target.classList.contains('gallery-item') ||
-          mutation.target.hasAttribute('data-job-id')))
-      );
-    });
-    
-    if (significantChanges && window.location.href.includes('midjourney.com/app')) {
-      // Debounce extraction to avoid too many calls
-      if (this.extractionTimeout) {
-        clearTimeout(this.extractionTimeout);
-      }
-      
-      this.extractionTimeout = setTimeout(() => {
-        console.log('Detected DOM changes, extracting new images...');
-        extractMidjourneyImages();
-      }, 1000);
-    }
-  });
-  
-  // For Midjourney specifically, check if we're on the app page
-  if (window.location.href.includes('midjourney.com/app')) {
-    console.log('On Midjourney app page, will automatically extract images');
-    
-    // Initial extraction after page load
-    window.addEventListener('load', () => {
-      // Wait for content to load
-      setTimeout(extractMidjourneyImages, 2000);
-      
-      // Start observing DOM changes
-      const targetNode = document.querySelector('.gallery, main, #root, #app') || document.body;
-      observer.observe(targetNode, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['src', 'srcset', 'data-src', 'data-job-id']
-      });
-      console.log('Observing Midjourney content for changes');
-      
-      // Set up periodic extraction in case some content is dynamically loaded
-      setInterval(extractMidjourneyImages, 30000); // Every 30 seconds
-    });
-    
-    // Also set up scroll detection to extract images as user scrolls
-    let lastScrollPosition = 0;
-    let scrollTimeout;
-    
-    window.addEventListener('scroll', () => {
-      // Clear previous timeout
-      if (scrollTimeout) {
-        clearTimeout(scrollTimeout);
-      }
-      
-      // Set new timeout for extraction after scroll stops
-      scrollTimeout = setTimeout(() => {
-        const currentScrollPosition = window.scrollY;
-        
-        // Only extract if we've scrolled a significant amount
-        if (Math.abs(currentScrollPosition - lastScrollPosition) > 300) {
-          console.log('Significant scroll detected, extracting new images');
-          extractMidjourneyImages();
-          lastScrollPosition = currentScrollPosition;
-        }
-      }, 500);
-    });
-  }
-})();

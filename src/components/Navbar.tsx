@@ -46,7 +46,7 @@ const Navbar = () => {
             {user ? (
               <>
                 <nav className="hidden md:flex items-center space-x-6">
-                  {/* Removed Gallery link since logo already navigates there */}
+                  {/* Gallery link removed as logo navigates there */}
                   <Link to="/platforms" className="text-sm font-medium hover:text-primary transition-colors">
                     Platforms
                   </Link>
