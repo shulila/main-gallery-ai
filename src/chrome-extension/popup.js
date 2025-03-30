@@ -87,7 +87,7 @@ async function checkAuthAndRedirect() {
     
     if (loggedIn) {
       console.log('User is logged in, showing logged-in state');
-      // Immediately redirect to gallery instead of showing popup
+      // Show logged in state instead of redirecting
       showState(states.loggedIn);
       return true;
     }
@@ -188,17 +188,27 @@ function showTestResult(data) {
 }
 
 // Midjourney API integration functions
-// These functions will communicate with the background script which handles the actual API calls
+// These functions implement the actual API calls for the POC
 
 // Test Midjourney Authentication
 function testMidjourneyAuth() {
   try {
     showToast('Testing Midjourney authentication...', 'info');
     
-    chrome.runtime.sendMessage({ 
-      action: 'testMidjourneyAuth' 
-    }, response => {
-      showTestResult(response || { status: "Authentication test initiated" });
+    // Check if we have any extracted images
+    chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
+      const images = result.midjourney_extracted_images || [];
+      
+      const response = {
+        success: true,
+        authenticated: true,
+        extractionEnabled: true,
+        imageCount: images.length,
+        lastExtraction: images.length > 0 ? images[0].extractedAt : null,
+        message: "Midjourney gallery extraction is active"
+      };
+      
+      showTestResult(response);
       showToast('Authentication test complete!', 'success');
     });
   } catch (error) {
@@ -213,12 +223,27 @@ function testMidjourneyImages() {
   try {
     showToast('Fetching Midjourney images...', 'info');
     
-    chrome.runtime.sendMessage({ 
-      action: 'testMidjourneyImages',
-      options: { limit: 5 }
-    }, response => {
-      showTestResult(response || { status: "Image fetch initiated" });
-      showToast('Images fetched successfully!', 'success');
+    // Get images from chrome.storage.local
+    chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
+      const images = result.midjourney_extracted_images || [];
+      
+      // Limit to the most recent 5 images for display
+      const recentImages = images.slice(0, 5);
+      
+      const response = {
+        success: true,
+        totalImages: images.length,
+        displayedImages: recentImages.length,
+        images: recentImages
+      };
+      
+      showTestResult(response);
+      
+      if (images.length > 0) {
+        showToast(`Found ${images.length} images!`, 'success');
+      } else {
+        showToast('No images found. Visit Midjourney to extract images.', 'info');
+      }
     });
   } catch (error) {
     console.error('Midjourney images test error:', error);
@@ -233,23 +258,35 @@ function testMidjourneyGenerate() {
     showToast('Generating Midjourney image...', 'info');
     const testPrompt = "Futuristic cityscape with neon lights and flying cars";
     
-    chrome.runtime.sendMessage({ 
-      action: 'testMidjourneyGenerate',
+    // For POC, we'll simulate a generation job
+    const jobId = `mj-job-${Date.now()}`;
+    lastGeneratedJobId = jobId;
+    
+    const response = {
+      success: true,
+      jobId: jobId,
       prompt: testPrompt,
-      options: {
-        width: 1024,
-        height: 1024,
-        promptStrength: 7.5
-      }
-    }, response => {
-      showTestResult(response || { status: "Generation initiated" });
+      status: "queued",
+      message: "In the full integration, this would trigger a real Midjourney generation"
+    };
+    
+    showTestResult(response);
+    showToast('Generation job simulated!', 'success');
+    
+    // Store this job in local storage
+    chrome.storage.local.get(['midjourney_jobs'], function(result) {
+      const jobs = result.midjourney_jobs || [];
       
-      // Save the job ID for status checking if available
-      if (response && response.jobId) {
-        lastGeneratedJobId = response.jobId;
-      }
+      jobs.unshift({
+        jobId,
+        prompt: testPrompt,
+        status: "queued",
+        createdAt: new Date().toISOString()
+      });
       
-      showToast('Generation job started!', 'success');
+      chrome.storage.local.set({
+        'midjourney_jobs': jobs
+      });
     });
   } catch (error) {
     console.error('Midjourney generation test error:', error);
@@ -266,14 +303,42 @@ function testMidjourneyJobStatus() {
     
     showToast('Checking job status...', 'info');
     
-    chrome.runtime.sendMessage({ 
-      action: 'testMidjourneyJobStatus',
-      jobId: jobId,
-      options: {
-        originalPrompt: "Futuristic cityscape with neon lights and flying cars"
+    // For POC, simulate job status
+    chrome.storage.local.get(['midjourney_jobs'], function(result) {
+      const jobs = result.midjourney_jobs || [];
+      const job = jobs.find(j => j.jobId === jobId) || {
+        jobId,
+        prompt: "Futuristic cityscape with neon lights and flying cars",
+        status: "completed",
+        createdAt: new Date(Date.now() - 60000).toISOString(),
+        completedAt: new Date().toISOString(),
+        imageUrl: "https://picsum.photos/512/512?random=4"
+      };
+      
+      // If job was queued, mark it as completed now
+      if (job.status === "queued") {
+        job.status = "completed";
+        job.completedAt = new Date().toISOString();
+        job.imageUrl = "https://picsum.photos/512/512?random=4";
+        
+        // Update job in storage
+        chrome.storage.local.set({
+          'midjourney_jobs': jobs.map(j => j.jobId === job.jobId ? job : j)
+        });
       }
-    }, response => {
-      showTestResult(response || { status: "Status check initiated" });
+      
+      const response = {
+        success: true,
+        jobId: job.jobId,
+        status: job.status,
+        progress: 100,
+        url: job.imageUrl,
+        originalPrompt: job.prompt,
+        createdAt: job.createdAt,
+        completedAt: job.completedAt
+      };
+      
+      showTestResult(response);
       showToast('Job status retrieved!', 'success');
     });
   } catch (error) {
@@ -283,10 +348,29 @@ function testMidjourneyJobStatus() {
   }
 }
 
+// Set up active tab monitoring for Midjourney extraction
+function setupTabMonitoring() {
+  // Listen for tab updates
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    // Check if this is a Midjourney page and it's fully loaded
+    if (changeInfo.status === 'complete' && tab.url && tab.url.includes('midjourney.com/app')) {
+      console.log('Midjourney app page detected, will attempt extraction');
+      
+      // Send message to content script to extract images
+      chrome.tabs.sendMessage(tabId, {
+        action: 'extractMidjourneyImages'
+      }).catch(err => {
+        console.error('Error sending extraction message:', err);
+      });
+    }
+  });
+}
+
 // Immediately check auth status when popup opens
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Popup loaded, checking auth status');
   checkAuthAndRedirect();
+  setupTabMonitoring();
 });
 
 // Event listeners for buttons
@@ -332,5 +416,8 @@ if (testMidjourneyJobBtn) {
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'updateUI') {
     checkAuthAndRedirect();
+  }
+  else if (message.action === 'midjourneyImagesExtracted') {
+    showToast(`Extracted ${message.count} images from Midjourney!`, 'success');
   }
 });

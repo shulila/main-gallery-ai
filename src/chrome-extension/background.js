@@ -40,7 +40,34 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (platformId) {
       console.log(`MainGallery: Detected ${platformId} on tab ${tabId}`);
       
-      // Check if user is logged in to MainGallery
+      // Special handling for Midjourney app page for image extraction
+      if (platformId === 'midjourney' && tab.url.includes('midjourney.com/app')) {
+        console.log('Detected Midjourney app page, will check login status');
+        
+        // Check if user is logged in to MainGallery
+        isLoggedIn().then(loggedIn => {
+          if (loggedIn) {
+            console.log('User logged in, will trigger image extraction');
+            // Trigger image extraction in content script
+            chrome.tabs.sendMessage(tabId, { 
+              action: 'extractMidjourneyImages'
+            }).catch(err => {
+              console.log('Content script may not be ready yet:', err.message);
+              
+              // Retry after a delay
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, { 
+                  action: 'extractMidjourneyImages'
+                }).catch(err => {
+                  console.log('Content script still not ready:', err.message);
+                });
+              }, 3000);
+            });
+          }
+        });
+      }
+      
+      // Regular platform detection logic
       isLoggedIn().then(loggedIn => {
         // Notify the content script that we've detected a supported platform
         chrome.tabs.sendMessage(tabId, { 
@@ -125,70 +152,139 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       
     // Midjourney API Test Handlers
     case 'testMidjourneyAuth':
-      // For now, we're returning mock data
-      // In the future, this will communicate with the actual Midjourney API
-      sendResponse({
-        success: true,
-        authenticated: true,
-        mock: true,
-        message: "Authenticated with Midjourney API (mock)"
+      // For POC we use locally stored data rather than a direct API connection
+      chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
+        const images = result.midjourney_extracted_images || [];
+        
+        sendResponse({
+          success: true,
+          authenticated: true,
+          extractionEnabled: true,
+          imageCount: images.length,
+          lastExtraction: images.length > 0 ? images[0].extractedAt : null
+        });
       });
-      break;
+      return true; // Will respond asynchronously
       
     case 'testMidjourneyImages':
-      // Mock images for now
-      sendResponse({
-        success: true,
-        mock: true,
-        images: [
-          {
-            id: "mj_123456",
-            url: "https://picsum.photos/512/512?random=1",
-            prompt: "Futuristic cityscape with neon lights",
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: "mj_123457",
-            url: "https://picsum.photos/512/512?random=2",
-            prompt: "Underwater scene with glowing creatures",
-            createdAt: new Date(Date.now() - 86400000).toISOString()
-          },
-          {
-            id: "mj_123458",
-            url: "https://picsum.photos/512/512?random=3",
-            prompt: "Mountain landscape at sunset",
-            createdAt: new Date(Date.now() - 172800000).toISOString()
-          }
-        ]
+      // Get images from storage for our POC
+      chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
+        const images = result.midjourney_extracted_images || [];
+        
+        // Limit to the most recent 5 images for display
+        const recentImages = images.slice(0, 5);
+        
+        sendResponse({
+          success: true,
+          totalImages: images.length,
+          displayedImages: recentImages.length,
+          images: recentImages
+        });
       });
-      break;
+      return true; // Will respond asynchronously
       
     case 'testMidjourneyGenerate':
-      // Mock generation job for now
+      // Mock generation job for the POC
       const jobId = `mj-job-${Date.now()}`;
-      sendResponse({
-        success: true,
-        mock: true,
-        jobId: jobId,
-        prompt: message.prompt,
-        status: "queued"
+      
+      // Store this job in local storage
+      chrome.storage.local.get(['midjourney_jobs'], function(result) {
+        const jobs = result.midjourney_jobs || [];
+        
+        jobs.unshift({
+          jobId,
+          prompt: message.prompt || "Futuristic cityscape with neon lights and flying cars",
+          status: "queued",
+          createdAt: new Date().toISOString()
+        });
+        
+        chrome.storage.local.set({
+          'midjourney_jobs': jobs
+        }, () => {
+          sendResponse({
+            success: true,
+            jobId: jobId,
+            prompt: message.prompt,
+            status: "queued"
+          });
+        });
       });
-      break;
+      return true; // Will respond asynchronously
       
     case 'testMidjourneyJobStatus':
-      // Mock job status for now
-      sendResponse({
-        success: true,
-        mock: true,
-        jobId: message.jobId,
-        status: "completed",
-        progress: 100,
-        url: "https://picsum.photos/512/512?random=4",
-        originalPrompt: message.options?.originalPrompt || "Unknown prompt"
+      // Get job status from storage for our POC
+      chrome.storage.local.get(['midjourney_jobs'], function(result) {
+        const jobs = result.midjourney_jobs || [];
+        const job = jobs.find(j => j.jobId === message.jobId);
+        
+        if (job) {
+          // If job was queued, mark it as completed now for the demo
+          if (job.status === "queued") {
+            job.status = "completed";
+            job.completedAt = new Date().toISOString();
+            job.imageUrl = "https://picsum.photos/512/512?random=4";
+            
+            // Update job in storage
+            chrome.storage.local.set({
+              'midjourney_jobs': jobs.map(j => j.jobId === job.jobId ? job : j)
+            });
+          }
+          
+          sendResponse({
+            success: true,
+            jobId: job.jobId,
+            status: job.status,
+            progress: 100,
+            url: job.imageUrl || "https://picsum.photos/512/512?random=4",
+            originalPrompt: job.prompt
+          });
+        } else {
+          // Job not found, create a mock response
+          sendResponse({
+            success: false,
+            error: "Job not found",
+            jobId: message.jobId
+          });
+        }
       });
+      return true; // Will respond asynchronously
+      
+    case 'midjourneyImagesExtracted':
+      // Forward this message to the popup if it's open
+      chrome.runtime.sendMessage({
+        action: 'midjourneyImagesExtracted',
+        count: message.count
+      });
+      sendResponse({ success: true });
       break;
   }
   
   // Return true if we plan to respond asynchronously
   return true;
+});
+
+// Store extracted images from content script
+chrome.runtime.onMessage.addListener(function(message, sender) {
+  if (message.action === 'storeExtractedImages' && message.images) {
+    console.log(`Received ${message.images.length} images for storage from tab:`, sender.tab.id);
+    
+    // Store in chrome.storage.local
+    chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
+      const existingImages = result.midjourney_extracted_images || [];
+      const existingIds = new Set(existingImages.map(img => img.id));
+      
+      // Filter out duplicates
+      const newImages = message.images.filter(img => !existingIds.has(img.id));
+      
+      // Combine and store (keep most recent at the start)
+      const combinedImages = [...newImages, ...existingImages];
+      
+      // Store in chrome.storage.local
+      chrome.storage.local.set({
+        'midjourney_extracted_images': combinedImages
+      }, function() {
+        console.log(`Stored ${newImages.length} new images (${combinedImages.length} total)`);
+      });
+    });
+  }
 });

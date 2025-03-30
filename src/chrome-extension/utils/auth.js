@@ -59,6 +59,8 @@ export function openAuthWithProvider(provider) {
     // Add timestamp to prevent caching
     authUrl += `&t=${Date.now()}`;
     
+    console.log('Opening provider auth with URL:', authUrl);
+    
     chrome.tabs.create({ url: authUrl }, function(tab) {
       if (chrome.runtime.lastError) {
         console.error(`Error opening ${provider} auth:`, chrome.runtime.lastError);

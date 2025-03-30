@@ -1,4 +1,3 @@
-
 // MainGallery Content Script
 console.log('MainGallery content script loaded');
 
@@ -7,7 +6,7 @@ const PLATFORMS = {
   midjourney: {
     name: 'Midjourney',
     urlPatterns: [/midjourney\.com/, /discord\.com\/channels.*midjourney/],
-    galleryPages: [/midjourney\.com\/organize/, /midjourney\.com\/archive/, /midjourney\.com\/feed/]
+    galleryPages: [/midjourney\.com\/organize/, /midjourney\.com\/archive/, /midjourney\.com\/feed/, /midjourney\.com\/app/]
   },
   dalle: {
     name: 'DALL·E',
@@ -177,6 +176,110 @@ async function checkAndShowUI() {
   }
 }
 
+// NEW FUNCTION: Extract Midjourney images from page
+function extractMidjourneyImages() {
+  console.log('Extracting Midjourney images from current page');
+  
+  try {
+    // Check if we're on the Midjourney app page
+    if (!window.location.href.includes('midjourney.com/app')) {
+      console.log('Not on Midjourney app page, skipping extraction');
+      return null;
+    }
+    
+    // Wait a moment to ensure the page is fully loaded
+    setTimeout(() => {
+      // This is a POC implementation - actual selectors will need to be adjusted
+      // based on the real DOM structure of Midjourney's web app
+      
+      // Collection to store extracted images
+      const extractedImages = [];
+      
+      // Find all image containers on the page
+      // These selectors are examples and will need to be updated based on actual DOM structure
+      const imageContainers = document.querySelectorAll('.card, .image-container, .grid-item');
+      
+      console.log(`Found ${imageContainers.length} potential image containers`);
+      
+      // Process each container to extract information
+      imageContainers.forEach((container, index) => {
+        try {
+          // Extract image URL (different sites may have different structures)
+          const imageElement = container.querySelector('img, .image, [role="img"]');
+          const imageUrl = imageElement ? (imageElement.src || imageElement.dataset.src) : null;
+          
+          // Extract prompt if available
+          const promptElement = container.querySelector('.prompt, .description, .caption');
+          const prompt = promptElement ? promptElement.textContent.trim() : null;
+          
+          // Extract date if available
+          const dateElement = container.querySelector('.date, .timestamp, time');
+          const createdAt = dateElement ? dateElement.textContent.trim() || dateElement.getAttribute('datetime') : null;
+          
+          // Extract any ID or link
+          const linkElement = container.querySelector('a') || container;
+          const linkUrl = linkElement.href || null;
+          const id = linkUrl ? linkUrl.split('/').pop() : `mj-${Date.now()}-${index}`;
+          
+          if (imageUrl) {
+            extractedImages.push({
+              id,
+              url: imageUrl,
+              prompt,
+              platform: 'midjourney',
+              createdAt: createdAt || new Date().toISOString(),
+              sourceUrl: linkUrl,
+              extractedAt: new Date().toISOString()
+            });
+          }
+        } catch (err) {
+          console.error('Error extracting data from container:', err);
+        }
+      });
+      
+      console.log(`Successfully extracted ${extractedImages.length} images from Midjourney`);
+      
+      if (extractedImages.length > 0) {
+        // Store in local storage
+        storeExtractedImages(extractedImages);
+        
+        // Notify about successful extraction
+        chrome.runtime.sendMessage({
+          action: 'midjourneyImagesExtracted',
+          count: extractedImages.length
+        });
+      }
+    }, 2000); // Give the page time to render fully
+    
+    return true;
+  } catch (error) {
+    console.error('Error extracting Midjourney images:', error);
+    return null;
+  }
+}
+
+// Store extracted images in Chrome storage
+function storeExtractedImages(images) {
+  // First get existing images to avoid duplicates
+  chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
+    const existingImages = result.midjourney_extracted_images || [];
+    const existingIds = new Set(existingImages.map(img => img.id));
+    
+    // Filter out duplicates
+    const newImages = images.filter(img => !existingIds.has(img.id));
+    
+    // Combine and store (keep most recent at the start)
+    const combinedImages = [...newImages, ...existingImages];
+    
+    // Store in chrome.storage.local
+    chrome.storage.local.set({
+      'midjourney_extracted_images': combinedImages
+    }, function() {
+      console.log(`Stored ${newImages.length} new images (${combinedImages.length} total)`);
+    });
+  });
+}
+
 // Listen for messages from popup or background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Content script received message:', message);
@@ -243,6 +346,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       sendResponse({ success: true });
       break;
+      
+    case 'extractMidjourneyImages':
+      const result = extractMidjourneyImages();
+      sendResponse({ success: !!result });
+      break;
+      
+    case 'getMidjourneyDetails':
+      // This will be implemented in the future for more detailed extraction
+      sendResponse({ notImplemented: true });
+      break;
   }
   
   return true; // Keep channel open for async response
@@ -304,4 +417,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     childList: true,
     subtree: true
   });
+  
+  // For Midjourney specifically, check if we're on the app page
+  if (window.location.href.includes('midjourney.com/app')) {
+    console.log('On Midjourney app page, will attempt to extract images');
+    
+    // Wait for page to fully load before extracting
+    window.addEventListener('load', () => {
+      setTimeout(extractMidjourneyImages, 3000);
+    });
+    
+    // Also set up MutationObserver to detect when new images are loaded
+    const observer = new MutationObserver(function(mutations) {
+      const significantChanges = mutations.some(mutation => {
+        return mutation.type === 'childList' && 
+               mutation.addedNodes.length > 0;
+      });
+      
+      if (significantChanges) {
+        console.log('Detected new content in Midjourney app, extracting images');
+        extractMidjourneyImages();
+      }
+    });
+    
+    // Start observing with a delay to ensure the page is ready
+    setTimeout(() => {
+      const targetNode = document.querySelector('.gallery, main, #root, #app') || document.body;
+      observer.observe(targetNode, {
+        childList: true,
+        subtree: true
+      });
+      console.log('Observation started for new Midjourney content');
+    }, 3000);
+  }
 })();
