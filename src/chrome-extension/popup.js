@@ -34,6 +34,7 @@ const syncCountElement = document.getElementById('sync-image-count');
 
 // Store the last generated job ID
 let lastGeneratedJobId = null;
+let isSyncing = false; // Track sync state
 
 // Helper functions
 function hideAllStates() {
@@ -118,6 +119,14 @@ function updateSyncStatus() {
     
     syncStatusElement.textContent = `Last sync: ${lastSync}`;
     syncCountElement.textContent = `${images.length} images found`;
+    
+    // Update button state
+    if (syncNowButton) {
+      syncNowButton.disabled = isSyncing;
+      syncNowButton.innerHTML = isSyncing ? 
+        '<div class="button-spinner"></div> Syncing...' : 
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9a9 9 0 00-9-9m9 9V3"></path></svg>';
+    }
   });
 }
 
@@ -198,6 +207,11 @@ function showTestResult(data) {
 
 // Trigger manual sync of Midjourney images
 function triggerMidjourneySync() {
+  if (isSyncing) return; // Prevent multiple syncs
+  
+  isSyncing = true;
+  updateSyncStatus(); // Update UI to show syncing state
+  
   chrome.tabs.query({ url: "*://www.midjourney.com/app*" }, function(tabs) {
     if (tabs.length > 0) {
       // There's an open Midjourney tab, send sync message
@@ -208,9 +222,14 @@ function triggerMidjourneySync() {
       showToast('Syncing images from Midjourney...', 'info');
       
       // Update status after a delay
-      setTimeout(updateSyncStatus, 2000);
+      setTimeout(() => {
+        isSyncing = false;
+        updateSyncStatus();
+      }, 2000);
     } else {
       // No Midjourney tab open
+      isSyncing = false;
+      updateSyncStatus();
       showToast('No Midjourney tabs found. Please open Midjourney first.', 'error');
     }
   });
@@ -317,6 +336,7 @@ chrome.runtime.onMessage.addListener((message) => {
     checkAuthAndRedirect();
   }
   else if (message.action === 'midjourneyImagesExtracted') {
+    isSyncing = false;
     showToast(`Extracted ${message.count} images from Midjourney!`, 'success');
     updateSyncStatus();
   }

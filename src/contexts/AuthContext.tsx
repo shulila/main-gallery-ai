@@ -19,8 +19,6 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     flowType: 'pkce',
-    // Always use the production URL for all redirects to avoid localhost
-    redirectTo: getProductionAuthRedirectUrl(),
   }
 });
 

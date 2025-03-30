@@ -4,12 +4,15 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 const AuthCallback = () => {
   const { session, isLoading } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [redirectPath, setRedirectPath] = useState('/gallery');
   const [processingAuth, setProcessingAuth] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   useEffect(() => {
     // Function to parse the hash fragment or query parameters
@@ -50,7 +53,13 @@ const AuthCallback = () => {
     // If there's an error, show it and stop
     if (authParams.error) {
       console.error('OAuth error:', authParams.error, authParams.error_description);
+      setError(`Auth error: ${authParams.error} - ${authParams.error_description || 'Unknown error'}`);
       setProcessingAuth(false);
+      toast({
+        title: "Authentication Error",
+        description: authParams.error_description || authParams.error,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -63,7 +72,7 @@ const AuthCallback = () => {
       const checkSessionTimer = setTimeout(() => {
         console.log('Auth processing timeout reached');
         setProcessingAuth(false);
-      }, 3000); // Give it 3 seconds maximum to ensure we don't get stuck
+      }, 5000); // Give it 5 seconds maximum to ensure we don't get stuck
       
       return () => clearTimeout(checkSessionTimer);
     } else {
@@ -71,7 +80,7 @@ const AuthCallback = () => {
       console.log('No auth parameters to process');
       setProcessingAuth(false);
     }
-  }, []);
+  }, [toast]);
 
   // When auth processing is done and session is ready, redirect
   useEffect(() => {
@@ -91,11 +100,27 @@ const AuthCallback = () => {
     <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8 text-center">
         <div className="flex flex-col items-center justify-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <h2 className="text-2xl font-bold">Completing Authentication</h2>
-          <p className="text-muted-foreground">
-            Please wait while we finish setting up your account...
-          </p>
+          {error ? (
+            <>
+              <div className="text-red-500 text-3xl mb-2">⚠️</div>
+              <h2 className="text-2xl font-bold text-destructive">Authentication Failed</h2>
+              <p className="text-muted-foreground">{error}</p>
+              <button 
+                onClick={() => navigate('/auth')}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+              >
+                Go to Login
+              </button>
+            </>
+          ) : (
+            <>
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <h2 className="text-2xl font-bold">Completing Authentication</h2>
+              <p className="text-muted-foreground">
+                Please wait while we finish setting up your account...
+              </p>
+            </>
+          )}
         </div>
       </Card>
     </div>

@@ -123,7 +123,7 @@ function constructGoogleOAuthUrl(redirectUrl, stateParam) {
   
   // Google OAuth parameters
   const params = {
-    client_id: '242032861157-q1nf91k8d4lp0goopnquqg2g6em581c6.apps.googleusercontent.com', // Replace with actual Google client ID
+    client_id: '242032861157-q1nf91k8d4lp0goopnquqg2g6em581c6.apps.googleusercontent.com', // Google client ID
     redirect_uri: redirectUrl,
     response_type: 'token',
     scope: 'email profile',
