@@ -1,11 +1,16 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createClient, Session, User, Provider } from '@supabase/supabase-js';
+import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/components/ui/use-toast';
 
 // Updated with actual Supabase credentials
 const supabaseUrl = 'https://ovhriawcqvcpagcaidlb.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U';
+
+// Get the correct production URL for auth redirects - avoid localhost
+const getProductionAuthRedirectUrl = () => {
+  // Always prioritize deployed URL over localhost
+  return 'https://main-gallery-hub.lovable.app/auth/callback';
+};
 
 // Create a single Supabase client instance to be used throughout the app
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -144,7 +149,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Add password reset functionality
   const resetPassword = async (email: string) => {
     try {
       setIsLoading(true);
@@ -172,13 +176,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Add OAuth sign-in methods
   const signInWithGoogle = async () => {
     try {
       setIsLoading(true);
       
-      // Use the deployed URL for the redirect
-      const redirectTo = `${window.location.origin}/auth/callback`;
+      // Always use the production URL for the redirect
+      const redirectTo = getProductionAuthRedirectUrl();
       
       console.log('Starting Google login with redirect to:', redirectTo);
       

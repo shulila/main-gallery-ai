@@ -1,8 +1,15 @@
+
 // Authentication utilities for MainGallery extension
+
+// Get the correct production URL for auth redirects
+const getProductionUrl = () => {
+  return 'https://main-gallery-hub.lovable.app';
+};
 
 // Open auth page with redirect
 export function openAuthPage(redirectUrl, options = {}) {
-  let authUrl = 'https://main-gallery-hub.lovable.app/auth?from=extension';
+  const baseUrl = getProductionUrl();
+  let authUrl = `${baseUrl}/auth?from=extension`;
   
   if (redirectUrl) {
     authUrl += `&redirect=${encodeURIComponent(redirectUrl)}`;
@@ -42,9 +49,8 @@ export function openAuthWithProvider(provider) {
   try {
     console.log(`Opening auth with provider: ${provider}`);
     
-    // Update to use the Supabase OAuth flow directly
-    // Instead of redirecting to our auth page, we'll redirect directly to the Supabase OAuth endpoint
-    const baseUrl = 'https://main-gallery-hub.lovable.app';
+    // Always use the production base URL
+    const baseUrl = getProductionUrl();
     const redirectTo = `${baseUrl}/auth/callback`;
     
     // Construct the URL with the provider parameter for Supabase
@@ -92,11 +98,10 @@ export function setupAuthCallbackListener() {
     chrome.webNavigation.onCompleted.addListener(function(details) {
       console.log('Navigation detected to:', details.url);
       
-      // Check if this is an auth callback URL
+      // Check if this is an auth callback URL - updated to look for production URL
+      const productionUrl = getProductionUrl();
       if (details.url.includes('/auth/callback') && 
-          (details.url.includes('maingallery.app') || 
-           details.url.includes('main-gallery.ai') || 
-           details.url.includes('main-gallery-hub.lovable.app'))) {
+          details.url.includes(productionUrl)) {
         
         console.log('Auth callback detected:', details.url);
         
@@ -155,7 +160,7 @@ export function setupAuthCallbackListener() {
                     chrome.tabs.create({ url: redirect });
                   } else {
                     // Open gallery after successful login - using deployed URL
-                    const galleryUrl = "https://main-gallery-hub.lovable.app/gallery";
+                    const galleryUrl = `${productionUrl}/gallery`;
                     chrome.tabs.create({ url: galleryUrl });
                   }
                 });
@@ -170,8 +175,6 @@ export function setupAuthCallbackListener() {
       }
     }, { 
       url: [
-        { urlContains: 'maingallery.app/auth/callback' },
-        { urlContains: 'main-gallery.ai/auth/callback' },
         { urlContains: 'main-gallery-hub.lovable.app/auth/callback' }
       ] 
     });
@@ -181,8 +184,6 @@ export function setupAuthCallbackListener() {
     // Fallback: Check for auth token periodically
     setInterval(() => {
       chrome.tabs.query({ url: [
-        '*://maingallery.app/auth/callback*',
-        '*://main-gallery.ai/auth/callback*',
         '*://main-gallery-hub.lovable.app/auth/callback*'
       ]}, (tabs) => {
         if (tabs.length > 0) {
@@ -212,7 +213,7 @@ export function setupAuthCallbackListener() {
                   chrome.tabs.create({ url: redirect });
                 } else {
                   // Open gallery after successful login - using deployed URL
-                  const galleryUrl = "https://main-gallery-hub.lovable.app/gallery";
+                  const galleryUrl = `${getProductionUrl()}/gallery`;
                   chrome.tabs.create({ url: galleryUrl });
                 }
               }, 500);

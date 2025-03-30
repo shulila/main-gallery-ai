@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
@@ -191,7 +190,7 @@ const Auth = ({
       console.error('Google sign in error:', error);
       toast({
         title: "Google sign in failed",
-        description: error.message || "Unable to sign in with Google",
+        description: error.message || "Could not authenticate with Google",
         variant: "destructive",
       });
     } finally {
@@ -280,7 +279,7 @@ const Auth = ({
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
             
-            {/* OAuth Buttons - Show for both login and signup */}
+            {/* Google Button - Always show for both login and signup */}
             <Button 
               type="button" 
               variant="outline" 

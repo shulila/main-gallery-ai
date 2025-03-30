@@ -187,6 +187,33 @@ h2 {
   flex-shrink: 0;
 }
 
+/* Google button specific styling - match website styling */
+#google-login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: white;
+  color: #333;
+  border: 1px solid #ddd;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+/* Forgot password link styling */
+#forgot-password-btn {
+  color: #3957ed;
+  text-decoration: none;
+  font-size: 14px;
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+#forgot-password-btn:hover {
+  text-decoration: underline;
+}
+
 .w-full {
   width: 100%;
 }

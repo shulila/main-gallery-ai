@@ -1,5 +1,6 @@
+
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -20,6 +21,7 @@ const Navbar = () => {
   const { user, signOut: logout, isLoading } = useAuth();
   const { isMobile } = useMobile();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -45,11 +47,15 @@ const Navbar = () => {
     setIsOpen(!isOpen);
   };
 
-  // Logo click handler - directs to gallery if logged in, otherwise to homepage
-  const handleLogoClick = () => {
+  // Logo click handler - always navigates to appropriate page based on auth state
+  const handleLogoClick = (event: React.MouseEvent) => {
+    event.preventDefault(); // Prevent default behavior
+    
     if (user) {
+      // If user is logged in, navigate to gallery
       navigate('/gallery');
     } else {
+      // If user is not logged in, navigate to home page (always)
       navigate('/');
     }
   };

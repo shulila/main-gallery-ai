@@ -1,9 +1,11 @@
-
 import { setupAuthCallbackListener, openAuthPage, openAuthWithProvider, isLoggedIn, logout } from './utils/auth.js';
 import { debugPlatformDetection, getGalleryUrl } from './utils/common.js';
 
 // Set up auth callback listener
 setupAuthCallbackListener();
+
+// Production URL for consistent redirects
+const PRODUCTION_URL = 'https://main-gallery-hub.lovable.app';
 
 // Listen for extension installation/update
 chrome.runtime.onInstalled.addListener(function(details) {
@@ -74,7 +76,7 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 // Function to open the gallery
 function openGallery() {
-  const galleryUrl = "https://main-gallery-hub.lovable.app/gallery";
+  const galleryUrl = `${PRODUCTION_URL}/gallery`;
   console.log('Opening gallery at', galleryUrl);
   
   // Check if gallery tab is already open

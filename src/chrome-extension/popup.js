@@ -1,4 +1,3 @@
-
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -134,7 +133,7 @@ function openAuthPage() {
   }
 }
 
-// Open auth with specific provider (Google)
+// Open auth with specific provider (Google) - updated to ensure direct OAuth flow
 function openAuthWithProvider(provider) {
   try {
     showState(states.authLoading);
