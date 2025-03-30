@@ -1,7 +1,242 @@
 
-/* Add this to your existing popup.css file */
+/* Base styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
 
-/* Spinner for the sync button */
+body {
+  background-color: #f8f9fa;
+  color: #333;
+  width: 320px;
+  overflow-x: hidden;
+}
+
+.container {
+  padding: 20px;
+}
+
+.header {
+  margin-bottom: 20px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo img {
+  width: 32px;
+  height: 32px;
+}
+
+.logo h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a73e8;
+}
+
+/* State containers */
+.state {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.state.hidden {
+  display: none;
+}
+
+/* Form elements and buttons */
+.primary-btn {
+  background-color: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+
+.primary-btn:hover {
+  background-color: #1765cc;
+}
+
+.text-btn {
+  background-color: transparent;
+  color: #1a73e8;
+  border: none;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+
+.text-btn:hover {
+  background-color: rgba(26, 115, 232, 0.04);
+}
+
+.social-btn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  background-color: white;
+  color: #5f6368;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+
+.social-btn:hover {
+  background-color: #f8f9fa;
+}
+
+/* Separator for "or continue with" */
+.separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #5f6368;
+  font-size: 12px;
+  margin: 8px 0;
+}
+
+.separator::before,
+.separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #dadce0;
+}
+
+.separator span {
+  padding: 0 10px;
+}
+
+/* Loading spinner */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px 0;
+}
+
+.loading-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(26, 115, 232, 0.2);
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Sync status card */
+.sync-status-card {
+  background-color: white;
+  border-radius: 8px;
+  border: 1px solid #dadce0;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.sync-header {
+  background-color: #f8f9fa;
+  padding: 12px 16px;
+  border-bottom: 1px solid #dadce0;
+}
+
+.sync-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #5f6368;
+  margin: 0;
+}
+
+.sync-details {
+  padding: 12px 16px;
+}
+
+.sync-details p {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* User info */
+.user-info {
+  background-color: white;
+  border-radius: 8px;
+  border: 1px solid #dadce0;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.user-info p {
+  font-size: 14px;
+  margin: 0;
+}
+
+#user-email {
+  font-weight: 500;
+}
+
+/* Toast notifications */
+.main-gallery-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background-color: #333;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  z-index: 1000;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  transition: transform 0.3s, opacity 0.3s;
+  max-width: 90%;
+  text-align: center;
+}
+
+.main-gallery-toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.main-gallery-toast.info {
+  background-color: #1a73e8;
+}
+
+.main-gallery-toast.error {
+  background-color: #d93025;
+}
+
+.main-gallery-toast.success {
+  background-color: #1e8e3e;
+}
+
+/* Button spinner for the sync button */
 .button-spinner {
   display: inline-block;
   width: 12px;
@@ -11,10 +246,4 @@
   border-radius: 50%;
   border-top-color: white;
   animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }

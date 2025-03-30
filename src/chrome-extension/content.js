@@ -292,22 +292,56 @@ function simulateInfiniteScroll() {
   // Notify background script that content script has loaded
   chrome.runtime.sendMessage({ action: 'contentScriptLoaded' });
   
-  // Check if on Midjourney app page
-  if (window.location.href.includes('midjourney.com/app')) {
-    console.log('On Midjourney app page, setting up automatic extraction');
+  // Auto-detect platform
+  const platform = detectPlatform();
+  if (platform) {
+    console.log(`Detected platform: ${platform.name} (${platform.id})`);
     
-    // Initial extraction after page loads
-    window.addEventListener('load', () => {
-      // Wait for content to load
-      setTimeout(() => {
-        extractMidjourneyImages();
+    // Check if on Midjourney app user page
+    if (platform.id === 'midjourney' && window.location.href.includes('midjourney.com/app/users/')) {
+      console.log('On Midjourney user gallery page, setting up automatic extraction');
+      
+      // Initial extraction after page loads
+      window.addEventListener('load', async () => {
+        // Show extraction in progress notification
+        const notificationEl = document.createElement('div');
+        notificationEl.classList.add('main-gallery-notification');
+        notificationEl.innerHTML = `
+          <div class="notification-icon">
+            <div class="spinner"></div>
+          </div>
+          <div class="notification-content">
+            <h3>MainGallery</h3>
+            <p>Syncing your Midjourney images...</p>
+          </div>
+        `;
+        document.body.appendChild(notificationEl);
         
-        // After initial extraction, try to load more content
+        // Wait for content to load
         setTimeout(async () => {
           await simulateInfiniteScroll();
-          extractMidjourneyImages();
+          const result = extractMidjourneyImages();
+          
+          // Update notification
+          if (result) {
+            notificationEl.innerHTML = `
+              <div class="notification-icon success">✓</div>
+              <div class="notification-content">
+                <h3>MainGallery</h3>
+                <p>Images synced successfully!</p>
+              </div>
+            `;
+            
+            // Remove notification after a few seconds
+            setTimeout(() => {
+              notificationEl.classList.add('fade-out');
+              setTimeout(() => notificationEl.remove(), 500);
+            }, 3000);
+          } else {
+            notificationEl.remove();
+          }
         }, 2000);
-      }, 2000);
+      });
       
       // Set up MutationObserver to detect new content
       const targetNode = document.querySelector('.gallery, main, #root, #app') || document.body;
@@ -351,28 +385,96 @@ function simulateInfiniteScroll() {
       // Start observing
       observer.observe(targetNode, observerConfig);
       console.log('MutationObserver set up to detect new Midjourney content');
-      
-      // Set up scroll detection for extraction
-      let lastScrollY = window.scrollY;
-      let scrollTimeout;
-      
-      window.addEventListener('scroll', () => {
-        // Clear previous timeout
-        clearTimeout(scrollTimeout);
-        
-        // Set new timeout
-        scrollTimeout = setTimeout(() => {
-          // Only extract if significant scroll occurred
-          if (Math.abs(window.scrollY - lastScrollY) > 300) {
-            console.log('Significant scroll detected, extracting new images');
-            extractMidjourneyImages();
-            lastScrollY = window.scrollY;
-          }
-        }, 500);
-      });
-    });
+    }
   }
 })();
+
+// Add styles for notifications
+const style = document.createElement('style');
+style.textContent = `
+.main-gallery-notification {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 12px 16px;
+  z-index: 9999;
+  animation: slide-in 0.3s ease-out;
+  max-width: 300px;
+}
+
+.main-gallery-notification.fade-out {
+  animation: fade-out 0.5s ease-out forwards;
+}
+
+.notification-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-icon .spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(25, 118, 210, 0.3);
+  border-top-color: rgb(25, 118, 210);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.notification-icon.success {
+  color: #4caf50;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.notification-content h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.notification-content p {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+`;
+document.head.appendChild(style);
 
 // Listen for messages from popup or background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -383,6 +485,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Extract Midjourney images
       const result = extractMidjourneyImages();
       sendResponse({ success: !!result });
+      break;
+      
+    case 'checkPlatformLogin':
+      // Check if the user is logged into this platform
+      const platform = detectPlatform();
+      if (platform && platform.id === message.platformId) {
+        // For Midjourney, look for signs of being logged in
+        if (platform.id === 'midjourney') {
+          // Check for avatar or profile elements that suggest a logged-in user
+          const avatarEl = document.querySelector('.avatar, .profile-image, [alt*="profile"]');
+          const usernameEl = document.querySelector('.username, .user-name, [data-username]');
+          const isLoggedIn = !!avatarEl || !!usernameEl;
+          sendResponse({ isLoggedIn });
+        } else {
+          // Default to assuming logged in if we're on the platform
+          sendResponse({ isLoggedIn: true });
+        }
+      } else {
+        sendResponse({ isLoggedIn: false });
+      }
       break;
   }
   

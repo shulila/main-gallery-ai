@@ -1,128 +1,135 @@
 
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { Card } from '@/components/ui/card';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
+/**
+ * Auth callback page for handling redirects from OAuth providers
+ */
 const AuthCallback = () => {
-  const { session, isLoading } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [redirectPath, setRedirectPath] = useState('/gallery');
-  const [processingAuth, setProcessingAuth] = useState(true);
+  const location = useLocation();
   const [error, setError] = useState<string | null>(null);
-  
+  const [processing, setProcessing] = useState(true);
+
   useEffect(() => {
-    // Function to parse the hash fragment or query parameters
-    const getHashParams = () => {
-      console.log('Parsing hash or query params');
-      
-      // Check if there are fragment parameters
-      const hashParams = window.location.hash.substring(1);
-      if (hashParams) {
-        console.log('Found hash fragment parameters:', hashParams);
-        const urlParams = new URLSearchParams(hashParams);
-        return Object.fromEntries(urlParams.entries());
+    const processCallback = async () => {
+      try {
+        console.log('Processing auth callback');
+        setProcessing(true);
+
+        // If there's an error parameter, handle it
+        const searchParams = new URLSearchParams(location.search);
+        const errorParam = searchParams.get('error');
+        const errorDescription = searchParams.get('error_description');
+        
+        if (errorParam) {
+          console.error('Auth error:', errorParam, errorDescription);
+          setError(errorDescription || 'Authentication failed');
+          return;
+        }
+
+        // Check for type=recovery for password reset
+        const type = searchParams.get('type');
+        if (type === 'recovery') {
+          console.log('Password recovery flow detected');
+          navigate('/auth?recovery=true');
+          return;
+        }
+
+        // Handle hash fragment (used by some OAuth providers like Google)
+        if (location.hash) {
+          console.log('Hash fragment detected in callback URL');
+          
+          // For Chrome extension auth flow
+          if (window.opener === null && location.hash.includes('access_token')) {
+            console.log('Extension flow detected, auto-closing window not possible');
+            
+            // Extract tokens
+            const params = new URLSearchParams(location.hash.substring(1));
+            const accessToken = params.get('access_token');
+            const tokenType = params.get('token_type');
+            
+            if (accessToken && tokenType) {
+              console.log('Access token found, redirecting to gallery');
+              navigate('/gallery');
+            } else {
+              setError('Invalid authentication response');
+            }
+          } else {
+            console.log('Regular web app flow with hash, redirecting to gallery');
+            // We know the auth update was handled by Supabase client, just navigate
+            navigate('/gallery');
+          }
+        } else {
+          console.log('No hash fragment, redirecting to gallery');
+          // No hash but we got here, assume success and navigate
+          navigate('/gallery');
+        }
+      } catch (err: any) {
+        console.error('Error processing auth callback:', err);
+        setError(err.message || 'An error occurred during authentication');
+      } finally {
+        setProcessing(false);
       }
-      
-      // Check if there are query parameters
-      const queryParams = new URLSearchParams(window.location.search);
-      if (queryParams.has('error') || queryParams.has('code')) {
-        console.log('Found query parameters:', queryParams.toString());
-        return Object.fromEntries(queryParams.entries());
-      }
-      
-      console.log('No auth parameters found in URL');
-      return {};
     };
-    
-    // Check for parameters that might indicate auth is happening
-    const authParams = getHashParams();
-    console.log('Auth callback received params:', authParams);
-    
-    // Check for stored redirect path in session storage
-    const storedRedirect = sessionStorage.getItem('oauth_redirect');
-    if (storedRedirect) {
-      console.log('Found stored redirect path:', storedRedirect);
-      setRedirectPath(storedRedirect);
-      sessionStorage.removeItem('oauth_redirect');
-    }
-    
-    // If there's an error, show it and stop
-    if (authParams.error) {
-      console.error('OAuth error:', authParams.error, authParams.error_description);
-      setError(`Auth error: ${authParams.error} - ${authParams.error_description || 'Unknown error'}`);
-      setProcessingAuth(false);
-      toast({
-        title: "Authentication Error",
-        description: authParams.error_description || authParams.error,
-        variant: "destructive",
-      });
-      return;
-    }
 
-    // If this is a successful OAuth redirect (we have a code or token)
-    // Supabase should automatically handle this - just need to wait for session
-    if (authParams.code || authParams.access_token) {
-      console.log('Auth code or token found, waiting for Supabase to process');
-      // Don't need to do anything special, Supabase will process this
-      // We just need to ensure we wait long enough for session to be set
-      const checkSessionTimer = setTimeout(() => {
-        console.log('Auth processing timeout reached');
-        setProcessingAuth(false);
-      }, 5000); // Give it 5 seconds maximum to ensure we don't get stuck
-      
-      return () => clearTimeout(checkSessionTimer);
-    } else {
-      // No auth params, nothing to process
-      console.log('No auth parameters to process');
-      setProcessingAuth(false);
-    }
-  }, [toast]);
-
-  // When auth processing is done and session is ready, redirect
-  useEffect(() => {
-    if (!processingAuth && !isLoading) {
-      if (session) {
-        console.log('Auth complete, redirecting to:', redirectPath);
-        navigate(redirectPath);
-      } else {
-        // If no session after processing, go to login
-        console.log('No session after auth processing, redirecting to login');
-        navigate('/auth');
-      }
-    }
-  }, [processingAuth, session, isLoading, navigate, redirectPath]);
+    processCallback();
+  }, [location, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-8 text-center">
-        <div className="flex flex-col items-center justify-center space-y-4">
-          {error ? (
-            <>
-              <div className="text-red-500 text-3xl mb-2">⚠️</div>
-              <h2 className="text-2xl font-bold text-destructive">Authentication Failed</h2>
-              <p className="text-muted-foreground">{error}</p>
-              <button 
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="w-full max-w-md p-8 space-y-4 bg-white rounded-lg shadow-lg">
+        {processing ? (
+          <div className="flex flex-col items-center justify-center space-y-4">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <h2 className="text-2xl font-bold text-center">
+              Completing authentication...
+            </h2>
+            <p className="text-center text-muted-foreground">
+              Please wait while we process your login
+            </p>
+          </div>
+        ) : error ? (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-center text-destructive">
+              Authentication Error
+            </h2>
+            <p className="text-center">{error}</p>
+            <div className="flex justify-center">
+              <button
                 onClick={() => navigate('/auth')}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+                className="px-4 py-2 bg-primary text-white rounded-md"
               >
-                Go to Login
+                Return to Login
               </button>
-            </>
-          ) : (
-            <>
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <h2 className="text-2xl font-bold">Completing Authentication</h2>
-              <p className="text-muted-foreground">
-                Please wait while we finish setting up your account...
-              </p>
-            </>
-          )}
-        </div>
-      </Card>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center space-y-4">
+            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-center">Login Successful</h2>
+            <p className="text-center text-muted-foreground">
+              You have been successfully authenticated. Redirecting...
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

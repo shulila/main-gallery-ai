@@ -3,6 +3,9 @@
 const supabaseUrl = 'https://ovhriawcqvcpagcaidlb.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U';
 
+// Hardcoded Google OAuth Client ID - PRODUCTION ONLY
+const GOOGLE_CLIENT_ID = '242032861157-q1nf91k8d4lp0goopnquqg2g6em581c6.apps.googleusercontent.com';
+
 // Get the production auth callback URL - NEVER use localhost
 const getProductionRedirectUrl = () => {
   return 'https://main-gallery-hub.lovable.app/auth/callback';
@@ -61,7 +64,7 @@ export function setupAuthCallbackListener() {
 
 // Open auth page
 export function openAuthPage(tabId = null, options = {}) {
-  let authUrl = 'https://main-gallery-hub.lovable.app/auth';
+  const authUrl = 'https://main-gallery-hub.lovable.app/auth';
   
   // Add any query parameters
   const searchParams = new URLSearchParams();
@@ -71,24 +74,28 @@ export function openAuthPage(tabId = null, options = {}) {
   if (options.from) searchParams.append('from', options.from);
   
   const queryString = searchParams.toString();
-  if (queryString) {
-    authUrl += `?${queryString}`;
-  }
+  const fullAuthUrl = queryString ? `${authUrl}?${queryString}` : authUrl;
   
   // Open the URL
   if (tabId) {
-    chrome.tabs.update(tabId, { url: authUrl });
+    chrome.tabs.update(tabId, { url: fullAuthUrl });
   } else {
-    chrome.tabs.create({ url: authUrl });
+    chrome.tabs.create({ url: fullAuthUrl });
   }
   
-  console.log('Opened auth URL:', authUrl);
+  console.log('Opened auth URL:', fullAuthUrl);
+}
+
+// Construct Google OAuth URL directly
+function constructGoogleOAuthUrl(redirectUrl, stateParam) {
+  // Use our hardcoded client ID
+  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true&state=${stateParam}`;
 }
 
 // Handle OAuth sign-in with provider
 export function openAuthWithProvider(provider) {
   try {
-    // For Google sign-in, we'll use a direct approach without dynamic imports
+    // For Google sign-in, we'll use a direct approach
     const redirectUrl = getProductionRedirectUrl();
     console.log(`Opening ${provider} auth with redirect to:`, redirectUrl);
     
@@ -98,45 +105,20 @@ export function openAuthWithProvider(provider) {
     // Store this state param for verification later
     chrome.storage.local.set({ 'oauth_state': stateParam });
     
-    // Since we can't use Supabase's dynamic import in a service worker,
-    // we'll construct the Google OAuth URL directly
     if (provider === 'google') {
-      // Create Google OAuth URL directly - this avoids the need for dynamic imports
+      // Create Google OAuth URL directly - avoiding Supabase client
       const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl, stateParam);
       
       // Open the OAuth URL in a new tab
       chrome.tabs.create({ url: googleOAuthUrl });
       
-      console.log(`Opened ${provider} OAuth URL manually`);
+      console.log(`Opened ${provider} OAuth URL manually:`, googleOAuthUrl);
     } else {
       console.error(`Provider ${provider} not supported in direct mode`);
     }
   } catch (error) {
     console.error(`Error during ${provider} auth:`, error);
   }
-}
-
-// Construct Google OAuth URL directly without using Supabase client
-function constructGoogleOAuthUrl(redirectUrl, stateParam) {
-  // Google OAuth 2.0 endpoint
-  const baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
-  
-  // Google OAuth parameters
-  const params = {
-    client_id: '242032861157-q1nf91k8d4lp0goopnquqg2g6em581c6.apps.googleusercontent.com', // Google client ID
-    redirect_uri: redirectUrl,
-    response_type: 'token',
-    scope: 'email profile',
-    state: stateParam,
-    prompt: 'select_account',
-    include_granted_scopes: 'true',
-  };
-  
-  // Build URL with parameters
-  const url = new URL(baseUrl);
-  Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-  
-  return url.toString();
 }
 
 // Check if user is logged in
@@ -149,12 +131,21 @@ export function isLoggedIn() {
   });
 }
 
+// Get user email if available
+export function getUserEmail() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['main_gallery_auth_token', 'main_gallery_user_email'], (result) => {
+      resolve(result.main_gallery_user_email || null);
+    });
+  });
+}
+
 // Log out from all platforms
 export function logout() {
   try {
     // Clear local storage token
     return new Promise((resolve) => {
-      chrome.storage.sync.remove(['main_gallery_auth_token'], () => {
+      chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
         console.log('Successfully logged out');
         resolve(true);
       });

@@ -11,7 +11,6 @@ const BRAND = {
 
 // Gallery URL with base from brand config
 const GALLERY_URL = `${BRAND.urls.baseUrl}${BRAND.urls.gallery}`;
-const AUTH_URL = `${BRAND.urls.baseUrl}${BRAND.urls.auth}`;
 
 // DOM elements
 const states = {
@@ -24,6 +23,7 @@ const loginBtn = document.getElementById('login-btn');
 const googleLoginBtn = document.getElementById('google-login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const openGalleryBtn = document.getElementById('open-gallery-btn');
+const userEmailElement = document.getElementById('user-email');
 
 // Helper functions
 function hideAllStates() {
@@ -39,6 +39,14 @@ function isLoggedIn() {
   return new Promise(resolve => {
     chrome.storage.sync.get(['main_gallery_auth_token'], result => {
       resolve(!!result.main_gallery_auth_token);
+    });
+  });
+}
+
+function getUserEmail() {
+  return new Promise(resolve => {
+    chrome.storage.sync.get(['main_gallery_user_email'], result => {
+      resolve(result.main_gallery_user_email || null);
     });
   });
 }
@@ -80,16 +88,14 @@ async function checkAuthAndRedirect() {
     
     if (loggedIn) {
       console.log('User is logged in, showing logged-in state');
+      
+      // Get user email to display if available
+      const userEmail = await getUserEmail();
+      if (userEmail && userEmailElement) {
+        userEmailElement.textContent = userEmail;
+      }
+      
       showState(states.loggedIn);
-      
-      // Check for any extracted images
-      chrome.storage.local.get(['midjourney_extracted_images'], (result) => {
-        const extractedImages = result.midjourney_extracted_images || [];
-        if (extractedImages.length > 0) {
-          showToast(`${extractedImages.length} Midjourney images synced to your gallery`, 'info');
-        }
-      });
-      
       return true;
     }
     

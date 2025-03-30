@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -132,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth?tab=login`,
+        redirectTo: `https://main-gallery-hub.lovable.app/auth?tab=login`,
       });
       
       if (error) {
@@ -170,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         options: {
           redirectTo,
           queryParams: {
-            prompt: 'select_account' // Force Google account selection
+            prompt: 'select_account', // Force Google account selection
           }
         }
       });
