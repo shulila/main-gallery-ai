@@ -19,8 +19,9 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-    // Force redirect to production domain
-    redirectTo: getProductionAuthRedirectUrl(),
+    // Correctly use the options structure for auth redirects
+    flowType: 'pkce',
+    // The redirectTo property should be set in the signInWithOAuth options instead of here
   }
 });
 
