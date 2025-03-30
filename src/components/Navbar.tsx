@@ -46,15 +46,27 @@ const Navbar = () => {
     setIsOpen(!isOpen);
   };
 
+  // Logo click handler - directs to gallery if logged in, otherwise to homepage
+  const handleLogoClick = () => {
+    if (user) {
+      navigate('/gallery');
+    } else {
+      navigate('/');
+    }
+  };
+
   return (
     <header className="fixed top-0 left-0 right-0 bg-background/80 backdrop-blur-md border-b border-border/40 z-50">
       <nav className="container mx-auto px-4 flex items-center justify-between h-16">
-        <Link to={user ? "/gallery" : "/"} className="flex items-center gap-2">
+        <button 
+          onClick={handleLogoClick} 
+          className="flex items-center gap-2 hover:opacity-90 transition-opacity"
+        >
           <div className="bg-primary w-10 h-10 flex items-center justify-center rounded-lg">
             <Image className="text-white w-6 h-6" />
           </div>
-          <span className="font-bold text-xl">MainGallery</span>
-        </Link>
+          <span className="font-bold text-xl">MainGallery.AI</span>
+        </button>
 
         {/* Mobile menu button */}
         {isMobile && (

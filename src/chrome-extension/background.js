@@ -96,14 +96,17 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   switch (message.action) {
     case 'openGallery':
       openGallery();
+      sendResponse({ success: true });
       break;
       
     case 'openAuthPage':
-      openAuthPage();
+      openAuthPage(null, { forgotPassword: message.forgotPassword });
+      sendResponse({ success: true });
       break;
       
     case 'openAuthWithProvider':
       openAuthWithProvider(message.provider);
+      sendResponse({ success: true });
       break;
       
     case 'checkLoginStatus':
@@ -117,6 +120,71 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         sendResponse({ success: true });
       });
       return true; // Will respond asynchronously
+      
+    // Midjourney API Test Handlers
+    case 'testMidjourneyAuth':
+      // For now, we're returning mock data
+      // In the future, this will communicate with the actual Midjourney API
+      sendResponse({
+        success: true,
+        authenticated: true,
+        mock: true,
+        message: "Authenticated with Midjourney API (mock)"
+      });
+      break;
+      
+    case 'testMidjourneyImages':
+      // Mock images for now
+      sendResponse({
+        success: true,
+        mock: true,
+        images: [
+          {
+            id: "mj_123456",
+            url: "https://picsum.photos/512/512?random=1",
+            prompt: "Futuristic cityscape with neon lights",
+            createdAt: new Date().toISOString()
+          },
+          {
+            id: "mj_123457",
+            url: "https://picsum.photos/512/512?random=2",
+            prompt: "Underwater scene with glowing creatures",
+            createdAt: new Date(Date.now() - 86400000).toISOString()
+          },
+          {
+            id: "mj_123458",
+            url: "https://picsum.photos/512/512?random=3",
+            prompt: "Mountain landscape at sunset",
+            createdAt: new Date(Date.now() - 172800000).toISOString()
+          }
+        ]
+      });
+      break;
+      
+    case 'testMidjourneyGenerate':
+      // Mock generation job for now
+      const jobId = `mj-job-${Date.now()}`;
+      sendResponse({
+        success: true,
+        mock: true,
+        jobId: jobId,
+        prompt: message.prompt,
+        status: "queued"
+      });
+      break;
+      
+    case 'testMidjourneyJobStatus':
+      // Mock job status for now
+      sendResponse({
+        success: true,
+        mock: true,
+        jobId: message.jobId,
+        status: "completed",
+        progress: 100,
+        url: "https://picsum.photos/512/512?random=4",
+        originalPrompt: message.options?.originalPrompt || "Unknown prompt"
+      });
+      break;
   }
   
   // Return true if we plan to respond asynchronously

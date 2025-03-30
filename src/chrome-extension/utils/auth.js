@@ -1,11 +1,17 @@
+
 // Authentication utilities for MainGallery extension
 
 // Open auth page with redirect
-export function openAuthPage(redirectUrl) {
+export function openAuthPage(redirectUrl, options = {}) {
   let authUrl = 'https://main-gallery-hub.lovable.app/auth?from=extension';
   
   if (redirectUrl) {
     authUrl += `&redirect=${encodeURIComponent(redirectUrl)}`;
+  }
+  
+  // Add forgot password parameter if needed
+  if (options.forgotPassword) {
+    authUrl += `&forgotPassword=true`;
   }
   
   // Add a timestamp to prevent caching issues

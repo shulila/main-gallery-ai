@@ -1,12 +1,4 @@
 
-// Import the Midjourney API functions
-import { 
-  authenticateWithMidjourney, 
-  fetchMidjourneyImages, 
-  generateMidjourneyImage,
-  checkMidjourneyJobStatus 
-} from './utils/midjourney-api.js';
-
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -31,6 +23,7 @@ const states = {
 const loginBtn = document.getElementById('login-btn');
 const googleLoginBtn = document.getElementById('google-login-btn');
 const logoutBtn = document.getElementById('logout-btn');
+const forgotPasswordBtn = document.getElementById('forgot-password-btn');
 const testMidjourneyAuthBtn = document.getElementById('test-midjourney-auth');
 const testMidjourneyImagesBtn = document.getElementById('test-midjourney-images');
 const testMidjourneyGenerateBtn = document.getElementById('test-midjourney-generate');
@@ -160,6 +153,24 @@ function openAuthWithProvider(provider) {
   }
 }
 
+// Open forgot password page
+function openForgotPasswordPage() {
+  try {
+    showState(states.authLoading);
+    chrome.runtime.sendMessage({ 
+      action: 'openAuthPage',
+      forgotPassword: true
+    });
+    
+    // Close popup after a short delay
+    setTimeout(() => window.close(), 300);
+  } catch (error) {
+    console.error('Error opening forgot password page:', error);
+    showToast('Could not open forgot password page. Please try again.', 'error');
+    showState(states.notLoggedIn);
+  }
+}
+
 // Log out the user
 function logout() {
   chrome.runtime.sendMessage({ action: 'logout' }, response => {
@@ -177,13 +188,20 @@ function showTestResult(data) {
   }
 }
 
+// Midjourney API integration functions
+// These functions will communicate with the background script which handles the actual API calls
+
 // Test Midjourney Authentication
 async function testMidjourneyAuth() {
   try {
     showToast('Testing Midjourney authentication...', 'info');
-    const result = await authenticateWithMidjourney();
-    showTestResult(result);
-    showToast('Authentication test complete!', 'success');
+    
+    chrome.runtime.sendMessage({ 
+      action: 'testMidjourneyAuth' 
+    }, response => {
+      showTestResult(response || { status: "Authentication test initiated" });
+      showToast('Authentication test complete!', 'success');
+    });
   } catch (error) {
     console.error('Midjourney auth test error:', error);
     showTestResult({ error: error.message });
@@ -195,9 +213,14 @@ async function testMidjourneyAuth() {
 async function testMidjourneyImages() {
   try {
     showToast('Fetching Midjourney images...', 'info');
-    const result = await fetchMidjourneyImages({ limit: 5 });
-    showTestResult(result);
-    showToast('Images fetched successfully!', 'success');
+    
+    chrome.runtime.sendMessage({ 
+      action: 'testMidjourneyImages',
+      options: { limit: 5 }
+    }, response => {
+      showTestResult(response || { status: "Image fetch initiated" });
+      showToast('Images fetched successfully!', 'success');
+    });
   } catch (error) {
     console.error('Midjourney images test error:', error);
     showTestResult({ error: error.message });
@@ -210,19 +233,25 @@ async function testMidjourneyGenerate() {
   try {
     showToast('Generating Midjourney image...', 'info');
     const testPrompt = "Futuristic cityscape with neon lights and flying cars";
-    const result = await generateMidjourneyImage(testPrompt, {
-      width: 1024,
-      height: 1024,
-      promptStrength: 7.5
+    
+    chrome.runtime.sendMessage({ 
+      action: 'testMidjourneyGenerate',
+      prompt: testPrompt,
+      options: {
+        width: 1024,
+        height: 1024,
+        promptStrength: 7.5
+      }
+    }, response => {
+      showTestResult(response || { status: "Generation initiated" });
+      
+      // Save the job ID for status checking if available
+      if (response && response.jobId) {
+        lastGeneratedJobId = response.jobId;
+      }
+      
+      showToast('Generation job started!', 'success');
     });
-    
-    // Save the job ID for status checking
-    if (result && result.jobId) {
-      lastGeneratedJobId = result.jobId;
-    }
-    
-    showTestResult(result);
-    showToast('Generation job started!', 'success');
   } catch (error) {
     console.error('Midjourney generation test error:', error);
     showTestResult({ error: error.message });
@@ -237,12 +266,17 @@ async function testMidjourneyJobStatus() {
     const jobId = lastGeneratedJobId || `mock-job-${Date.now()}`;
     
     showToast('Checking job status...', 'info');
-    const result = await checkMidjourneyJobStatus(jobId, {
-      originalPrompt: "Futuristic cityscape with neon lights and flying cars"
-    });
     
-    showTestResult(result);
-    showToast('Job status retrieved!', 'success');
+    chrome.runtime.sendMessage({ 
+      action: 'testMidjourneyJobStatus',
+      jobId: jobId,
+      options: {
+        originalPrompt: "Futuristic cityscape with neon lights and flying cars"
+      }
+    }, response => {
+      showTestResult(response || { status: "Status check initiated" });
+      showToast('Job status retrieved!', 'success');
+    });
   } catch (error) {
     console.error('Midjourney job status test error:', error);
     showTestResult({ error: error.message });
@@ -266,6 +300,12 @@ if (loginBtn) {
 if (googleLoginBtn) {
   googleLoginBtn.addEventListener('click', () => {
     openAuthWithProvider('google');
+  });
+}
+
+if (forgotPasswordBtn) {
+  forgotPasswordBtn.addEventListener('click', () => {
+    openForgotPasswordPage();
   });
 }
 
