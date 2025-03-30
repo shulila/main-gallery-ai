@@ -159,14 +159,15 @@ function openAuthPage() {
 function openAuthWithProvider(provider) {
   try {
     showState(states.authLoading);
+    showToast('Opening Google login...', 'info');
     
     chrome.runtime.sendMessage({
       action: 'openAuthWithProvider',
       provider: provider
+    }, (response) => {
+      // We'll close the popup regardless of response
+      setTimeout(() => window.close(), 300);
     });
-    
-    // Close popup after initiating OAuth
-    setTimeout(() => window.close(), 300);
   } catch (error) {
     console.error(`Error opening ${provider} auth:`, error);
     showToast(`Could not open ${provider} login. Please try again.`, 'error');
@@ -262,44 +263,40 @@ function testMidjourneyJobStatus() {
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Popup loaded, checking auth status');
   checkAuthAndRedirect();
+  
+  // Set up event listeners for buttons
+  if (loginBtn) {
+    loginBtn.addEventListener('click', openAuthPage);
+  }
+  
+  if (googleLoginBtn) {
+    googleLoginBtn.addEventListener('click', () => openAuthWithProvider('google'));
+  }
+  
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', logout);
+  }
+  
+  if (testMidjourneyAuthBtn) {
+    testMidjourneyAuthBtn.addEventListener('click', testMidjourneyAuth);
+  }
+  
+  if (testMidjourneyImagesBtn) {
+    testMidjourneyImagesBtn.addEventListener('click', testMidjourneyImages);
+  }
+  
+  if (testMidjourneyGenerateBtn) {
+    testMidjourneyGenerateBtn.addEventListener('click', testMidjourneyGenerate);
+  }
+  
+  if (testMidjourneyJobBtn) {
+    testMidjourneyJobBtn.addEventListener('click', testMidjourneyJobStatus);
+  }
+  
+  if (syncNowButton) {
+    syncNowButton.addEventListener('click', triggerMidjourneySync);
+  }
 });
-
-// Event listeners for buttons
-if (loginBtn) {
-  loginBtn.addEventListener('click', () => {
-    openAuthPage();
-  });
-}
-
-if (googleLoginBtn) {
-  googleLoginBtn.addEventListener('click', () => {
-    openAuthWithProvider('google');
-  });
-}
-
-if (logoutBtn) {
-  logoutBtn.addEventListener('click', logout);
-}
-
-if (testMidjourneyAuthBtn) {
-  testMidjourneyAuthBtn.addEventListener('click', testMidjourneyAuth);
-}
-
-if (testMidjourneyImagesBtn) {
-  testMidjourneyImagesBtn.addEventListener('click', testMidjourneyImages);
-}
-
-if (testMidjourneyGenerateBtn) {
-  testMidjourneyGenerateBtn.addEventListener('click', testMidjourneyGenerate);
-}
-
-if (testMidjourneyJobBtn) {
-  testMidjourneyJobBtn.addEventListener('click', testMidjourneyJobStatus);
-}
-
-if (syncNowButton) {
-  syncNowButton.addEventListener('click', triggerMidjourneySync);
-}
 
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message) => {

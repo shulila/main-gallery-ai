@@ -39,49 +39,51 @@ const loadSupabaseClient = async () => {
 
 // Set up a listener for auth callback
 export async function setupAuthCallbackListener() {
-  const redirectPattern = '*://main-gallery-hub.lovable.app/auth/callback*';
-  
+  // Instead of using webNavigation, we'll monitor tab updates
+  // This is more compatible with MV3 restrictions
   try {
-    // Listen for the auth callback on the redirect URL
-    chrome.webNavigation.onCompleted.addListener(async (details) => {
-      console.log('Auth navigation detected:', details.url);
-      
-      // Get auth token from the URL
-      const url = new URL(details.url);
-      const accessToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('access_token') : null;
-      const refreshToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('refresh_token') : null;
-      
-      // If we have tokens, validate and store them
-      if (accessToken) {
-        console.log('Auth tokens detected, will store session');
+    const redirectPattern = '*://main-gallery-hub.lovable.app/auth/callback*';
+    
+    // Use tabs.onUpdated instead of webNavigation
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+      // Only process completed loads with our auth callback URL
+      if (changeInfo.status === 'complete' && tab.url && 
+          tab.url.includes('main-gallery-hub.lovable.app/auth/callback')) {
         
-        // Store basic token info for extension usage
-        chrome.storage.sync.set({
-          'main_gallery_auth_token': {
-            access_token: accessToken,
-            refresh_token: refreshToken,
-            timestamp: Date.now()
-          }
-        }, () => {
-          console.log('Auth token stored in extension storage');
-        });
+        console.log('Auth navigation detected:', tab.url);
         
-        // Close the auth tab after successful login
-        chrome.tabs.query({ url: redirectPattern }, (tabs) => {
-          if (tabs && tabs.length > 0) {
-            // We'll wait a moment to ensure user sees success before closing
+        // Get auth token from the URL
+        const url = new URL(tab.url);
+        const accessToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('access_token') : null;
+        const refreshToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('refresh_token') : null;
+        
+        // If we have tokens, validate and store them
+        if (accessToken) {
+          console.log('Auth tokens detected, will store session');
+          
+          // Store basic token info for extension usage
+          chrome.storage.sync.set({
+            'main_gallery_auth_token': {
+              access_token: accessToken,
+              refresh_token: refreshToken,
+              timestamp: Date.now()
+            }
+          }, () => {
+            console.log('Auth token stored in extension storage');
+            
+            // Close the auth tab after successful login
             setTimeout(() => {
-              chrome.tabs.remove(tabs[0].id);
+              chrome.tabs.remove(tabId);
               
               // Open gallery in a new tab
               chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery' });
-            }, 2000);
-          }
-        });
+            }, 1000);
+          });
+        }
       }
-    }, { url: [{ urlMatches: redirectPattern }] });
+    });
     
-    console.log('Auth callback listener set up for:', redirectPattern);
+    console.log('Auth callback listener set up using tabs API');
   } catch (error) {
     console.error('Error setting up auth callback listener:', error);
   }
@@ -116,30 +118,55 @@ export function openAuthPage(tabId = null, options = {}) {
 // Handle OAuth sign-in with provider
 export async function openAuthWithProvider(provider) {
   try {
-    const supabase = await loadSupabaseClient();
-    if (!supabase) {
-      console.error('Failed to initialize Supabase client');
-      return;
-    }
-    
+    // For Google sign-in in Chrome extension, we'll use a direct approach
     const redirectUrl = getProductionRedirectUrl();
     console.log(`Opening ${provider} auth with redirect to:`, redirectUrl);
     
-    // Initiate OAuth flow
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: redirectUrl,
-        scopes: 'email profile'
-      }
-    });
+    // Generate a state param for security
+    const stateParam = Math.random().toString(36).substring(2, 15);
     
-    if (error) {
-      console.error(`${provider} auth error:`, error);
-    }
+    // Store this state param for verification later
+    chrome.storage.local.set({ 'oauth_state': stateParam });
+    
+    // Build the Google OAuth URL directly
+    const oauthUrl = await buildProviderOAuthUrl(provider, redirectUrl, stateParam);
+    
+    // Open the OAuth URL in a new tab
+    chrome.tabs.create({ url: oauthUrl });
+    
+    console.log(`Opened ${provider} OAuth URL`);
   } catch (error) {
     console.error(`Error during ${provider} auth:`, error);
   }
+}
+
+// Helper to build OAuth URLs
+async function buildProviderOAuthUrl(provider, redirectUrl, stateParam) {
+  // We'll use Supabase's client to get the correct OAuth URL
+  const supabase = await loadSupabaseClient();
+  
+  if (!supabase) {
+    throw new Error('Could not initialize Supabase client');
+  }
+  
+  if (provider === 'google') {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: redirectUrl,
+        skipBrowserRedirect: true, // Just get the URL, don't redirect
+        queryParams: {
+          state: stateParam,
+          prompt: 'select_account'
+        }
+      }
+    });
+    
+    if (error) throw error;
+    return data.url;
+  }
+  
+  throw new Error(`Provider ${provider} not supported`);
 }
 
 // Check if user is logged in

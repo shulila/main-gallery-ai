@@ -3,7 +3,7 @@
 import { setupAuthCallbackListener, openAuthPage, openAuthWithProvider, isLoggedIn, logout } from './utils/auth.js';
 import { debugPlatformDetection } from './utils/common.js';
 
-// Set up auth callback listener
+// Set up auth callback listener - this now uses tabs API instead of webNavigation
 setupAuthCallbackListener();
 
 // Production URL for consistent redirects
@@ -131,7 +131,7 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       break;
       
     case 'openAuthPage':
-      openAuthPage(null, { forgotPassword: message.forgotPassword });
+      openAuthPage(null, { forgotPassword: message.forgotPassword, from: message.from });
       sendResponse({ success: true });
       break;
       

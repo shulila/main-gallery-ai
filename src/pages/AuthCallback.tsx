@@ -9,6 +9,7 @@ const AuthCallback = () => {
   const { session, isLoading } = useAuth();
   const navigate = useNavigate();
   const [redirectPath, setRedirectPath] = useState('/gallery');
+  const [processingAuth, setProcessingAuth] = useState(true);
   
   useEffect(() => {
     // Function to parse the hash fragment or query parameters
@@ -22,15 +23,16 @@ const AuthCallback = () => {
       
       // Check if there are query parameters
       const queryParams = new URLSearchParams(window.location.search);
-      if (queryParams.has('error') || queryParams.has('access_token')) {
+      if (queryParams.has('error') || queryParams.has('code')) {
         return Object.fromEntries(queryParams.entries());
       }
       
       return {};
     };
     
-    // Get params
-    const params = getHashParams();
+    // Check for parameters that might indicate auth is happening
+    const authParams = getHashParams();
+    console.log('Auth callback received params:', authParams);
     
     // Check for stored redirect path in session storage
     const storedRedirect = sessionStorage.getItem('oauth_redirect');
@@ -40,16 +42,37 @@ const AuthCallback = () => {
     }
     
     // If there's an error, show it and stop
-    if (params.error) {
-      console.error('OAuth error:', params.error, params.error_description);
+    if (authParams.error) {
+      console.error('OAuth error:', authParams.error, authParams.error_description);
+      setProcessingAuth(false);
       return;
     }
-    
-    // If user is logged in, redirect them
-    if (session && !isLoading) {
-      navigate(redirectPath);
+
+    // If this is a successful OAuth redirect (we have a code or token)
+    // Supabase should automatically handle this - just need to wait for session
+    if (authParams.code || authParams.access_token) {
+      // Don't need to do anything special, Supabase will process this
+      // We just need to ensure we wait long enough for session to be set
+      const checkSessionTimer = setTimeout(() => {
+        setProcessingAuth(false);
+      }, 2000); // Give it 2 seconds maximum
+      
+      return () => clearTimeout(checkSessionTimer);
+    } else {
+      // No auth params, nothing to process
+      setProcessingAuth(false);
     }
-  }, [session, isLoading, navigate, redirectPath]);
+  }, []);
+
+  // When auth processing is done and session is ready, redirect
+  useEffect(() => {
+    if (!processingAuth && !isLoading && session) {
+      navigate(redirectPath);
+    } else if (!processingAuth && !isLoading && !session) {
+      // If no session after processing, go to login
+      navigate('/auth');
+    }
+  }, [processingAuth, session, isLoading, navigate, redirectPath]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">

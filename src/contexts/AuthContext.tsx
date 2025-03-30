@@ -188,11 +188,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('Starting Google login with redirect to:', redirectTo);
       
+      // Add additional query params to help debug the flow
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo,
-          scopes: 'email profile',
+          queryParams: {
+            prompt: 'select_account' // Force Google account selection
+          }
         }
       });
       
