@@ -32,7 +32,7 @@ console.log('Auth redirect URL:', getProductionAuthRedirectUrl());
 console.log('Google Client ID:', GOOGLE_CLIENT_ID);
 
 // Direct Google OAuth URL construction
-const constructGoogleOAuthUrl = (redirectUrl) => {
+const constructGoogleOAuthUrl = (redirectUrl: string) => {
   const stateParam = Math.random().toString(36).substring(2, 15);
   return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true&state=${stateParam}`;
 };
@@ -84,9 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 console.log('Stored auth data in localStorage for extension access');
                 
                 // Also sync to chrome.storage if in extension context
-                if (typeof chrome !== 'undefined' && chrome.storage) {
+                if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
                   try {
-                    chrome.storage.sync.set({
+                    window.chrome.storage.sync.set({
                       'main_gallery_auth_token': tokenData,
                       'main_gallery_user_email': session.user.email || 'User'
                     }, () => {
@@ -106,8 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 localStorage.removeItem('main_gallery_auth_token');
                 
                 // Also clear chrome.storage if in extension context
-                if (typeof chrome !== 'undefined' && chrome.storage) {
-                  chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
+                if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
+                  window.chrome.storage?.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
                 }
               } catch (err) {
                 console.error('Error clearing localStorage:', err);
@@ -137,9 +137,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.log('Stored auth data in localStorage for extension access');
             
             // Also sync to chrome.storage if in extension context
-            if (typeof chrome !== 'undefined' && chrome.storage) {
+            if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
               try {
-                chrome.storage.sync.set({
+                window.chrome.storage.sync.set({
                   'main_gallery_auth_token': tokenData,
                   'main_gallery_user_email': session.user.email || 'User'
                 }, () => {

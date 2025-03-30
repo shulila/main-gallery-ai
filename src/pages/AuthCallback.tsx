@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const AuthCallback = () => {
   const [searchParams] = useSearchParams();
@@ -50,9 +51,9 @@ const AuthCallback = () => {
             }
             
             // Sync to chrome.storage if in extension context
-            if (typeof chrome !== 'undefined' && chrome.storage) {
+            if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
               try {
-                chrome.storage.sync.set({
+                window.chrome.storage.sync.set({
                   'main_gallery_auth_token': tokenData,
                   'main_gallery_user_email': email || 'User'
                 }, () => {
@@ -89,8 +90,59 @@ const AuthCallback = () => {
           }
         }
         
+        // Exchange code for session if available in the URL
+        const code = queryParams.code;
+        if (code) {
+          console.log('Got authorization code, exchanging for session');
+          
+          // The supabase client will automatically handle the code exchange
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (exchangeError) {
+            throw new Error(`Error exchanging code: ${exchangeError.message}`);
+          }
+          
+          if (data.session) {
+            console.log('Successfully exchanged code for session');
+            
+            // Sync to localStorage for web app use
+            const tokenData = {
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token || '',
+              timestamp: Date.now()
+            };
+            
+            localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
+            localStorage.setItem('main_gallery_user_email', data.session.user.email || 'User');
+            
+            // Sync to chrome.storage if in extension context
+            if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
+              try {
+                window.chrome.storage.sync.set({
+                  'main_gallery_auth_token': tokenData,
+                  'main_gallery_user_email': data.session.user.email || 'User'
+                }, () => {
+                  console.log('Auth data synced to chrome.storage');
+                });
+              } catch (err) {
+                console.error('Error syncing to chrome.storage:', err);
+              }
+            }
+            
+            // Redirect to gallery
+            navigate('/gallery');
+            return;
+          }
+        }
+        
         // Default fallback if no token handling was triggered
-        navigate("/gallery");
+        // First try to get any existing session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          navigate("/gallery");
+        } else {
+          navigate("/auth");
+        }
       } catch (err: any) {
         console.error("Auth callback error:", err);
         setError(err.message || "Authentication failed");
