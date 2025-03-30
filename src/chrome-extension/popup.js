@@ -23,18 +23,7 @@ const states = {
 const loginBtn = document.getElementById('login-btn');
 const googleLoginBtn = document.getElementById('google-login-btn');
 const logoutBtn = document.getElementById('logout-btn');
-const testMidjourneyAuthBtn = document.getElementById('test-midjourney-auth');
-const testMidjourneyImagesBtn = document.getElementById('test-midjourney-images');
-const testMidjourneyGenerateBtn = document.getElementById('test-midjourney-generate');
-const testMidjourneyJobBtn = document.getElementById('test-midjourney-job');
-const testResult = document.getElementById('test-result');
-const syncStatusElement = document.getElementById('sync-status');
-const syncNowButton = document.getElementById('sync-now');
-const syncCountElement = document.getElementById('sync-image-count');
-
-// Store the last generated job ID
-let lastGeneratedJobId = null;
-let isSyncing = false; // Track sync state
+const openGalleryBtn = document.getElementById('open-gallery-btn');
 
 // Helper functions
 function hideAllStates() {
@@ -82,7 +71,7 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
-// Auto-redirect to gallery if logged in
+// Check auth and update UI
 async function checkAuthAndRedirect() {
   try {
     showState(states.authLoading); // Show loading state while checking
@@ -91,9 +80,7 @@ async function checkAuthAndRedirect() {
     
     if (loggedIn) {
       console.log('User is logged in, showing logged-in state');
-      // Show logged in state instead of redirecting
       showState(states.loggedIn);
-      updateSyncStatus(); // Update the Midjourney sync status
       return true;
     }
     
@@ -105,29 +92,6 @@ async function checkAuthAndRedirect() {
     showState(states.notLoggedIn);
     return false;
   }
-}
-
-// Update Midjourney sync status
-function updateSyncStatus() {
-  if (!syncStatusElement || !syncCountElement) return;
-  
-  chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
-    const images = result.midjourney_extracted_images || [];
-    const lastSync = images.length > 0 
-      ? new Date(images[0].extractedAt).toLocaleTimeString() 
-      : 'Never';
-    
-    syncStatusElement.textContent = `Last sync: ${lastSync}`;
-    syncCountElement.textContent = `${images.length} images found`;
-    
-    // Update button state
-    if (syncNowButton) {
-      syncNowButton.disabled = isSyncing;
-      syncNowButton.innerHTML = isSyncing ? 
-        '<div class="button-spinner"></div> Syncing...' : 
-        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9a9 9 0 00-9-9m9 9V3"></path></svg>';
-    }
-  });
 }
 
 // Open gallery in new tab or focus existing tab
@@ -167,7 +131,7 @@ function openAuthPage() {
   }
 }
 
-// Open auth with specific provider (Google) - updated for direct OAuth flow
+// Open auth with Google provider - using direct OAuth URL construction
 function openAuthWithProvider(provider) {
   try {
     showState(states.authLoading);
@@ -196,92 +160,6 @@ function logout() {
   });
 }
 
-// Show test results
-function showTestResult(data) {
-  if (testResult) {
-    const pre = testResult.querySelector('pre');
-    pre.textContent = JSON.stringify(data, null, 2);
-    testResult.classList.remove('hidden');
-  }
-}
-
-// Trigger manual sync of Midjourney images
-function triggerMidjourneySync() {
-  if (isSyncing) return; // Prevent multiple syncs
-  
-  isSyncing = true;
-  updateSyncStatus(); // Update UI to show syncing state
-  
-  chrome.tabs.query({ url: "*://www.midjourney.com/app*" }, function(tabs) {
-    if (tabs.length > 0) {
-      // There's an open Midjourney tab, send sync message
-      chrome.tabs.sendMessage(tabs[0].id, { 
-        action: 'extractMidjourneyImages',
-        forceSync: true
-      });
-      showToast('Syncing images from Midjourney...', 'info');
-      
-      // Update status after a delay
-      setTimeout(() => {
-        isSyncing = false;
-        updateSyncStatus();
-      }, 2000);
-    } else {
-      // No Midjourney tab open
-      isSyncing = false;
-      updateSyncStatus();
-      showToast('No Midjourney tabs found. Please open Midjourney first.', 'error');
-    }
-  });
-}
-
-// Midjourney API integration functions
-function testMidjourneyAuth() {
-  chrome.runtime.sendMessage({ action: 'testMidjourneyAuth' }, function(response) {
-    showTestResult(response);
-    showToast('Authentication test complete!', response.success ? 'success' : 'error');
-  });
-}
-
-function testMidjourneyImages() {
-  chrome.runtime.sendMessage({ action: 'testMidjourneyImages' }, function(response) {
-    showTestResult(response);
-    
-    if (response.success) {
-      if (response.totalImages > 0) {
-        showToast(`Found ${response.totalImages} images!`, 'success');
-      } else {
-        showToast('No images found. Visit Midjourney to extract images.', 'info');
-      }
-    } else {
-      showToast('Failed to fetch images', 'error');
-    }
-  });
-}
-
-function testMidjourneyGenerate() {
-  chrome.runtime.sendMessage({ action: 'testMidjourneyGenerate' }, function(response) {
-    showTestResult(response);
-    
-    if (response.success) {
-      lastGeneratedJobId = response.jobId;
-      showToast('Generation job started!', 'success');
-    } else {
-      showToast('Failed to start generation job', 'error');
-    }
-  });
-}
-
-function testMidjourneyJobStatus() {
-  chrome.runtime.sendMessage({ 
-    action: 'testMidjourneyJobStatus',
-    jobId: lastGeneratedJobId
-  }, function(response) {
-    showTestResult(response);
-    showToast('Job status retrieved!', response.success ? 'success' : 'error');
-  });
-}
-
 // Immediately check auth status when popup opens
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Popup loaded, checking auth status');
@@ -291,8 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginBtn) {
     loginBtn.addEventListener('click', openAuthPage);
     console.log('Login button listener set up');
-  } else {
-    console.warn('Login button not found in DOM');
   }
   
   if (googleLoginBtn) {
@@ -301,32 +177,14 @@ document.addEventListener('DOMContentLoaded', () => {
       openAuthWithProvider('google');
     });
     console.log('Google login button listener set up');
-  } else {
-    console.warn('Google login button not found in DOM');
   }
   
   if (logoutBtn) {
     logoutBtn.addEventListener('click', logout);
   }
   
-  if (testMidjourneyAuthBtn) {
-    testMidjourneyAuthBtn.addEventListener('click', testMidjourneyAuth);
-  }
-  
-  if (testMidjourneyImagesBtn) {
-    testMidjourneyImagesBtn.addEventListener('click', testMidjourneyImages);
-  }
-  
-  if (testMidjourneyGenerateBtn) {
-    testMidjourneyGenerateBtn.addEventListener('click', testMidjourneyGenerate);
-  }
-  
-  if (testMidjourneyJobBtn) {
-    testMidjourneyJobBtn.addEventListener('click', testMidjourneyJobStatus);
-  }
-  
-  if (syncNowButton) {
-    syncNowButton.addEventListener('click', triggerMidjourneySync);
+  if (openGalleryBtn) {
+    openGalleryBtn.addEventListener('click', openGallery);
   }
 });
 
@@ -334,10 +192,5 @@ document.addEventListener('DOMContentLoaded', () => {
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'updateUI') {
     checkAuthAndRedirect();
-  }
-  else if (message.action === 'midjourneyImagesExtracted') {
-    isSyncing = false;
-    showToast(`Extracted ${message.count} images from Midjourney!`, 'success');
-    updateSyncStatus();
   }
 });

@@ -43,36 +43,17 @@
     <div id="logged-in" class="state hidden">
       <h2>Welcome to MainGallery.AI</h2>
       
-      <!-- Midjourney Sync Status -->
+      <!-- Sync status - simplified -->
       <div class="sync-status-card">
         <div class="sync-header">
-          <h3>Midjourney Sync</h3>
-          <button id="sync-now" class="icon-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9a9 9 0 00-9-9m9 9V3"></path>
-            </svg>
-          </button>
+          <h3>Connection Status</h3>
         </div>
         <div class="sync-details">
-          <p id="sync-status">Last sync: Never</p>
-          <p id="sync-image-count">0 images found</p>
+          <p>Connected to MainGallery.AI</p>
         </div>
       </div>
       
-      <!-- Test section for Midjourney -->
-      <div class="test-section">
-        <h3>Midjourney Test</h3>
-        <div class="action-buttons">
-          <button id="test-midjourney-auth" class="secondary-btn">Test Auth</button>
-          <button id="test-midjourney-images" class="secondary-btn">Fetch Images</button>
-          <button id="test-midjourney-generate" class="secondary-btn">Generate</button>
-          <button id="test-midjourney-job" class="secondary-btn">Job Status</button>
-        </div>
-        <div id="test-result" class="result-box hidden">
-          <pre></pre>
-        </div>
-      </div>
-      
+      <button id="open-gallery-btn" class="primary-btn">Open Gallery</button>
       <button id="logout-btn" class="text-btn">Sign Out</button>
     </div>
   </div>
