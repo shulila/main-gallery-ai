@@ -2,7 +2,7 @@
 // Auth utilities for Chrome extension
 
 // Updated Google OAuth Client ID
-const GOOGLE_CLIENT_ID = '242032861157-fjjn965aou8i5bhdmb32cr2s41er0mbn.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
 
 // Get the production auth callback URL - NEVER use localhost
 const getProductionRedirectUrl = () => {

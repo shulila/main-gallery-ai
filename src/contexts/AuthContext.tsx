@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -14,7 +13,7 @@ const getProductionAuthRedirectUrl = () => {
 };
 
 // Updated Google OAuth Client ID
-const GOOGLE_CLIENT_ID = '242032861157-fjjn965aou8i5bhdmb32cr2s41er0mbn.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
 
 // Create a single Supabase client instance to be used throughout the app
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {

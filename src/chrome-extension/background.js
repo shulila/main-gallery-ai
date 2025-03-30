@@ -1,4 +1,3 @@
-
 // Import functions from other modules - avoid dynamic imports in MV3
 // Use standard JS function declarations and move code from imported files
 
@@ -92,7 +91,7 @@ function openAuthWithProvider(provider) {
     chrome.storage.local.set({ 'oauth_state': stateParam });
     
     // Updated Google OAuth client ID
-    const GOOGLE_CLIENT_ID = '242032861157-fjjn965aou8i5bhdmb32cr2s41er0mbn.apps.googleusercontent.com';
+    const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
     
     if (provider === 'google') {
       // Construct the Google OAuth URL directly

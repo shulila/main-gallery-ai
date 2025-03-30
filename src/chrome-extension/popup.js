@@ -86,6 +86,21 @@ function isLoggedIn() {
       // Check if token exists and is not too old (24 hours validity)
       if (token && (Date.now() - token.timestamp < 24 * 60 * 60 * 1000)) {
         console.log('Valid token found in extension storage');
+        
+        // Also try to sync to localStorage for web access
+        try {
+          localStorage.setItem('main_gallery_auth_token', JSON.stringify(token));
+          
+          // Also get user email if available
+          chrome.storage.sync.get(['main_gallery_user_email'], emailResult => {
+            if (emailResult.main_gallery_user_email) {
+              localStorage.setItem('main_gallery_user_email', emailResult.main_gallery_user_email);
+            }
+          });
+        } catch (err) {
+          console.error('Error syncing to localStorage:', err);
+        }
+        
         resolve(true);
       } else {
         // Token doesn't exist or is expired
