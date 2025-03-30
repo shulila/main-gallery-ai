@@ -9,7 +9,7 @@ import {
 
 // Brand configuration to align with the main app
 const BRAND = {
-  name: "MainGallery",
+  name: "MainGallery.AI",
   urls: {
     baseUrl: "https://main-gallery-hub.lovable.app",
     auth: "/auth",

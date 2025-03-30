@@ -21,7 +21,7 @@ chrome.runtime.onInstalled.addListener(function(details) {
       chrome.notifications.create(notificationId, {
         type: 'basic',
         iconUrl: 'icons/icon128.png',
-        title: 'Welcome to MainGallery',
+        title: 'Welcome to MainGallery.AI',
         message: 'Pin this extension for quick access to your AI art gallery!'
       });
     } catch (error) {
@@ -74,7 +74,7 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 // Function to open the gallery
 function openGallery() {
-  const galleryUrl = getGalleryUrl();
+  const galleryUrl = "https://main-gallery-hub.lovable.app/gallery";
   console.log('Opening gallery at', galleryUrl);
   
   // Check if gallery tab is already open

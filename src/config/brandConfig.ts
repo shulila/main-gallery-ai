@@ -2,7 +2,7 @@
 // Brand configuration
 export const brandConfig = {
   // Brand identity
-  name: "MainGallery",
+  name: "MainGallery.AI",
   tagline: "Your unified gallery for AI-generated art",
   description: "Connect all your AI art platforms in one click and experience your entire creative universe in a beautifully organized gallery without any file transfers.",
   
@@ -10,11 +10,11 @@ export const brandConfig = {
   baseUrl: "https://main-gallery-hub.lovable.app",
   
   // Contact info
-  email: "contact@maingallery.com",
+  email: "contact@maingallery.ai",
   social: {
-    twitter: "https://twitter.com/maingallery",
-    github: "https://github.com/maingallery",
-    linkedin: "https://linkedin.com/company/maingallery"
+    twitter: "https://twitter.com/maingalleryai",
+    github: "https://github.com/maingalleryai",
+    linkedin: "https://linkedin.com/company/maingalleryai"
   },
   
   // App routes

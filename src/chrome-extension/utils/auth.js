@@ -1,3 +1,4 @@
+
 // Authentication utilities for MainGallery extension
 
 // Open auth page with redirect
@@ -32,12 +33,13 @@ export function openAuthPage(redirectUrl) {
   });
 }
 
-// Open auth with specific provider (Google or Microsoft)
+// Open auth with specific provider (Google)
 export function openAuthWithProvider(provider) {
   try {
     console.log(`Opening auth with provider: ${provider}`);
     
     // Construct the URL with the provider parameter
+    // Use the deployed URL instead of localhost
     let authUrl = `https://main-gallery-hub.lovable.app/auth?from=extension&provider=${provider}`;
     
     // Add timestamp to prevent caching
@@ -127,8 +129,8 @@ export function setupAuthCallbackListener() {
                 chrome.notifications.create('auth-success', {
                   type: 'basic',
                   iconUrl: 'icons/icon128.png',
-                  title: 'MainGallery Connected',
-                  message: 'You are now connected to MainGallery!'
+                  title: 'MainGallery.AI Connected',
+                  message: 'You are now connected to MainGallery.AI!'
                 });
               }
               
@@ -144,7 +146,7 @@ export function setupAuthCallbackListener() {
                   if (redirect) {
                     chrome.tabs.create({ url: redirect });
                   } else {
-                    // Open gallery after successful login
+                    // Open gallery after successful login - using deployed URL
                     const galleryUrl = "https://main-gallery-hub.lovable.app/gallery";
                     chrome.tabs.create({ url: galleryUrl });
                   }
@@ -201,7 +203,7 @@ export function setupAuthCallbackListener() {
                 if (redirect) {
                   chrome.tabs.create({ url: redirect });
                 } else {
-                  // Open gallery after successful login
+                  // Open gallery after successful login - using deployed URL
                   const galleryUrl = "https://main-gallery-hub.lovable.app/gallery";
                   chrome.tabs.create({ url: galleryUrl });
                 }
