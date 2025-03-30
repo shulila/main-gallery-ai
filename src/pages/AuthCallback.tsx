@@ -14,9 +14,12 @@ const AuthCallback = () => {
   useEffect(() => {
     // Function to parse the hash fragment or query parameters
     const getHashParams = () => {
+      console.log('Parsing hash or query params');
+      
       // Check if there are fragment parameters
       const hashParams = window.location.hash.substring(1);
       if (hashParams) {
+        console.log('Found hash fragment parameters:', hashParams);
         const urlParams = new URLSearchParams(hashParams);
         return Object.fromEntries(urlParams.entries());
       }
@@ -24,9 +27,11 @@ const AuthCallback = () => {
       // Check if there are query parameters
       const queryParams = new URLSearchParams(window.location.search);
       if (queryParams.has('error') || queryParams.has('code')) {
+        console.log('Found query parameters:', queryParams.toString());
         return Object.fromEntries(queryParams.entries());
       }
       
+      console.log('No auth parameters found in URL');
       return {};
     };
     
@@ -37,6 +42,7 @@ const AuthCallback = () => {
     // Check for stored redirect path in session storage
     const storedRedirect = sessionStorage.getItem('oauth_redirect');
     if (storedRedirect) {
+      console.log('Found stored redirect path:', storedRedirect);
       setRedirectPath(storedRedirect);
       sessionStorage.removeItem('oauth_redirect');
     }
@@ -51,26 +57,33 @@ const AuthCallback = () => {
     // If this is a successful OAuth redirect (we have a code or token)
     // Supabase should automatically handle this - just need to wait for session
     if (authParams.code || authParams.access_token) {
+      console.log('Auth code or token found, waiting for Supabase to process');
       // Don't need to do anything special, Supabase will process this
       // We just need to ensure we wait long enough for session to be set
       const checkSessionTimer = setTimeout(() => {
+        console.log('Auth processing timeout reached');
         setProcessingAuth(false);
-      }, 2000); // Give it 2 seconds maximum
+      }, 3000); // Give it 3 seconds maximum to ensure we don't get stuck
       
       return () => clearTimeout(checkSessionTimer);
     } else {
       // No auth params, nothing to process
+      console.log('No auth parameters to process');
       setProcessingAuth(false);
     }
   }, []);
 
   // When auth processing is done and session is ready, redirect
   useEffect(() => {
-    if (!processingAuth && !isLoading && session) {
-      navigate(redirectPath);
-    } else if (!processingAuth && !isLoading && !session) {
-      // If no session after processing, go to login
-      navigate('/auth');
+    if (!processingAuth && !isLoading) {
+      if (session) {
+        console.log('Auth complete, redirecting to:', redirectPath);
+        navigate(redirectPath);
+      } else {
+        // If no session after processing, go to login
+        console.log('No session after auth processing, redirecting to login');
+        navigate('/auth');
+      }
     }
   }, [processingAuth, session, isLoading, navigate, redirectPath]);
 

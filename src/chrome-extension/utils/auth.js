@@ -8,43 +8,13 @@ const getProductionRedirectUrl = () => {
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
-// Create a Supabase client for authentication
-let supabaseClient = null;
-
-// Load the Supabase library dynamically
-const loadSupabaseClient = async () => {
-  try {
-    if (!supabaseClient) {
-      // Import Supabase from CDN for Chrome extension
-      const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/+esm');
-      
-      supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-          storage: localStorage,
-          persistSession: true,
-          autoRefreshToken: true,
-          flowType: 'pkce'
-        }
-      });
-      
-      console.log('Extension: Supabase client initialized');
-    }
-    
-    return supabaseClient;
-  } catch (error) {
-    console.error('Failed to load Supabase client:', error);
-    return null;
-  }
-};
-
 // Set up a listener for auth callback
-export async function setupAuthCallbackListener() {
-  // Instead of using webNavigation, we'll monitor tab updates
-  // This is more compatible with MV3 restrictions
+export function setupAuthCallbackListener() {
+  // Use tabs.onUpdated instead of webNavigation
   try {
     const redirectPattern = '*://main-gallery-hub.lovable.app/auth/callback*';
     
-    // Use tabs.onUpdated instead of webNavigation
+    // Use tabs.onUpdated to detect auth callbacks
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       // Only process completed loads with our auth callback URL
       if (changeInfo.status === 'complete' && tab.url && 
@@ -116,9 +86,9 @@ export function openAuthPage(tabId = null, options = {}) {
 }
 
 // Handle OAuth sign-in with provider
-export async function openAuthWithProvider(provider) {
+export function openAuthWithProvider(provider) {
   try {
-    // For Google sign-in in Chrome extension, we'll use a direct approach
+    // For Google sign-in, we'll use a direct approach without dynamic imports
     const redirectUrl = getProductionRedirectUrl();
     console.log(`Opening ${provider} auth with redirect to:`, redirectUrl);
     
@@ -128,91 +98,70 @@ export async function openAuthWithProvider(provider) {
     // Store this state param for verification later
     chrome.storage.local.set({ 'oauth_state': stateParam });
     
-    // Build the Google OAuth URL directly
-    const oauthUrl = await buildProviderOAuthUrl(provider, redirectUrl, stateParam);
-    
-    // Open the OAuth URL in a new tab
-    chrome.tabs.create({ url: oauthUrl });
-    
-    console.log(`Opened ${provider} OAuth URL`);
+    // Since we can't use Supabase's dynamic import in a service worker,
+    // we'll construct the Google OAuth URL directly
+    if (provider === 'google') {
+      // Create Google OAuth URL directly - this avoids the need for dynamic imports
+      const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl, stateParam);
+      
+      // Open the OAuth URL in a new tab
+      chrome.tabs.create({ url: googleOAuthUrl });
+      
+      console.log(`Opened ${provider} OAuth URL manually`);
+    } else {
+      console.error(`Provider ${provider} not supported in direct mode`);
+    }
   } catch (error) {
     console.error(`Error during ${provider} auth:`, error);
   }
 }
 
-// Helper to build OAuth URLs
-async function buildProviderOAuthUrl(provider, redirectUrl, stateParam) {
-  // We'll use Supabase's client to get the correct OAuth URL
-  const supabase = await loadSupabaseClient();
+// Construct Google OAuth URL directly without using Supabase client
+function constructGoogleOAuthUrl(redirectUrl, stateParam) {
+  // Google OAuth 2.0 endpoint
+  const baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
   
-  if (!supabase) {
-    throw new Error('Could not initialize Supabase client');
-  }
+  // Google OAuth parameters
+  const params = {
+    client_id: '242032861157-q1nf91k8d4lp0goopnquqg2g6em581c6.apps.googleusercontent.com', // Replace with actual Google client ID
+    redirect_uri: redirectUrl,
+    response_type: 'token',
+    scope: 'email profile',
+    state: stateParam,
+    prompt: 'select_account',
+    access_type: 'offline',
+    include_granted_scopes: 'true',
+  };
   
-  if (provider === 'google') {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: redirectUrl,
-        skipBrowserRedirect: true, // Just get the URL, don't redirect
-        queryParams: {
-          state: stateParam,
-          prompt: 'select_account'
-        }
-      }
-    });
-    
-    if (error) throw error;
-    return data.url;
-  }
+  // Build URL with parameters
+  const url = new URL(baseUrl);
+  Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
   
-  throw new Error(`Provider ${provider} not supported`);
+  return url.toString();
 }
 
 // Check if user is logged in
-export async function isLoggedIn() {
-  try {
-    // First try to get from storage for speed
-    const result = await new Promise((resolve) => {
-      chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
-        resolve(!!result.main_gallery_auth_token);
-      });
+export function isLoggedIn() {
+  return new Promise((resolve) => {
+    // Check if token exists in storage
+    chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
+      resolve(!!result.main_gallery_auth_token);
     });
-    
-    if (result) return true;
-    
-    // If not found in storage, check with Supabase
-    const supabase = await loadSupabaseClient();
-    if (supabase) {
-      const { data } = await supabase.auth.getSession();
-      return !!data.session;
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('Error checking login status:', error);
-    return false;
-  }
+  });
 }
 
 // Log out from all platforms
-export async function logout() {
+export function logout() {
   try {
     // Clear local storage token
-    await new Promise((resolve) => {
-      chrome.storage.sync.remove(['main_gallery_auth_token'], resolve);
+    return new Promise((resolve) => {
+      chrome.storage.sync.remove(['main_gallery_auth_token'], () => {
+        console.log('Successfully logged out');
+        resolve(true);
+      });
     });
-    
-    // Sign out from Supabase
-    const supabase = await loadSupabaseClient();
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
-    
-    console.log('Successfully logged out');
-    return true;
   } catch (error) {
     console.error('Logout error:', error);
-    return false;
+    return Promise.resolve(false);
   }
 }

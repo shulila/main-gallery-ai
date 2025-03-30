@@ -1,9 +1,9 @@
-
 // Import functions from other modules
 import { setupAuthCallbackListener, openAuthPage, openAuthWithProvider, isLoggedIn, logout } from './utils/auth.js';
 import { debugPlatformDetection } from './utils/common.js';
 
-// Set up auth callback listener - this now uses tabs API instead of webNavigation
+// Set up auth callback listener - using tabs API
+console.log('Setting up auth callback listener');
 setupAuthCallbackListener();
 
 // Production URL for consistent redirects

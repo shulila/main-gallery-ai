@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +19,8 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     flowType: 'pkce',
+    // Always use the production URL for all redirects to avoid localhost
+    redirectTo: getProductionAuthRedirectUrl(),
   }
 });
 
@@ -183,12 +184,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
       
-      // Always use the production URL for the redirect
+      // Always use the production URL for the redirect, never use window.location.origin
       const redirectTo = getProductionAuthRedirectUrl();
       
       console.log('Starting Google login with redirect to:', redirectTo);
       
-      // Add additional query params to help debug the flow
+      // Always pass the production URL for redirectTo
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

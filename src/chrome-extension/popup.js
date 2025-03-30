@@ -141,6 +141,9 @@ function openGallery() {
 function openAuthPage() {
   try {
     showState(states.authLoading);
+    console.log('Opening auth page with email/password login');
+    showToast('Opening login page...', 'info');
+    
     chrome.runtime.sendMessage({ 
       action: 'openAuthPage',
       from: 'extension'
@@ -155,19 +158,20 @@ function openAuthPage() {
   }
 }
 
-// Open auth with specific provider (Google) - updated to ensure direct OAuth flow
+// Open auth with specific provider (Google) - updated for direct OAuth flow
 function openAuthWithProvider(provider) {
   try {
     showState(states.authLoading);
-    showToast('Opening Google login...', 'info');
+    console.log(`Opening ${provider} login...`);
+    showToast(`Opening ${provider} login...`, 'info');
     
     chrome.runtime.sendMessage({
       action: 'openAuthWithProvider',
       provider: provider
-    }, (response) => {
-      // We'll close the popup regardless of response
-      setTimeout(() => window.close(), 300);
     });
+    
+    // Close popup after a short delay
+    setTimeout(() => window.close(), 300);
   } catch (error) {
     console.error(`Error opening ${provider} auth:`, error);
     showToast(`Could not open ${provider} login. Please try again.`, 'error');
@@ -267,10 +271,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Set up event listeners for buttons
   if (loginBtn) {
     loginBtn.addEventListener('click', openAuthPage);
+    console.log('Login button listener set up');
+  } else {
+    console.warn('Login button not found in DOM');
   }
   
   if (googleLoginBtn) {
-    googleLoginBtn.addEventListener('click', () => openAuthWithProvider('google'));
+    googleLoginBtn.addEventListener('click', () => {
+      console.log('Google login button clicked');
+      openAuthWithProvider('google');
+    });
+    console.log('Google login button listener set up');
+  } else {
+    console.warn('Google login button not found in DOM');
   }
   
   if (logoutBtn) {
