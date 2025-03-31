@@ -29,6 +29,14 @@
           <span>Google</span>
         </button>
       </div>
+      
+      <!-- Added scan button to non-logged in state as well -->
+      <div class="scan-section">
+        <div class="separator">
+          <span>Image Tools</span>
+        </div>
+        <button id="scan-tabs-btn-public" class="secondary-btn">🔍 סרוק טאבים פתוחים</button>
+      </div>
     </div>
     
     <!-- Authentication loading state -->
@@ -65,6 +73,12 @@
         <h3 class="results-header">Images from Open Tabs</h3>
         <div id="results-grid" class="results-grid"></div>
       </div>
+    </div>
+    
+    <!-- Common scan results area that works for both logged in and logged out states -->
+    <div id="common-scan-results" class="hidden">
+      <h3 class="results-header">Images from Open Tabs</h3>
+      <div id="common-results-grid" class="results-grid"></div>
     </div>
   </div>
   <script src="popup.js"></script>

@@ -1,3 +1,4 @@
+
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -23,8 +24,11 @@ const googleLoginBtn = document.getElementById('google-login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const openGalleryBtn = document.getElementById('open-gallery-btn');
 const scanTabsBtn = document.getElementById('scan-tabs-btn');
+const scanTabsBtnPublic = document.getElementById('scan-tabs-btn-public');
 const scanResults = document.getElementById('scan-results');
+const commonScanResults = document.getElementById('common-scan-results');
 const resultsGrid = document.getElementById('results-grid');
+const commonResultsGrid = document.getElementById('common-results-grid');
 const userEmailElement = document.getElementById('user-email');
 
 // Helper functions
@@ -364,10 +368,15 @@ function logout() {
 function scanOpenTabs() {
   showToast('Scanning open tabs for images...', 'info');
   
+  // Determine which results grid to use based on login state
+  const isUserLoggedIn = document.getElementById('logged-in').classList.contains('hidden') === false;
+  const targetResultsGrid = isUserLoggedIn ? resultsGrid : commonResultsGrid;
+  const targetResultsContainer = isUserLoggedIn ? scanResults : commonScanResults;
+  
   // Clear any previous results
-  if (resultsGrid) {
-    resultsGrid.innerHTML = '';
-    scanResults.classList.add('hidden');
+  if (targetResultsGrid) {
+    targetResultsGrid.innerHTML = '';
+    targetResultsContainer.classList.add('hidden');
   }
   
   // Show loading indicator
@@ -377,8 +386,8 @@ function scanOpenTabs() {
     <div class="loading-spinner"></div>
     <p>Scanning tabs for images...</p>
   `;
-  resultsGrid.appendChild(loadingEl);
-  scanResults.classList.remove('hidden');
+  targetResultsGrid.appendChild(loadingEl);
+  targetResultsContainer.classList.remove('hidden');
   
   // Request background script to scan tabs
   chrome.runtime.sendMessage({ action: 'scanTabs' }, (response) => {
@@ -390,11 +399,16 @@ function scanOpenTabs() {
 function renderImageGrid(images) {
   console.log(`Rendering ${images.length} images in grid`);
   
+  // Determine which results grid to use based on login state
+  const isUserLoggedIn = document.getElementById('logged-in').classList.contains('hidden') === false;
+  const targetResultsGrid = isUserLoggedIn ? resultsGrid : commonResultsGrid;
+  const targetResultsContainer = isUserLoggedIn ? scanResults : commonScanResults;
+  
   // Remove loading indicator
-  resultsGrid.innerHTML = '';
+  targetResultsGrid.innerHTML = '';
   
   if (images.length === 0) {
-    resultsGrid.innerHTML = '<p class="no-images">No images found in open tabs</p>';
+    targetResultsGrid.innerHTML = '<p class="no-images">No images found in open tabs</p>';
     return;
   }
   
@@ -433,15 +447,15 @@ function renderImageGrid(images) {
       gridItem.appendChild(badge);
       
       // Add to results grid
-      resultsGrid.appendChild(gridItem);
+      targetResultsGrid.appendChild(gridItem);
     } catch (err) {
       console.error('Error rendering image:', err);
     }
   });
   
   // Show results and update header
-  scanResults.classList.remove('hidden');
-  const resultsHeader = document.querySelector('.results-header');
+  targetResultsContainer.classList.remove('hidden');
+  const resultsHeader = targetResultsContainer.querySelector('.results-header');
   if (resultsHeader) {
     resultsHeader.textContent = `Images from Open Tabs (${images.length})`;
   }
@@ -474,10 +488,15 @@ document.addEventListener('DOMContentLoaded', () => {
     openGalleryBtn.addEventListener('click', openGallery);
   }
   
-  // Set up scan tabs button
+  // Set up scan tabs buttons (both logged in and public versions)
   if (scanTabsBtn) {
     scanTabsBtn.addEventListener('click', scanOpenTabs);
-    console.log('Scan tabs button listener set up');
+    console.log('Scan tabs button listener set up (logged in)');
+  }
+  
+  if (scanTabsBtnPublic) {
+    scanTabsBtnPublic.addEventListener('click', scanOpenTabs);
+    console.log('Scan tabs button listener set up (public)');
   }
 });
 
