@@ -304,6 +304,120 @@ function openGallery() {
   });
 }
 
+// Function to scan all open tabs for images
+function scanAllOpenTabs() {
+  console.log('Starting scan of all open tabs for images');
+  
+  return new Promise((resolve) => {
+    // Get all tabs in the current window
+    chrome.tabs.query({ currentWindow: true }, async (tabs) => {
+      console.log(`Found ${tabs.length} tabs to scan`);
+      const allImages = [];
+      const processedTabs = [];
+      
+      // Process each tab
+      for (const tab of tabs) {
+        try {
+          // Skip tabs without URLs or with chrome:// URLs
+          if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+            console.log(`Skipping tab with URL: ${tab.url}`);
+            processedTabs.push(tab.id);
+            continue;
+          }
+          
+          console.log(`Scanning tab ${tab.id}: ${tab.url}`);
+          
+          // Inject content script to extract images
+          const result = await new Promise((resolveTab) => {
+            chrome.tabs.sendMessage(
+              tab.id,
+              { action: 'extractImages' },
+              (response) => {
+                // Check if we got a response
+                if (chrome.runtime.lastError) {
+                  console.log(`Need to inject content script into tab ${tab.id}`);
+                  
+                  // Inject content script and try again
+                  chrome.scripting.executeScript(
+                    {
+                      target: { tabId: tab.id },
+                      function: function() {
+                        // This function runs in the context of the tab
+                        function extractImagesFromDOM() {
+                          console.log('Extracting images from DOM');
+                          const images = Array.from(document.querySelectorAll('img'));
+                          const extractedImages = images.map(img => ({
+                            src: img.src,
+                            alt: img.alt || '',
+                            title: img.title || '',
+                            naturalWidth: img.naturalWidth,
+                            naturalHeight: img.naturalHeight,
+                            domain: window.location.hostname,
+                            path: window.location.pathname,
+                            pageTitle: document.title
+                          })).filter(img => img.src && img.src.length > 0 && !img.src.startsWith('data:'));
+                          
+                          console.log(`Found ${extractedImages.length} images`);
+                          return extractedImages;
+                        }
+                        
+                        const extractedImages = extractImagesFromDOM();
+                        return extractedImages;
+                      }
+                    },
+                    (results) => {
+                      if (chrome.runtime.lastError) {
+                        console.error(`Error injecting script: ${chrome.runtime.lastError.message}`);
+                        resolveTab({ images: [], error: chrome.runtime.lastError.message });
+                        return;
+                      }
+                      
+                      if (results && results[0] && results[0].result) {
+                        const tabImages = results[0].result;
+                        console.log(`Extracted ${tabImages.length} images from tab ${tab.id}`);
+                        resolveTab({ images: tabImages || [] });
+                      } else {
+                        resolveTab({ images: [] });
+                      }
+                    }
+                  );
+                } else if (response && response.images) {
+                  // Got response from existing content script
+                  console.log(`Received ${response.images.length} images from tab ${tab.id}`);
+                  resolveTab({ images: response.images });
+                } else {
+                  resolveTab({ images: [] });
+                }
+              }
+            );
+          });
+          
+          if (result.images && result.images.length > 0) {
+            // Add the tab's favicon and URL to each image
+            const tabImages = result.images.map(img => ({
+              ...img,
+              favicon: tab.favIconUrl || '',
+              tabUrl: tab.url,
+              tabTitle: tab.title
+            }));
+            
+            // Add these images to our collection
+            allImages.push(...tabImages);
+          }
+          
+          processedTabs.push(tab.id);
+        } catch (error) {
+          console.error(`Error processing tab ${tab.id}:`, error);
+          processedTabs.push(tab.id);
+        }
+      }
+      
+      console.log(`Scan complete. Found ${allImages.length} images in ${processedTabs.length} tabs`);
+      resolve({ images: allImages, tabCount: processedTabs.length });
+    });
+  });
+}
+
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   console.log('Received message:', message.action, 'from:', sender.tab?.url || 'popup');
@@ -336,110 +450,17 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       });
       return true; // Will respond asynchronously
       
-    case 'midjourneyImagesExtracted':
-      // Forward this message to the popup if it's open
-      chrome.runtime.sendMessage({
-        action: 'midjourneyImagesExtracted',
-        count: message.count
-      });
-      sendResponse({ success: true });
-      break;
-      
-    case 'testMidjourneyAuth':
-      // For POC we use locally stored data rather than a direct API connection
-      chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
-        const images = result.midjourney_extracted_images || [];
-        
-        sendResponse({
-          success: true,
-          authenticated: true,
-          extractionEnabled: true,
-          imageCount: images.length,
-          lastExtraction: images.length > 0 ? images[0].extractedAt : null
+    case 'scanTabs':
+      // Handle scan tabs request from popup
+      console.log('Scan tabs request received from popup');
+      scanAllOpenTabs().then(result => {
+        // Send results back to popup
+        chrome.runtime.sendMessage({
+          action: 'scanTabsResult',
+          images: result.images,
+          tabCount: result.tabCount
         });
-      });
-      return true; // Will respond asynchronously
-      
-    case 'testMidjourneyImages':
-      // Get images from storage for our POC
-      chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
-        const images = result.midjourney_extracted_images || [];
-        
-        // Limit to the most recent 5 images for display
-        const recentImages = images.slice(0, 5);
-        
-        sendResponse({
-          success: true,
-          totalImages: images.length,
-          displayedImages: recentImages.length,
-          images: recentImages
-        });
-      });
-      return true; // Will respond asynchronously
-      
-    case 'testMidjourneyGenerate':
-      // Mock generation job for the POC
-      const jobId = `mj-job-${Date.now()}`;
-      
-      // Store this job in local storage
-      chrome.storage.local.get(['midjourney_jobs'], function(result) {
-        const jobs = result.midjourney_jobs || [];
-        
-        jobs.unshift({
-          jobId,
-          prompt: message.prompt || "Futuristic cityscape with neon lights and flying cars",
-          status: "queued",
-          createdAt: new Date().toISOString()
-        });
-        
-        chrome.storage.local.set({
-          'midjourney_jobs': jobs
-        }, () => {
-          sendResponse({
-            success: true,
-            jobId: jobId,
-            prompt: message.prompt,
-            status: "queued"
-          });
-        });
-      });
-      return true; // Will respond asynchronously
-      
-    case 'testMidjourneyJobStatus':
-      // Get job status from storage for our POC
-      chrome.storage.local.get(['midjourney_jobs'], function(result) {
-        const jobs = result.midjourney_jobs || [];
-        const job = jobs.find(j => j.jobId === message.jobId);
-        
-        if (job) {
-          // If job was queued, mark it as completed now for the demo
-          if (job.status === "queued") {
-            job.status = "completed";
-            job.completedAt = new Date().toISOString();
-            job.imageUrl = "https://picsum.photos/512/512?random=4";
-            
-            // Update job in storage
-            chrome.storage.local.set({
-              'midjourney_jobs': jobs.map(j => j.jobId === job.jobId ? job : j)
-            });
-          }
-          
-          sendResponse({
-            success: true,
-            jobId: job.jobId,
-            status: job.status,
-            progress: 100,
-            url: job.imageUrl || "https://picsum.photos/512/512?random=4",
-            originalPrompt: job.prompt
-          });
-        } else {
-          // Job not found, create a mock response
-          sendResponse({
-            success: false,
-            error: "Job not found",
-            jobId: message.jobId
-          });
-        }
+        sendResponse({ success: true });
       });
       return true; // Will respond asynchronously
       

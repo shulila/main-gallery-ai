@@ -1,4 +1,3 @@
-
 // MainGallery Content Script
 console.log('MainGallery content script loaded');
 
@@ -250,6 +249,50 @@ function extractMidjourneyImages() {
   } catch (error) {
     console.error('Error extracting Midjourney images:', error);
     return false;
+  }
+}
+
+// Extract all images from the current page
+function extractAllImages() {
+  console.log('Extracting all images from the current page');
+  
+  try {
+    // Find all image elements on the page
+    const imageElements = document.querySelectorAll('img');
+    console.log(`Found ${imageElements.length} image elements`);
+    
+    // Extract relevant information from each image
+    const extractedImages = Array.from(imageElements)
+      .map(img => {
+        // Only process images with src and size > 0 (and not data URLs which are often icons)
+        if (!img.src || img.src.startsWith('data:') || img.width < 20 || img.height < 20) {
+          return null;
+        }
+        
+        // Get image metadata
+        const rect = img.getBoundingClientRect();
+        
+        return {
+          src: img.src,
+          alt: img.alt || '',
+          title: img.title || '',
+          width: img.width,
+          height: img.height,
+          naturalWidth: img.naturalWidth,
+          naturalHeight: img.naturalHeight,
+          visible: rect.top < window.innerHeight && rect.bottom > 0,
+          domain: window.location.hostname,
+          path: window.location.pathname,
+          pageTitle: document.title
+        };
+      })
+      .filter(Boolean); // Remove nulls
+    
+    console.log(`Extracted ${extractedImages.length} valid images`);
+    return extractedImages;
+  } catch (error) {
+    console.error('Error extracting images:', error);
+    return [];
   }
 }
 
@@ -505,6 +548,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       } else {
         sendResponse({ isLoggedIn: false });
       }
+      break;
+      
+    case 'extractImages':
+      // Extract all images from the page
+      const extractedImages = extractAllImages();
+      sendResponse({ images: extractedImages });
       break;
   }
   

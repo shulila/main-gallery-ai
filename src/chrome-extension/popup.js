@@ -1,4 +1,3 @@
-
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -23,6 +22,9 @@ const loginBtn = document.getElementById('login-btn');
 const googleLoginBtn = document.getElementById('google-login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const openGalleryBtn = document.getElementById('open-gallery-btn');
+const scanTabsBtn = document.getElementById('scan-tabs-btn');
+const scanResults = document.getElementById('scan-results');
+const resultsGrid = document.getElementById('results-grid');
 const userEmailElement = document.getElementById('user-email');
 
 // Helper functions
@@ -358,6 +360,93 @@ function logout() {
   });
 }
 
+// Scan all open tabs for images
+function scanOpenTabs() {
+  showToast('Scanning open tabs for images...', 'info');
+  
+  // Clear any previous results
+  if (resultsGrid) {
+    resultsGrid.innerHTML = '';
+    scanResults.classList.add('hidden');
+  }
+  
+  // Show loading indicator
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'scan-loading';
+  loadingEl.innerHTML = `
+    <div class="loading-spinner"></div>
+    <p>Scanning tabs for images...</p>
+  `;
+  resultsGrid.appendChild(loadingEl);
+  scanResults.classList.remove('hidden');
+  
+  // Request background script to scan tabs
+  chrome.runtime.sendMessage({ action: 'scanTabs' }, (response) => {
+    console.log('Scan request sent, waiting for images...');
+  });
+}
+
+// Render images in the popup grid
+function renderImageGrid(images) {
+  console.log(`Rendering ${images.length} images in grid`);
+  
+  // Remove loading indicator
+  resultsGrid.innerHTML = '';
+  
+  if (images.length === 0) {
+    resultsGrid.innerHTML = '<p class="no-images">No images found in open tabs</p>';
+    return;
+  }
+  
+  // Create grid items for each image
+  images.forEach(image => {
+    try {
+      // Create grid item
+      const gridItem = document.createElement('div');
+      gridItem.className = 'grid-item';
+      
+      // Create tooltip wrapper
+      const tooltipWrapper = document.createElement('div');
+      tooltipWrapper.className = 'tooltip-wrapper';
+      
+      // Create image thumbnail
+      const img = document.createElement('img');
+      img.src = image.src;
+      img.className = 'thumbnail';
+      img.alt = image.alt || 'Image';
+      img.loading = 'lazy';
+      
+      // Create tooltip
+      const tooltip = document.createElement('span');
+      tooltip.className = 'tooltip';
+      tooltip.textContent = image.title || image.alt || image.domain || 'Image';
+      
+      // Create info badge
+      const badge = document.createElement('div');
+      badge.className = 'domain-badge';
+      badge.textContent = image.domain || '';
+      
+      // Assemble the components
+      tooltipWrapper.appendChild(img);
+      tooltipWrapper.appendChild(tooltip);
+      gridItem.appendChild(tooltipWrapper);
+      gridItem.appendChild(badge);
+      
+      // Add to results grid
+      resultsGrid.appendChild(gridItem);
+    } catch (err) {
+      console.error('Error rendering image:', err);
+    }
+  });
+  
+  // Show results and update header
+  scanResults.classList.remove('hidden');
+  const resultsHeader = document.querySelector('.results-header');
+  if (resultsHeader) {
+    resultsHeader.textContent = `Images from Open Tabs (${images.length})`;
+  }
+}
+
 // Check for auth status immediately when popup opens
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Popup loaded, checking auth status');
@@ -384,6 +473,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (openGalleryBtn) {
     openGalleryBtn.addEventListener('click', openGallery);
   }
+  
+  // Set up scan tabs button
+  if (scanTabsBtn) {
+    scanTabsBtn.addEventListener('click', scanOpenTabs);
+    console.log('Scan tabs button listener set up');
+  }
 });
 
 // Listen for messages from background script
@@ -392,5 +487,15 @@ chrome.runtime.onMessage.addListener((message) => {
     checkAuthAndRedirect();
   } else if (message.action === 'midjourneyImagesExtracted') {
     showToast(`${message.count} new images extracted from Midjourney`, 'info');
+  } else if (message.action === 'scanTabsResult') {
+    // Handle results from tab scanning
+    if (message.images && Array.isArray(message.images)) {
+      console.log(`Received ${message.images.length} images from background`);
+      renderImageGrid(message.images);
+      showToast(`Found ${message.images.length} images in ${message.tabCount} tabs`, 'info');
+    } else {
+      console.error('Invalid image data received:', message);
+      showToast('Error processing images from tabs', 'error');
+    }
   }
 });
