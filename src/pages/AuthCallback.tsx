@@ -52,24 +52,30 @@ const AuthCallback = () => {
             }
             
             // Sync to chrome.storage if in extension context
-            if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
+            if (typeof window !== 'undefined' && window.chrome && window.chrome.storage) {
               try {
                 const chromeApi = window.chrome as Chrome;
-                chromeApi.storage?.sync?.set({
-                  'main_gallery_auth_token': tokenData,
-                  'main_gallery_user_email': email || 'User'
-                }, () => {
-                  console.log('Auth data synced to chrome.storage');
-                  
-                  // Also send a message to the extension if this was initiated from there
-                  if (window.chrome?.runtime?.id) {
-                    window.chrome.runtime.sendMessage({
-                      action: 'authCompleted',
-                      success: true,
-                      user: { email: email || 'User' }
-                    }).catch(err => console.log('Error sending auth completed message:', err));
-                  }
-                });
+                if (chromeApi.storage?.sync?.set) {
+                  chromeApi.storage.sync.set({
+                    'main_gallery_auth_token': tokenData,
+                    'main_gallery_user_email': email || 'User'
+                  }, () => {
+                    console.log('Auth data synced to chrome.storage');
+                    
+                    // Also send a message to the extension if this was initiated from there
+                    if (window.chrome?.runtime?.id) {
+                      try {
+                        window.chrome.runtime.sendMessage({
+                          action: 'authCompleted',
+                          success: true,
+                          user: { email: email || 'User' }
+                        });
+                      } catch (err) {
+                        console.log('Error sending auth completed message:', err);
+                      }
+                    }
+                  });
+                }
               } catch (err) {
                 console.error('Error syncing to chrome.storage:', err);
               }
@@ -128,24 +134,30 @@ const AuthCallback = () => {
             localStorage.setItem('main_gallery_user_email', data.session.user.email || 'User');
             
             // Sync to chrome.storage if in extension context
-            if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
+            if (typeof window !== 'undefined' && window.chrome && window.chrome.storage) {
               try {
                 const chromeApi = window.chrome as Chrome;
-                chromeApi.storage?.sync?.set({
-                  'main_gallery_auth_token': tokenData,
-                  'main_gallery_user_email': data.session.user.email || 'User'
-                }, () => {
-                  console.log('Auth data synced to chrome.storage');
-                  
-                  // Also send a message to the extension if possible
-                  if (window.chrome?.runtime?.id) {
-                    window.chrome.runtime.sendMessage({
-                      action: 'authCompleted',
-                      success: true,
-                      user: { email: data.session.user.email || 'User' }
-                    }).catch(err => console.log('Error sending auth completed message:', err));
-                  }
-                });
+                if (chromeApi.storage?.sync?.set) {
+                  chromeApi.storage.sync.set({
+                    'main_gallery_auth_token': tokenData,
+                    'main_gallery_user_email': data.session.user.email || 'User'
+                  }, () => {
+                    console.log('Auth data synced to chrome.storage');
+                    
+                    // Also send a message to the extension if possible
+                    if (window.chrome?.runtime?.id) {
+                      try {
+                        window.chrome.runtime.sendMessage({
+                          action: 'authCompleted',
+                          success: true,
+                          user: { email: data.session.user.email || 'User' }
+                        });
+                      } catch (err) {
+                        console.log('Error sending auth completed message:', err);
+                      }
+                    }
+                  });
+                }
               } catch (err) {
                 console.error('Error syncing to chrome.storage:', err);
               }
