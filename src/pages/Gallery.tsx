@@ -5,10 +5,32 @@ import Navbar from '@/components/Navbar';
 import GalleryView from '@/components/GalleryView';
 import Footer from '@/components/Footer';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 const Gallery = () => {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  // Extension integration notification
+  useEffect(() => {
+    // Check if the page was loaded by the extension
+    const fromExtension = new URLSearchParams(window.location.search).get('from') === 'extension';
+    
+    if (fromExtension) {
+      toast({
+        title: "Extension Connected",
+        description: "MainGallery extension is ready to sync images",
+        duration: 3000,
+      });
+    }
+    
+    // Notify bridge that page is ready (if extension is installed)
+    window.postMessage({
+      type: 'GALLERY_PAGE_READY',
+      timestamp: Date.now()
+    }, '*');
+  }, []);
   
   // Redirect to auth page if not logged in
   useEffect(() => {

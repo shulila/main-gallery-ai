@@ -25,6 +25,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.error('Error forwarding images to web app:', err);
       sendResponse({ success: false, error: err.message });
     }
+    
+    return true; // Keep channel open for async response
   }
   
   // Always return true if we want to send a response asynchronously

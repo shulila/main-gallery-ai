@@ -1,8 +1,9 @@
+
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ImageCard } from './ImageCard';
 import { Button } from "@/components/ui/button";
-import { Grid, Columns, Calendar, Filter, ChevronDown, ImageIcon, Download, Copy, ExternalLink } from 'lucide-react';
+import { Grid, Columns, Calendar, Filter, ChevronDown, ImageIcon, Download, Copy, ExternalLink, FileJson, RefreshCw } from 'lucide-react';
 import { galleryDB } from '@/services/GalleryIndexedDB';
 import { useToast } from "@/hooks/use-toast";
 
@@ -109,6 +110,8 @@ const GalleryView = () => {
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [filterPlatforms, setFilterPlatforms] = useState<boolean>(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState<boolean>(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -309,6 +312,45 @@ const GalleryView = () => {
     a.click();
     document.body.removeChild(a);
   };
+  
+  const handleExportGallery = () => {
+    try {
+      const exportData = images.map(img => ({
+        id: img.id,
+        url: img.url,
+        prompt: img.prompt || '',
+        platform: img.platform || '',
+        creationDate: img.creationDate || '',
+        sourceURL: img.sourceURL,
+        timestamp: img.timestamp
+      }));
+      
+      const json = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `maingallery-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Gallery exported successfully",
+        description: `Exported ${exportData.length} images to JSON file.`,
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error('Error exporting gallery:', error);
+      toast({
+        title: "Export failed",
+        description: "Could not export gallery data. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const platforms = [
     { id: 'all', name: 'All Platforms' },
@@ -332,7 +374,7 @@ const GalleryView = () => {
           <h2 className="text-2xl font-bold mb-4 md:mb-0">Your Gallery</h2>
           
           <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative">
+            <div className="relative group">
               <Button variant="outline" className="w-full sm:w-auto flex items-center justify-between">
                 <Filter className="h-4 w-4 mr-2" />
                 {platforms.find(p => p.id === filterBy)?.name}
@@ -351,7 +393,7 @@ const GalleryView = () => {
               </div>
             </div>
             
-            <div className="relative">
+            <div className="relative group">
               <Button variant="outline" className="w-full sm:w-auto flex items-center justify-between">
                 <Calendar className="h-4 w-4 mr-2" />
                 {sortOptions.find(s => s.id === sortBy)?.name}
@@ -370,19 +412,44 @@ const GalleryView = () => {
               </div>
             </div>
             
-            <div className="flex rounded-md shadow-sm border border-border">
-              <button
-                className={`px-3 py-2 rounded-l-md ${viewMode === 'grid' ? 'bg-primary text-white' : 'bg-background hover:bg-secondary'}`}
-                onClick={() => setViewMode('grid')}
+            <div className="flex gap-2">
+              <div className="flex rounded-md shadow-sm border border-border">
+                <button
+                  className={`px-3 py-2 rounded-l-md ${viewMode === 'grid' ? 'bg-primary text-white' : 'bg-background hover:bg-secondary'}`}
+                  onClick={() => setViewMode('grid')}
+                >
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  className={`px-3 py-2 rounded-r-md ${viewMode === 'columns' ? 'bg-primary text-white' : 'bg-background hover:bg-secondary'}`}
+                  onClick={() => setViewMode('columns')}
+                >
+                  <Columns className="h-4 w-4" />
+                </button>
+              </div>
+              
+              <Button variant="outline" size="icon" title="Export Gallery" onClick={handleExportGallery}>
+                <FileJson className="h-4 w-4" />
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                size="icon" 
+                title="Refresh Gallery"
+                onClick={() => {
+                  setIsLoading(true);
+                  galleryDB.getAllImages().then(dbImages => {
+                    setImages(dbImages);
+                    setIsLoading(false);
+                    toast({
+                      title: "Gallery refreshed",
+                      description: `Loaded ${dbImages.length} images from storage.`,
+                    });
+                  });
+                }}
               >
-                <Grid className="h-4 w-4" />
-              </button>
-              <button
-                className={`px-3 py-2 rounded-r-md ${viewMode === 'columns' ? 'bg-primary text-white' : 'bg-background hover:bg-secondary'}`}
-                onClick={() => setViewMode('columns')}
-              >
-                <Columns className="h-4 w-4" />
-              </button>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
