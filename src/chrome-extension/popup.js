@@ -1,3 +1,4 @@
+
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -55,15 +56,18 @@ try {
   console.error('Error creating Supabase client:', err);
 }
 
-// Enhanced localStorage session check
+// Enhanced localStorage session check with validation
 function checkLocalStorageAuth() {
   try {
     const tokenStr = localStorage.getItem('main_gallery_auth_token');
     if (tokenStr) {
       const token = JSON.parse(tokenStr);
       
-      // Check if token is valid and not expired (24 hours validity)
-      if (token && (Date.now() - token.timestamp < 24 * 60 * 60 * 1000)) {
+      // Check if token is valid and not expired
+      const hasExpiry = token.expires_at !== undefined;
+      const isExpired = hasExpiry && Date.now() > token.expires_at;
+      
+      if (token && !isExpired) {
         console.log('Valid auth token found in localStorage');
         
         // Sync to Chrome storage
@@ -99,11 +103,12 @@ async function checkSupabaseSession() {
       if (session) {
         console.log('Valid Supabase session found:', session.user.email);
         
-        // Sync to storage
+        // Sync to storage with expiry time (24 hours from now)
         const tokenData = {
           access_token: session.access_token,
           refresh_token: session.refresh_token || '',
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          expires_at: Date.now() + (24 * 60 * 60 * 1000)
         };
         
         // Store in chrome storage
@@ -132,7 +137,7 @@ async function checkSupabaseSession() {
   return false;
 }
 
-// Improved isLoggedIn check to handle both storage mechanisms
+// Improved isLoggedIn check with token validation
 async function isLoggedIn() {
   // First try Supabase session
   if (await checkSupabaseSession()) {
@@ -144,39 +149,43 @@ async function isLoggedIn() {
     return true;
   }
   
-  // Finally check extension storage
+  // Finally check extension storage with validation
   return new Promise(resolve => {
     chrome.storage.sync.get(['main_gallery_auth_token'], result => {
       const token = result.main_gallery_auth_token;
       
-      // Check if token exists and is not too old (24 hours validity)
-      if (token && (Date.now() - token.timestamp < 24 * 60 * 60 * 1000)) {
-        console.log('Valid token found in extension storage');
+      // Check if token exists and is not expired
+      if (token) {
+        const hasExpiry = token.expires_at !== undefined;
+        const isExpired = hasExpiry && Date.now() > token.expires_at;
         
-        // Also try to sync to localStorage for web access
-        try {
-          localStorage.setItem('main_gallery_auth_token', JSON.stringify(token));
+        if (!isExpired) {
+          console.log('Valid token found in extension storage');
           
-          // Also get user email if available
-          chrome.storage.sync.get(['main_gallery_user_email'], emailResult => {
-            if (emailResult.main_gallery_user_email) {
-              localStorage.setItem('main_gallery_user_email', emailResult.main_gallery_user_email);
-            }
-          });
-        } catch (err) {
-          console.error('Error syncing to localStorage:', err);
-        }
+          // Sync to localStorage for web access if possible
+          try {
+            localStorage.setItem('main_gallery_auth_token', JSON.stringify(token));
+            
+            // Also get user email if available
+            chrome.storage.sync.get(['main_gallery_user_email'], emailResult => {
+              if (emailResult.main_gallery_user_email) {
+                localStorage.setItem('main_gallery_user_email', emailResult.main_gallery_user_email);
+              }
+            });
+          } catch (err) {
+            console.error('Error syncing to localStorage:', err);
+          }
+          
+          resolve(true);
+          return;
+        } 
         
-        resolve(true);
-      } else {
-        // Token doesn't exist or is expired
-        if (token) {
-          // Clear expired token
-          console.log('Expired token found in extension storage');
-          chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
-        }
-        resolve(false);
+        // Token is expired, clean it up
+        console.log('Expired token found in extension storage');
+        chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
       }
+      
+      resolve(false);
     });
   });
 }
@@ -241,13 +250,13 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
-// Enhanced auth check with logging for debugging
+// Enhanced auth check with token validation
 async function checkAuthAndRedirect() {
   try {
     showState(states.authLoading); // Show loading state while checking
-    console.log('Checking authentication status...');
+    console.log('Checking authentication status with validation...');
     
-    // Check authentication in all storage mechanisms
+    // Check authentication in all storage mechanisms with token validation
     const loggedIn = await isLoggedIn();
     
     if (loggedIn) {
@@ -385,9 +394,3 @@ chrome.runtime.onMessage.addListener((message) => {
     showToast(`${message.count} new images extracted from Midjourney`, 'info');
   }
 });
-
-// Add periodic auth check for better synchronization
-setInterval(() => {
-  console.log('Running periodic auth check');
-  checkAuthAndRedirect();
-}, 30000); // Check every 30 seconds

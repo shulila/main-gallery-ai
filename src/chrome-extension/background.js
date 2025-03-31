@@ -1,4 +1,3 @@
-
 // Import functions from other modules - avoid dynamic imports in MV3
 // Use standard JS function declarations and move code from imported files
 
@@ -23,31 +22,17 @@ function setupAuthCallbackListener() {
         if (accessToken) {
           console.log('Auth tokens detected, will store session');
           
-          // Store basic token info for extension usage
+          // Store basic token info for extension usage with expiry time
           chrome.storage.sync.set({
             'main_gallery_auth_token': {
               access_token: accessToken,
               refresh_token: refreshToken,
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours validity
             },
             'main_gallery_user_email': userEmail || 'User'
           }, () => {
             console.log('Auth token stored in extension storage');
-            
-            // Also try to store in localStorage for web access
-            try {
-              const mainWindow = chrome.extension.getBackgroundPage();
-              if (mainWindow && mainWindow.localStorage) {
-                mainWindow.localStorage.setItem('main_gallery_auth_token', JSON.stringify({
-                  access_token: accessToken,
-                  refresh_token: refreshToken,
-                  timestamp: Date.now()
-                }));
-                mainWindow.localStorage.setItem('main_gallery_user_email', userEmail || 'User');
-              }
-            } catch (err) {
-              console.error('Error setting localStorage from background:', err);
-            }
             
             // Close the auth tab after successful login
             setTimeout(() => {
@@ -131,17 +116,33 @@ function openAuthWithProvider(provider) {
   }
 }
 
-// Check if user is logged in - improved to check both extension storage and localStorage
+// Check if user is logged in with token validation
 function isLoggedIn() {
   return new Promise((resolve) => {
     // Check if token exists in extension storage
     chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
-      if (result.main_gallery_auth_token) {
-        resolve(true);
-      } else {
-        // If no token in extension storage, resolve false
-        resolve(false);
+      const token = result.main_gallery_auth_token;
+      
+      // Validate token exists and is not expired
+      if (token) {
+        // Check if token has an expiry time and if it's still valid
+        const hasExpiry = token.expires_at !== undefined;
+        const isExpired = hasExpiry && Date.now() > token.expires_at;
+        
+        // If token is valid or doesn't have expiry (backward compatibility)
+        if (!isExpired) {
+          console.log('Valid auth token found in extension storage');
+          resolve(true);
+          return;
+        }
+        
+        // Token is expired, clean it up
+        console.log('Token expired, removing it');
+        chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
       }
+      
+      // No valid token found
+      resolve(false);
     });
   });
 }
@@ -207,7 +208,7 @@ chrome.runtime.onInstalled.addListener(function(details) {
       // Use chrome notifications API
       chrome.notifications.create(notificationId, {
         type: 'basic',
-        iconUrl: 'icons/icon128.png',
+        iconUrl: 'icons/icon48.png',
         title: 'Welcome to MainGallery.AI',
         message: 'Pin this extension for quick access to your AI art gallery!'
       });
@@ -335,7 +336,15 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       });
       return true; // Will respond asynchronously
       
-    // Midjourney API Test Handlers
+    case 'midjourneyImagesExtracted':
+      // Forward this message to the popup if it's open
+      chrome.runtime.sendMessage({
+        action: 'midjourneyImagesExtracted',
+        count: message.count
+      });
+      sendResponse({ success: true });
+      break;
+      
     case 'testMidjourneyAuth':
       // For POC we use locally stored data rather than a direct API connection
       chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
