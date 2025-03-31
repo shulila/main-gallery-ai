@@ -3,5 +3,10 @@
   "rewrites": [
     { "source": "/auth/callback", "destination": "/" },
     { "source": "/(.*)", "destination": "/" }
+  ],
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/auth/callback(.*)", "dest": "/" },
+    { "src": "/(.*)", "dest": "/" }
   ]
 }
