@@ -51,9 +51,10 @@ const AuthCallback = () => {
             }
             
             // Sync to chrome.storage if in extension context
-            if (typeof chrome !== 'undefined' && chrome.storage) {
+            if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
               try {
-                chrome.storage.sync.set({
+                const chromeApi = window.chrome as Chrome;
+                chromeApi.storage?.sync?.set({
                   'main_gallery_auth_token': tokenData,
                   'main_gallery_user_email': email || 'User'
                 }, () => {
@@ -116,9 +117,10 @@ const AuthCallback = () => {
             localStorage.setItem('main_gallery_user_email', data.session.user.email || 'User');
             
             // Sync to chrome.storage if in extension context
-            if (typeof chrome !== 'undefined' && chrome.storage) {
+            if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
               try {
-                chrome.storage.sync.set({
+                const chromeApi = window.chrome as Chrome;
+                chromeApi.storage?.sync?.set({
                   'main_gallery_auth_token': tokenData,
                   'main_gallery_user_email': data.session.user.email || 'User'
                 }, () => {
