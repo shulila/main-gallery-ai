@@ -1,4 +1,3 @@
-
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -33,6 +32,10 @@ const userEmailElement = document.getElementById('user-email');
 const scanActions = document.getElementById('scan-actions');
 const copyAllPromptsBtn = document.getElementById('copy-all-prompts-btn');
 const clearResultsBtn = document.getElementById('clear-results-btn');
+const syncToGalleryBtn = document.getElementById('sync-to-gallery-btn');
+const viewGalleryBtn = document.getElementById('view-gallery-btn');
+const syncSuccessMessage = document.getElementById('sync-success-message');
+const syncCountElement = document.getElementById('sync-count');
 
 // Helper functions
 function hideAllStates() {
@@ -547,6 +550,134 @@ function renderImageGrid(images) {
   }
 }
 
+// Function to sync images to the main gallery
+function syncImagesToGallery() {
+  const isUserLoggedIn = document.getElementById('logged-in').classList.contains('hidden') === false;
+  const targetResultsGrid = isUserLoggedIn ? resultsGrid : commonResultsGrid;
+  const syncSuccessMessage = document.getElementById('sync-success-message');
+  const syncCountElement = document.getElementById('sync-count');
+  
+  // Show loading state
+  showToast('Syncing images to gallery...', 'info');
+  
+  // Get all grid items
+  const gridItems = targetResultsGrid.querySelectorAll('.grid-item');
+  if (!gridItems.length) {
+    showToast('No images to sync', 'info');
+    return;
+  }
+  
+  // Collect image data
+  const images = Array.from(gridItems).map(item => {
+    const img = item.querySelector('img');
+    const tooltip = item.querySelector('.tooltip');
+    const badge = item.querySelector('.domain-badge');
+    
+    return {
+      src: img?.src,
+      alt: img?.alt,
+      title: img?.title,
+      prompt: tooltip?.textContent,
+      platform: badge?.textContent,
+      tabUrl: img?.dataset.tabUrl || item.dataset.tabUrl,
+      sourceUrl: img?.dataset.sourceUrl || item.dataset.sourceUrl,
+      timestamp: Date.now()
+    };
+  }).filter(img => img.src);
+  
+  console.log(`Preparing to sync ${images.length} images to gallery`);
+  
+  // Find a tab with our web app open, or open a new one
+  chrome.tabs.query({ url: `${BRAND.urls.baseUrl}/*` }, (tabs) => {
+    // Sync function that sends data to the web app
+    const sendToWebApp = (tab) => {
+      console.log('Sending images to web app tab:', tab.id);
+      
+      // Use chrome.tabs.sendMessage to send images to content script in the web app tab
+      chrome.tabs.sendMessage(tab.id, {
+        action: 'syncImagesToGallery',
+        images: images
+      }, response => {
+        if (chrome.runtime.lastError) {
+          console.error('Error sending images to web app:', chrome.runtime.lastError);
+          
+          // Try direct postMessage approach
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            function: (images) => {
+              console.log(`Content script injected, posting ${images.length} images to window`);
+              window.postMessage({ 
+                type: 'GALLERY_IMAGES', 
+                images: images,
+                source: 'MAIN_GALLERY_EXTENSION'
+              }, '*');
+            },
+            args: [images]
+          }).then(() => {
+            console.log('Script executed to send images via postMessage');
+            showSyncSuccess(images.length);
+          }).catch(err => {
+            console.error('Failed to inject script:', err);
+            showToast('Error syncing to gallery. Try opening the gallery first.', 'error');
+          });
+        } else if (response && response.success) {
+          console.log('Images successfully sent to web app');
+          showSyncSuccess(images.length);
+        }
+      });
+    };
+    
+    // Show sync success message and update UI
+    const showSyncSuccess = (count) => {
+      if (syncSuccessMessage && syncCountElement) {
+        syncCountElement.textContent = count;
+        syncSuccessMessage.classList.remove('hidden');
+        
+        // Hide results grid
+        if (commonScanResults) {
+          commonResultsGrid.classList.add('hidden');
+          scanActions.classList.add('hidden');
+        }
+      }
+      
+      showToast(`✅ ${count} images synced to MainGallery`, 'info');
+    };
+    
+    // If we found a tab with our web app
+    if (tabs && tabs.length > 0) {
+      // Focus the tab
+      chrome.tabs.update(tabs[0].id, { active: true }, () => {
+        // Send data to it
+        sendToWebApp(tabs[0]);
+      });
+    } else {
+      // Open a new gallery tab
+      chrome.tabs.create({ url: GALLERY_URL }, (newTab) => {
+        console.log('New gallery tab created, waiting for load...');
+        
+        // Wait for tab to load before sending data
+        chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, tab) {
+          if (tabId === newTab.id && changeInfo.status === 'complete') {
+            // Remove listener to avoid multiple calls
+            chrome.tabs.onUpdated.removeListener(listener);
+            
+            // Give the app a moment to initialize
+            setTimeout(() => {
+              sendToWebApp(tab);
+            }, 2000);
+          }
+        });
+      });
+    }
+  });
+}
+
+// Function to open gallery in new tab
+function viewGallery() {
+  openGallery();
+  window.close(); // Close the popup
+}
+
 // Check for auth status immediately when popup opens
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Popup loaded, checking auth status');
@@ -592,6 +723,18 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (clearResultsBtn) {
     clearResultsBtn.addEventListener('click', clearResults);
+  }
+  
+  // Setup sync to gallery button
+  if (syncToGalleryBtn) {
+    syncToGalleryBtn.addEventListener('click', syncImagesToGallery);
+    console.log('Sync to gallery button listener set up');
+  }
+  
+  // Setup view gallery button
+  if (viewGalleryBtn) {
+    viewGalleryBtn.addEventListener('click', viewGallery);
+    console.log('View gallery button listener set up');
   }
 });
 

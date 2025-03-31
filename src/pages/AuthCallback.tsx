@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,6 +19,22 @@ export default function AuthCallback() {
     
     const token = tokenFromHash || tokenFromQuery;
     
+    // Check if there's any image sync data in the session storage
+    // This could be set by the extension before redirecting to auth
+    const pendingSync = sessionStorage.getItem('maingallery_pending_sync');
+    let syncData = null;
+    
+    if (pendingSync) {
+      try {
+        syncData = JSON.parse(pendingSync);
+        console.log('Found pending image sync data:', syncData);
+      } catch (e) {
+        console.error('Error parsing pending sync data:', e);
+      }
+      // Clear the pending sync data
+      sessionStorage.removeItem('maingallery_pending_sync');
+    }
+    
     console.log('🔑 access_token detected:', token ? 'YES' : 'NO');
     if (token) {
       console.log('Token found, storing in localStorage');
@@ -34,8 +49,17 @@ export default function AuthCallback() {
       
       // Slight delay before redirect to ensure processing
       setTimeout(() => {
-        console.log('Redirecting to home page');
-        navigate('/');
+        console.log('Redirecting to destination');
+        
+        // If there's pending sync data, redirect to gallery
+        if (syncData && syncData.images && syncData.images.length > 0) {
+          // Store the sync data in session storage for the gallery to pick up
+          sessionStorage.setItem('maingallery_sync_images', JSON.stringify(syncData.images));
+          navigate('/gallery');
+        } else {
+          // Otherwise redirect to home page
+          navigate('/');
+        }
       }, 2000);
     } else {
       console.error('No access token found in URL');

@@ -1,11 +1,21 @@
-
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ImageCard } from './ImageCard';
 import { Button } from "@/components/ui/button";
-import { Grid, Columns, Calendar, Filter, ChevronDown, ImageIcon } from 'lucide-react';
+import { Grid, Columns, Calendar, Filter, ChevronDown, ImageIcon, Download, Copy, ExternalLink } from 'lucide-react';
+import { galleryDB } from '@/services/GalleryIndexedDB';
+import { useToast } from "@/hooks/use-toast";
 
-// Mock data for our gallery
+type GalleryImage = {
+  id: string;
+  url: string;
+  prompt?: string;
+  platform?: string;
+  creationDate?: string;
+  sourceURL: string;
+  timestamp: number;
+};
+
 const mockImages = [
   {
     id: '1',
@@ -89,7 +99,6 @@ const mockImages = [
   }
 ];
 
-// Type definitions to match ImageCard component expectations
 type ViewMode = 'grid' | 'columns';
 type SortOption = 'newest' | 'oldest' | 'platform';
 type FilterOption = 'all' | 'midjourney' | 'dalle' | 'stable-diffusion' | 'runway' | 'pika';
@@ -98,43 +107,159 @@ const GalleryView = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
-  const [images, setImages] = useState(mockImages);
+  const [images, setImages] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
-  // Simulate loading effect
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
+    const handleExtensionMessage = (event: MessageEvent) => {
+      if (process.env.NODE_ENV === 'production') {
+        const allowedOrigins = [window.location.origin, 'chrome-extension://'];
+        if (!allowedOrigins.some(origin => event.origin.startsWith(origin))) {
+          console.warn('Received message from unauthorized origin:', event.origin);
+          return;
+        }
+      }
+  
+      if (event.data && event.data.type === 'GALLERY_IMAGES') {
+        console.log('Received gallery images:', event.data.images.length);
+        processIncomingImages(event.data.images);
+      }
+    };
+  
+    window.addEventListener('message', handleExtensionMessage);
     
-    return () => clearTimeout(timer);
+    return () => {
+      window.removeEventListener('message', handleExtensionMessage);
+    };
   }, []);
 
-  // Apply sorting and filtering
+  const processIncomingImages = async (incomingImages: any[]) => {
+    if (!incomingImages || !Array.isArray(incomingImages) || incomingImages.length === 0) {
+      console.warn('No valid images received');
+      return;
+    }
+
+    try {
+      const formattedImages: GalleryImage[] = incomingImages.map((img) => ({
+        id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        url: img.src || img.url || '',
+        prompt: img.prompt || img.alt || img.title || '',
+        platform: img.platform || img.platformName || 'unknown',
+        creationDate: img.creationDate || new Date().toISOString(),
+        sourceURL: img.tabUrl || img.sourceUrl || window.location.href,
+        timestamp: Date.now()
+      }));
+
+      const validImages = formattedImages.filter(img => img.url && img.url.length > 0);
+      
+      if (validImages.length === 0) {
+        toast({
+          title: "No valid images found",
+          description: "The received data didn't contain any valid image URLs.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await galleryDB.addImages(validImages);
+      
+      setImages(prevImages => {
+        const existingUrls = new Set(prevImages.map(img => img.url));
+        const uniqueImages = validImages.filter(img => !existingUrls.has(img.url));
+        return [...uniqueImages, ...prevImages];
+      });
+
+      toast({
+        title: "Images synced successfully",
+        description: `Added ${validImages.length} new images to your gallery.`,
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('Error processing incoming images:', error);
+      toast({
+        title: "Error syncing images",
+        description: "Failed to process incoming images. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
-    let filteredImages = [...mockImages];
+    const loadImagesFromDB = async () => {
+      try {
+        setIsLoading(true);
+        await galleryDB.init();
+        
+        const dbImages = await galleryDB.getAllImages();
+        console.log(`Loaded ${dbImages.length} images from IndexedDB`);
+        
+        setImages(dbImages);
+
+        if (dbImages.length === 0 && process.env.NODE_ENV !== 'production') {
+          console.log('No images found in DB, using mock data');
+          setImages(mockImages as unknown as GalleryImage[]);
+        }
+      } catch (error) {
+        console.error('Error loading images from IndexedDB:', error);
+        if (process.env.NODE_ENV !== 'production') {
+          setImages(mockImages as unknown as GalleryImage[]);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadImagesFromDB();
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
     
-    // Apply platform filter
+    let filteredImages = [...images];
+    
     if (filterBy !== 'all') {
-      filteredImages = filteredImages.filter(img => 
-        img.platform.toLowerCase().replace(/·/g, '').replace(/\s/g, '-') === filterBy
-      );
+      filteredImages = filteredImages.filter(img => {
+        const platform = img.platform?.toLowerCase().replace(/·/g, '').replace(/\s/g, '-');
+        return platform === filterBy;
+      });
     }
     
-    // Apply sorting
     filteredImages.sort((a, b) => {
       if (sortBy === 'newest') {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return (b.timestamp || 0) - (a.timestamp || 0);
       } else if (sortBy === 'oldest') {
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return (a.timestamp || 0) - (b.timestamp || 0);
       } else if (sortBy === 'platform') {
-        return a.platform.localeCompare(b.platform);
+        return (a.platform || '').localeCompare(b.platform || '');
       }
       return 0;
     });
     
     setImages(filteredImages);
   }, [sortBy, filterBy]);
+
+  const handleCopyPrompt = (prompt: string) => {
+    navigator.clipboard.writeText(prompt);
+    toast({
+      title: "Prompt copied",
+      description: "The prompt has been copied to your clipboard.",
+      duration: 2000,
+    });
+  };
+
+  const handleOpenSource = (sourceURL: string) => {
+    window.open(sourceURL, '_blank');
+  };
+
+  const handleDownload = (url: string, filename: string) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'image';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   const platforms = [
     { id: 'all', name: 'All Platforms' },
@@ -158,7 +283,6 @@ const GalleryView = () => {
           <h2 className="text-2xl font-bold mb-4 md:mb-0">Your Gallery</h2>
           
           <div className="flex flex-col sm:flex-row gap-4">
-            {/* Filter dropdown */}
             <div className="relative">
               <Button variant="outline" className="w-full sm:w-auto flex items-center justify-between">
                 <Filter className="h-4 w-4 mr-2" />
@@ -178,7 +302,6 @@ const GalleryView = () => {
               </div>
             </div>
             
-            {/* Sort dropdown */}
             <div className="relative">
               <Button variant="outline" className="w-full sm:w-auto flex items-center justify-between">
                 <Calendar className="h-4 w-4 mr-2" />
@@ -198,7 +321,6 @@ const GalleryView = () => {
               </div>
             </div>
             
-            {/* View mode toggles */}
             <div className="flex rounded-md shadow-sm border border-border">
               <button
                 className={`px-3 py-2 rounded-l-md ${viewMode === 'grid' ? 'bg-primary text-white' : 'bg-background hover:bg-secondary'}`}
@@ -217,7 +339,6 @@ const GalleryView = () => {
         </div>
         
         {isLoading ? (
-          // Loading skeleton
           <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'} gap-6`}>
             {[...Array(6)].map((_, i) => (
               <div key={i} className="animate-pulse rounded-xl overflow-hidden bg-muted/30">
@@ -233,9 +354,37 @@ const GalleryView = () => {
         ) : (
           <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'} gap-6`}>
             {images.map(image => (
-              <Link to={`/detail/${image.id}`} key={image.id}>
-                <ImageCard image={image} />
-              </Link>
+              <div key={image.id} className="rounded-xl overflow-hidden border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
+                <div className="aspect-square relative overflow-hidden bg-muted">
+                  <img 
+                    src={image.url} 
+                    alt={image.prompt || 'Gallery image'} 
+                    className="object-cover w-full h-full transition-transform hover:scale-105"
+                    loading="lazy"
+                  />
+                  <div className="absolute top-2 left-2 bg-background/80 backdrop-blur-sm rounded-md px-2 py-1 text-xs font-medium">
+                    {image.platform || 'Unknown'}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <h3 className="font-medium text-sm line-clamp-2 mb-2" title={image.prompt}>
+                    {image.prompt || 'No prompt available'}
+                  </h3>
+                  <div className="flex gap-2 mt-3 justify-end">
+                    {image.prompt && (
+                      <Button variant="outline" size="icon" onClick={() => handleCopyPrompt(image.prompt || '')}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button variant="outline" size="icon" onClick={() => handleOpenSource(image.sourceURL)}>
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={() => handleDownload(image.url, `image-${image.id}`)}>
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -246,7 +395,7 @@ const GalleryView = () => {
               <ImageIcon className="h-16 w-16 mx-auto opacity-30" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No images found</h3>
-            <p className="text-muted-foreground mb-6">Try adjusting your filters or connect more platforms.</p>
+            <p className="text-muted-foreground mb-6">Try adjusting your filters or use the Chrome extension to scan for images.</p>
             <Button>Connect a Platform</Button>
           </div>
         )}

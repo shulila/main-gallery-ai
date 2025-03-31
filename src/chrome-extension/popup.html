@@ -67,12 +67,6 @@
       <button id="open-gallery-btn" class="primary-btn">Open Gallery</button>
       <button id="scan-tabs-btn" class="secondary-btn">🔍 סרוק טאבים פתוחים</button>
       <button id="logout-btn" class="text-btn">Sign Out</button>
-
-      <!-- Images results container -->
-      <div id="scan-results" class="hidden">
-        <h3 class="results-header">Images from Open Tabs</h3>
-        <div id="results-grid" class="results-grid"></div>
-      </div>
     </div>
     
     <!-- Common scan results area that works for both logged in and logged out states -->
@@ -83,7 +77,14 @@
       <!-- Additional UI for metadata -->
       <div id="scan-actions" class="scan-actions hidden">
         <button id="copy-all-prompts-btn" class="text-btn">📝 Copy All Prompts</button>
+        <button id="sync-to-gallery-btn" class="primary-btn">🔄 Sync to Gallery</button>
         <button id="clear-results-btn" class="text-btn">🗑️ Clear Results</button>
+      </div>
+      
+      <!-- Added sync success message -->
+      <div id="sync-success-message" class="sync-success-message hidden">
+        <p>✅ <span id="sync-count">0</span> images synced to MainGallery</p>
+        <button id="view-gallery-btn" class="text-btn">View Gallery →</button>
       </div>
     </div>
   </div>
