@@ -9,6 +9,7 @@ type GalleryImage = {
   creationDate?: string;
   sourceURL: string;
   timestamp: number;
+  type?: string;
 };
 
 // Singleton pattern for the IndexedDB service
@@ -95,6 +96,14 @@ class GalleryIndexedDBService {
       // Add each image to the store
       uniqueImages.forEach((image) => {
         try {
+          // Ensure ID exists
+          if (!image.id) {
+            image.id = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          }
+          // Ensure timestamp exists
+          if (!image.timestamp) {
+            image.timestamp = Date.now();
+          }
           store.put(image);
         } catch (error) {
           console.error('Error adding image', image, error);

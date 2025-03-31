@@ -1,70 +1,284 @@
 
-// Import functions from other modules - avoid dynamic imports in MV3
-// Use standard JS function declarations and move code from imported files
+// Production URL for consistent redirects
+const PRODUCTION_URL = 'https://main-gallery-hub.lovable.app';
+const GALLERY_URL = `${PRODUCTION_URL}/gallery`;
+const AUTH_URL = `${PRODUCTION_URL}/auth`;
 
-// Authentication utilities
-function setupAuthCallbackListener() {
-  try {
-    // Use tabs.onUpdated to detect auth callbacks
-    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-      // Only process completed loads with our auth callback URL
-      if (changeInfo.status === 'complete' && tab.url && 
-          tab.url.includes('main-gallery-hub.lovable.app/auth/callback')) {
+// Check if user is logged in with token validation
+function isLoggedIn() {
+  return new Promise((resolve) => {
+    // Check token in extension storage
+    chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
+      const token = result.main_gallery_auth_token;
+      
+      // Validate token exists and is not expired
+      if (token) {
+        const hasExpiry = token.expires_at !== undefined;
+        const isExpired = hasExpiry && Date.now() > token.expires_at;
         
-        console.log('Auth navigation detected:', tab.url);
+        if (!isExpired) {
+          console.log('Valid auth token found');
+          resolve(true);
+          return;
+        }
         
-        // Get auth token from the URL
-        const url = new URL(tab.url);
-        const accessToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('access_token') : null;
-        const refreshToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('refresh_token') : null;
-        const userEmail = url.hash ? new URLSearchParams(url.hash.substring(1)).get('email') : null;
+        console.log('Token expired, removing it');
+        chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
+      }
+      
+      // Also check localStorage as fallback (for web sessions)
+      try {
+        const localStorageCheck = () => {
+          try {
+            const tokenStr = localStorage.getItem('main_gallery_auth_token');
+            if (tokenStr) {
+              const token = JSON.parse(tokenStr);
+              const hasExpiry = token.expires_at !== undefined;
+              const isExpired = hasExpiry && Date.now() > token.expires_at;
+              
+              if (!isExpired) {
+                console.log('Valid token found in localStorage');
+                
+                // Sync to Chrome storage
+                chrome.storage.sync.set({
+                  'main_gallery_auth_token': token,
+                  'main_gallery_user_email': localStorage.getItem('main_gallery_user_email') || 'User'
+                });
+                
+                return true;
+              }
+            }
+            return false;
+          } catch (e) {
+            console.error('Error checking localStorage:', e);
+            return false;
+          }
+        };
         
-        // If we have tokens, validate and store them
-        if (accessToken) {
-          console.log('Auth tokens detected, will store session');
-          
-          // Store basic token info for extension usage with expiry time
-          chrome.storage.sync.set({
-            'main_gallery_auth_token': {
-              access_token: accessToken,
-              refresh_token: refreshToken,
-              timestamp: Date.now(),
-              expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours validity
-            },
-            'main_gallery_user_email': userEmail || 'User'
-          }, () => {
-            console.log('Auth token stored in extension storage');
+        // Try to execute localStorage check in active tab context
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0] && tabs[0].url && tabs[0].url.includes('main-gallery-hub.lovable.app')) {
+            chrome.scripting.executeScript({
+              target: { tabId: tabs[0].id },
+              function: localStorageCheck
+            }).then((results) => {
+              if (results && results[0] && results[0].result) {
+                resolve(true);
+              } else {
+                resolve(false);
+              }
+            }).catch(() => {
+              resolve(false);
+            });
+          } else {
+            resolve(false);
+          }
+        });
+      } catch (e) {
+        console.error('Error executing script:', e);
+        resolve(false);
+      }
+    });
+  });
+}
+
+// Extract images from the current active tab
+function extractImagesFromActiveTab() {
+  return new Promise((resolve) => {
+    // Get active tab in current window
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      if (!tabs || !tabs[0] || !tabs[0].id) {
+        console.log('No active tab found');
+        resolve({ images: [], tabCount: 0 });
+        return;
+      }
+      
+      const tab = tabs[0];
+      
+      // Skip tabs without URLs or with chrome:// URLs
+      if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+        console.log(`Skipping tab with URL: ${tab.url}`);
+        resolve({ images: [], tabCount: 0 });
+        return;
+      }
+      
+      console.log(`Extracting images from active tab: ${tab.url}`);
+      
+      // Detect platform for specialized extraction
+      let platformId = null;
+      
+      if (tab.url.includes('midjourney.com')) {
+        platformId = 'midjourney';
+      } else if (tab.url.includes('openai.com')) {
+        platformId = 'dalle';
+      } else if (tab.url.includes('dreamstudio.ai') || tab.url.includes('stability.ai')) {
+        platformId = 'stableDiffusion';
+      } else if (tab.url.includes('runwayml.com')) {
+        platformId = 'runway';
+      } else if (tab.url.includes('pika.art')) {
+        platformId = 'pika';
+      } else if (tab.url.includes('leonardo.ai')) {
+        platformId = 'leonardo';
+      } else if (tab.url.includes('discord.com/channels') && tab.url.includes('midjourney')) {
+        platformId = 'midjourney';
+      }
+      
+      // Try platform-specific extraction first if applicable
+      if (platformId) {
+        console.log(`Detected ${platformId} platform, using specialized extraction`);
+        
+        try {
+          // Send message to content script for platform-specific extraction
+          chrome.tabs.sendMessage(
+            tab.id,
+            { action: 'extractPlatformImages', platformId },
+            (response) => {
+              if (chrome.runtime.lastError) {
+                console.log('Error extracting platform images, falling back to generic extraction');
+                genericExtraction();
+                return;
+              }
+              
+              if (response && response.images && response.images.length > 0) {
+                const processedImages = response.images.map(img => ({
+                  ...img,
+                  platform: platformId,
+                  platformName: platformId.charAt(0).toUpperCase() + platformId.slice(1),
+                  favicon: tab.favIconUrl || '',
+                  tabUrl: tab.url,
+                  tabTitle: tab.title,
+                  timestamp: new Date().toISOString(),
+                  type: 'image'
+                }));
+                
+                console.log(`Extracted ${processedImages.length} platform-specific images`);
+                resolve({ images: processedImages, tabCount: 1 });
+              } else {
+                console.log('No platform-specific images found, trying generic extraction');
+                genericExtraction();
+              }
+            }
+          );
+        } catch (error) {
+          console.error('Error with platform extractor:', error);
+          genericExtraction();
+        }
+      } else {
+        genericExtraction();
+      }
+      
+      // Generic image extraction as fallback
+      function genericExtraction() {
+        try {
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            function: function() {
+              // This function runs in the context of the tab
+              const images = Array.from(document.querySelectorAll('img'));
+              return images
+                .filter(img => (
+                  img.src && 
+                  !img.src.startsWith('data:') && 
+                  img.width > 100 && 
+                  img.height > 100
+                ))
+                .map(img => {
+                  // Find nearby text that might be a prompt
+                  let prompt = img.alt || img.title || '';
+                  if (!prompt) {
+                    // Check for nearby text elements that might contain prompts
+                    const parent = img.parentElement;
+                    const siblings = parent ? Array.from(parent.children) : [];
+                    
+                    for (const sibling of siblings) {
+                      if (sibling !== img && sibling.textContent && sibling.textContent.trim().length > 10) {
+                        prompt = sibling.textContent.trim();
+                        break;
+                      }
+                    }
+                    
+                    if (!prompt) {
+                      // Check parent's siblings
+                      const grandparent = parent?.parentElement;
+                      const parentSiblings = grandparent ? Array.from(grandparent.children) : [];
+                      
+                      for (const sibling of parentSiblings) {
+                        if (sibling !== parent && sibling.textContent && sibling.textContent.trim().length > 10) {
+                          prompt = sibling.textContent.trim();
+                          break;
+                        }
+                      }
+                    }
+                  }
+                  
+                  return {
+                    src: img.src,
+                    url: img.src,
+                    alt: img.alt || '',
+                    title: img.title || '',
+                    prompt: prompt || document.title,
+                    naturalWidth: img.naturalWidth || img.width,
+                    naturalHeight: img.naturalHeight || img.height,
+                    domain: window.location.hostname,
+                    path: window.location.pathname,
+                    pageTitle: document.title,
+                    timestamp: new Date().toISOString(),
+                    sourceURL: window.location.href
+                  };
+                });
+            }
+          }, (results) => {
+            if (chrome.runtime.lastError) {
+              console.error(`Error injecting script: ${chrome.runtime.lastError.message}`);
+              resolve({ images: [], tabCount: 0 });
+              return;
+            }
             
-            // Close the auth tab after successful login
-            setTimeout(() => {
-              chrome.tabs.remove(tabId);
+            if (results && results[0] && results[0].result) {
+              const tabImages = results[0].result;
+              console.log(`Extracted ${tabImages.length} generic images from tab ${tab.id}`);
               
-              // Open gallery in a new tab
-              chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery' });
-              
-              // Send message to update UI if popup is open
-              chrome.runtime.sendMessage({ action: 'updateUI' });
-            }, 1000);
+              // Process the generic images
+              if (tabImages && tabImages.length > 0) {
+                const platformName = platformId ? 
+                  platformId.charAt(0).toUpperCase() + platformId.slice(1) : 
+                  tab.title.split(' ')[0];
+                
+                const processedImages = tabImages.map(img => ({
+                  ...img,
+                  platform: platformId || 'generic',
+                  platformName: platformName,
+                  favicon: tab.favIconUrl || '',
+                  tabUrl: tab.url,
+                  tabTitle: tab.title,
+                  type: 'image'
+                }));
+                
+                console.log(`Processed ${processedImages.length} images with metadata`);
+                resolve({ images: processedImages, tabCount: 1 });
+              } else {
+                resolve({ images: [], tabCount: 0 });
+              }
+            } else {
+              resolve({ images: [], tabCount: 0 });
+            }
           });
+        } catch (error) {
+          console.error(`Error processing tab ${tab.id}:`, error);
+          resolve({ images: [], tabCount: 0 });
         }
       }
     });
-    
-    console.log('Auth callback listener set up using tabs API');
-  } catch (error) {
-    console.error('Error setting up auth callback listener:', error);
-  }
+  });
 }
 
-// Open auth page
-function openAuthPage(tabId = null, options = {}) {
-  let authUrl = 'https://main-gallery-hub.lovable.app/auth';
+// Open auth page for login
+function openAuthPage(options = {}) {
+  let authUrl = AUTH_URL;
   
   // Add any query parameters
   const searchParams = new URLSearchParams();
   if (options.redirect) searchParams.append('redirect', options.redirect);
-  if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
-  if (options.signup) searchParams.append('signup', 'true');
   if (options.from) searchParams.append('from', options.from);
   
   const queryString = searchParams.toString();
@@ -72,625 +286,233 @@ function openAuthPage(tabId = null, options = {}) {
     authUrl += `?${queryString}`;
   }
   
-  // Open the URL
-  if (tabId) {
-    chrome.tabs.update(tabId, { url: authUrl });
-  } else {
-    chrome.tabs.create({ url: authUrl });
-  }
-  
+  // Open the URL in a new tab
+  chrome.tabs.create({ url: authUrl });
   console.log('Opened auth URL:', authUrl);
 }
 
-// Handle OAuth sign-in with provider
-function openAuthWithProvider(provider) {
-  try {
-    // For Google sign-in, we'll use a direct approach
-    const redirectUrl = 'https://main-gallery-hub.lovable.app/auth/callback';
-    console.log(`Opening ${provider} auth with redirect to:`, redirectUrl);
-    
-    // Generate a state param for security
-    const stateParam = Math.random().toString(36).substring(2, 15);
-    
-    // Store this state param for verification later
-    chrome.storage.local.set({ 'oauth_state': stateParam });
-    
-    // Updated Google OAuth client ID
-    const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
-    
-    if (provider === 'google') {
-      // Construct the Google OAuth URL directly
-      const googleOAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true&state=${stateParam}`;
-      
-      // Log the URL for debugging
-      console.log(`Constructed Google OAuth URL:`, googleOAuthUrl);
-      
-      // Open the OAuth URL in a new tab
-      chrome.tabs.create({ url: googleOAuthUrl });
-      
-      console.log(`Opened ${provider} OAuth URL manually:`, googleOAuthUrl);
-    } else {
-      console.error(`Provider ${provider} not supported in direct mode`);
-    }
-  } catch (error) {
-    console.error(`Error during ${provider} auth:`, error);
-  }
+// Open the gallery
+function openGallery() {
+  chrome.tabs.create({ url: GALLERY_URL });
+  console.log('Opened gallery:', GALLERY_URL);
 }
 
-// Check if user is logged in with token validation
-function isLoggedIn() {
-  return new Promise((resolve) => {
-    // Check if token exists in extension storage
-    chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
-      const token = result.main_gallery_auth_token;
-      
-      // Validate token exists and is not expired
-      if (token) {
-        // Check if token has an expiry time and if it's still valid
-        const hasExpiry = token.expires_at !== undefined;
-        const isExpired = hasExpiry && Date.now() > token.expires_at;
-        
-        // If token is valid or doesn't have expiry (backward compatibility)
-        if (!isExpired) {
-          console.log('Valid auth token found in extension storage');
-          resolve(true);
-          return;
-        }
-        
-        // Token is expired, clean it up
-        console.log('Token expired, removing it');
-        chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
-      }
-      
-      // No valid token found
-      resolve(false);
-    });
-  });
-}
-
-// Log out from all platforms
-function logout() {
-  try {
-    // Clear local storage token
-    return new Promise((resolve) => {
-      chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-        console.log('Successfully logged out');
-        resolve(true);
-      });
-    });
-  } catch (error) {
-    console.error('Logout error:', error);
-    return Promise.resolve(false);
-  }
-}
-
-// Platform detection utility
-function debugPlatformDetection(url) {
-  if (!url) return null;
+// Sync images to gallery
+function syncImagesToGallery(images) {
+  console.log(`Starting sync of ${images.length} images to gallery`);
   
-  if (url.includes('midjourney.com')) {
-    return 'midjourney';
-  } else if (url.includes('openai.com')) {
-    return 'dalle';
-  } else if (url.includes('dreamstudio.ai') || url.includes('stability.ai')) {
-    return 'stableDiffusion';
-  } else if (url.includes('runwayml.com')) {
-    return 'runway';
-  } else if (url.includes('pika.art')) {
-    return 'pika';
-  } else if (url.includes('leonardo.ai')) {
-    return 'leonardo';
-  } else if (url.includes('discord.com/channels') && url.includes('midjourney')) {
-    return 'midjourney';
-  }
-  
-  return null;
-}
-
-// Set up auth callback listener - using tabs API
-console.log('Setting up auth callback listener');
-setupAuthCallbackListener();
-
-// Production URL for consistent redirects
-const PRODUCTION_URL = 'https://main-gallery-hub.lovable.app';
-
-// Listen for extension installation/update
-chrome.runtime.onInstalled.addListener(function(details) {
-  console.log('Extension installed or updated:', details.reason);
-  
-  // Show a notification to pin the extension on install
-  if (details.reason === 'install') {
-    try {
-      console.log('Extension installed, creating welcome notification');
-      
-      // Create a unique ID for this notification
-      const notificationId = 'installation-' + Date.now();
-      
-      // Use chrome notifications API
-      chrome.notifications.create(notificationId, {
-        type: 'basic',
-        iconUrl: 'icons/icon48.png',
-        title: 'Welcome to MainGallery.AI',
-        message: 'Pin this extension for quick access to your AI art gallery!'
-      });
-    } catch (error) {
-      console.error('Failed to show installation notification:', error);
-    }
-  }
-});
-
-// Listen for tab updates to detect supported platforms
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url) {
-    const platformId = debugPlatformDetection(tab.url);
-    
-    if (platformId) {
-      console.log(`MainGallery: Detected ${platformId} on tab ${tabId}`);
-      
-      // Special handling for Midjourney app page for image extraction
-      if (platformId === 'midjourney' && tab.url.includes('midjourney.com/app')) {
-        console.log('Detected Midjourney app page, will check login status');
+  // Find or open a gallery tab
+  chrome.tabs.query({ url: `${PRODUCTION_URL}/gallery*` }, (tabs) => {
+    if (tabs && tabs.length > 0) {
+      // Gallery tab exists, focus and sync to it
+      const tab = tabs[0];
+      chrome.tabs.update(tab.id, { active: true }, () => {
+        console.log('Found existing gallery tab, sending images');
         
-        // Check if user is logged in to MainGallery
-        isLoggedIn().then(loggedIn => {
-          if (loggedIn) {
-            console.log('User logged in, will trigger image extraction');
-            // Trigger image extraction in content script
-            chrome.tabs.sendMessage(tabId, { 
-              action: 'extractMidjourneyImages'
-            }).catch(err => {
-              console.log('Content script may not be ready yet:', err.message);
-              
-              // Retry after a delay
-              setTimeout(() => {
-                chrome.tabs.sendMessage(tabId, { 
-                  action: 'extractMidjourneyImages'
-                }).catch(err => {
-                  console.log('Content script still not ready:', err.message);
-                });
-              }, 3000);
-            });
+        // Send message to bridge.js in the gallery tab
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'syncImagesToGallery',
+          images: images
+        }, response => {
+          if (chrome.runtime.lastError) {
+            console.error('Error syncing to existing gallery tab:', chrome.runtime.lastError);
+            openNewGalleryTab();
+            return;
           }
-        });
-      }
-      
-      // Regular platform detection logic
-      isLoggedIn().then(loggedIn => {
-        // Notify the content script that we've detected a supported platform
-        chrome.tabs.sendMessage(tabId, { 
-          action: 'platformDetected',
-          platformId: platformId,
-          userLoggedIn: loggedIn
-        }).catch(err => {
-          console.log('Content script may not be ready yet:', err.message);
+          
+          console.log('Images synced to existing gallery tab');
+          
+          // Show notification
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'icons/icon48.png',
+            title: 'Images Synced',
+            message: `Successfully synced ${images.length} images to MainGallery`
+          });
         });
       });
+    } else {
+      openNewGalleryTab();
     }
-  }
-});
-
-// Handle icon click in toolbar
-chrome.action.onClicked.addListener(async (tab) => {
-  console.log('Extension icon clicked in toolbar');
+  });
   
-  // Check if user is logged in to MainGallery
+  function openNewGalleryTab() {
+    // No gallery tab exists, create one and store images in storage for it to pick up
+    console.log('Opening new gallery tab');
+    
+    // Store images temporarily in local storage
+    chrome.storage.local.set({ 'maingallery_pending_images': images }, () => {
+      chrome.tabs.create({ url: `${GALLERY_URL}?sync=true` }, newTab => {
+        console.log('Created new gallery tab, images stored for pickup');
+        
+        // Show notification
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon48.png',
+          title: 'Images Ready',
+          message: `${images.length} images ready to sync to MainGallery`
+        });
+      });
+    });
+  }
+}
+
+// Handle browser action (icon) click
+chrome.action.onClicked.addListener(async (tab) => {
+  console.log('Extension icon clicked');
+  
+  // Check if the user is logged in
   const loggedIn = await isLoggedIn();
   
-  if (loggedIn) {
-    // If user is logged in, go directly to gallery
-    console.log('User is logged in, opening gallery directly');
-    openGallery();
+  if (!loggedIn) {
+    console.log('User not logged in, redirecting to auth page');
+    openAuthPage({ from: 'extension', redirect: 'gallery' });
     return;
   }
   
-  // User is not logged in, open auth page
-  console.log('User not logged in, opening auth page');
-  openAuthPage();
+  // User is logged in, extract images from the active tab
+  console.log('User logged in, extracting images from active tab');
+  
+  try {
+    // Show a quick notification that scanning is in progress
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon48.png',
+      title: 'Scanning Active Tab',
+      message: 'Looking for images to sync...'
+    });
+    
+    // Extract images
+    const { images } = await extractImagesFromActiveTab();
+    
+    if (!images || images.length === 0) {
+      console.log('No images found in active tab');
+      
+      // Show notification
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon48.png',
+        title: 'No Images Found',
+        message: 'No images were found on the current page'
+      });
+      return;
+    }
+    
+    console.log(`Found ${images.length} images in active tab`);
+    
+    // Sync images to gallery
+    syncImagesToGallery(images);
+    
+  } catch (error) {
+    console.error('Error during scan or sync:', error);
+    
+    // Show error notification
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon48.png',
+      title: 'Sync Error',
+      message: 'There was an error syncing images. Please try again.'
+    });
+  }
 });
 
-// Function to open the gallery
-function openGallery() {
-  const galleryUrl = `${PRODUCTION_URL}/gallery`;
-  console.log('Opening gallery at', galleryUrl);
-  
-  // Check if gallery tab is already open
-  chrome.tabs.query({ url: `${galleryUrl}*` }, (tabs) => {
-    if (tabs && tabs.length > 0) {
-      // Gallery tab exists, focus it
-      chrome.tabs.update(tabs[0].id, { active: true });
-    } else {
-      // Gallery tab doesn't exist, open a new one
-      chrome.tabs.create({ url: galleryUrl });
-    }
-  });
-}
-
-// Function to scan all open tabs for images
-function scanAllOpenTabs() {
-  console.log('Starting scan of all open tabs for images');
-  
-  return new Promise((resolve) => {
-    // Get all tabs in the current window
-    chrome.tabs.query({ currentWindow: true }, async (tabs) => {
-      console.log(`Found ${tabs.length} tabs to scan`);
-      const allImages = [];
-      const processedTabs = [];
-      
-      // Process each tab
-      for (const tab of tabs) {
-        try {
-          // Skip tabs without URLs or with chrome:// URLs
-          if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-            console.log(`Skipping tab with URL: ${tab.url}`);
-            processedTabs.push(tab.id);
-            continue;
-          }
-          
-          console.log(`Scanning tab ${tab.id}: ${tab.url}`);
-          
-          // Inject content script to extract images
-          const result = await new Promise((resolveTab) => {
-            chrome.tabs.sendMessage(
-              tab.id,
-              { action: 'extractImages' },
-              (response) => {
-                // Check if we got a response
-                if (chrome.runtime.lastError) {
-                  console.log(`Need to inject content script into tab ${tab.id}`);
-                  
-                  // Inject content script and try again
-                  chrome.scripting.executeScript(
-                    {
-                      target: { tabId: tab.id },
-                      function: function() {
-                        // This function runs in the context of the tab
-                        function extractImagesFromDOM() {
-                          console.log('Extracting images from DOM');
-                          const images = Array.from(document.querySelectorAll('img'));
-                          const extractedImages = images.map(img => ({
-                            src: img.src,
-                            alt: img.alt || '',
-                            title: img.title || '',
-                            naturalWidth: img.naturalWidth,
-                            naturalHeight: img.naturalHeight,
-                            domain: window.location.hostname,
-                            path: window.location.pathname,
-                            pageTitle: document.title
-                          })).filter(img => img.src && img.src.length > 0 && !img.src.startsWith('data:'));
-                          
-                          console.log(`Found ${extractedImages.length} images`);
-                          return extractedImages;
-                        }
-                        
-                        const extractedImages = extractImagesFromDOM();
-                        return extractedImages;
-                      }
-                    },
-                    (results) => {
-                      if (chrome.runtime.lastError) {
-                        console.error(`Error injecting script: ${chrome.runtime.lastError.message}`);
-                        resolveTab({ images: [], error: chrome.runtime.lastError.message });
-                        return;
-                      }
-                      
-                      if (results && results[0] && results[0].result) {
-                        const tabImages = results[0].result;
-                        console.log(`Extracted ${tabImages.length} images from tab ${tab.id}`);
-                        resolveTab({ images: tabImages || [] });
-                      } else {
-                        resolveTab({ images: [] });
-                      }
-                    }
-                  );
-                } else if (response && response.images) {
-                  // Got response from existing content script
-                  console.log(`Received ${response.images.length} images from tab ${tab.id}`);
-                  resolveTab({ images: response.images });
-                } else {
-                  resolveTab({ images: [] });
-                }
-              }
-            );
-          });
-          
-          if (result.images && result.images.length > 0) {
-            // Add the tab's favicon and URL to each image
-            const tabImages = result.images.map(img => ({
-              ...img,
-              favicon: tab.favIconUrl || '',
-              tabUrl: tab.url,
-              tabTitle: tab.title
-            }));
-            
-            // Add these images to our collection
-            allImages.push(...tabImages);
-          }
-          
-          processedTabs.push(tab.id);
-        } catch (error) {
-          console.error(`Error processing tab ${tab.id}:`, error);
-          processedTabs.push(tab.id);
-        }
-      }
-      
-      console.log(`Scan complete. Found ${allImages.length} images in ${processedTabs.length} tabs`);
-      resolve({ images: allImages, tabCount: processedTabs.length });
-    });
-  });
-}
-
-// Enhanced function to scan tabs with platform-specific extractors
-async function scanTabsWithPlatformExtractors() {
-  console.log('Starting enhanced scan with platform-specific extractors');
-  
-  // Get all tabs in the current window
-  const tabs = await new Promise((resolve) => 
-    chrome.tabs.query({ currentWindow: true }, tabs => resolve(tabs))
-  );
-  
-  console.log(`Found ${tabs.length} tabs to scan`);
-  const allExtractedMedia = [];
-  const processedTabs = [];
-  
-  // Process each tab
-  for (const tab of tabs) {
-    try {
-      // Skip tabs without URLs or with chrome:// URLs
-      if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-        console.log(`Skipping tab with URL: ${tab.url}`);
-        processedTabs.push({ id: tab.id, count: 0 });
-        continue;
-      }
-      
-      console.log(`Scanning tab ${tab.id}: ${tab.url}`);
-      
-      // Detect platform
-      const platformId = debugPlatformDetection(tab.url);
-      const isPlatformTab = !!platformId;
-      
-      // For supported platforms, use specialized extractors
-      if (isPlatformTab) {
-        console.log(`Tab ${tab.id} is ${platformId} platform`);
+// Listen for tab updates to specifically detect gallery page with sync request
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && 
+      tab.url && 
+      tab.url.includes('main-gallery-hub.lovable.app/gallery') && 
+      tab.url.includes('sync=true')) {
+    
+    console.log('Detected gallery page load with sync=true param');
+    
+    // Get pending images from storage and send after a delay to ensure page is ready
+    setTimeout(() => {
+      chrome.storage.local.get(['maingallery_pending_images'], result => {
+        const pendingImages = result.maingallery_pending_images || [];
         
-        // Try to use platform-specific extractor
-        try {
-          // Send message to content script
-          const action = `extract${platformId.charAt(0).toUpperCase() + platformId.slice(1)}Images`;
+        if (pendingImages.length > 0) {
+          console.log(`Sending ${pendingImages.length} pending images to gallery tab`);
           
-          await new Promise(resolve => {
-            chrome.tabs.sendMessage(
-              tab.id, 
-              { action: 'simulateInfiniteScroll' },
-              response => {
-                console.log(`Infinite scroll on tab ${tab.id} complete`);
-                resolve();
-              }
-            );
-            
-            // Resolve anyway after timeout
-            setTimeout(resolve, 5000);
-          });
-          
-          const response = await new Promise(resolve => {
-            chrome.tabs.sendMessage(
-              tab.id,
-              { action: 'extractPlatformImages' },
-              response => {
-                if (chrome.runtime.lastError) {
-                  console.log(`Error: ${chrome.runtime.lastError.message}`);
-                  resolve({ success: false });
-                } else {
-                  resolve(response || { success: false });
-                }
-              }
-            );
-            
-            // Fallback if no response
-            setTimeout(() => resolve({ success: false }), 3000);
-          });
-          
-          if (response && response.success) {
-            console.log(`Successfully extracted ${response.count || 'unknown'} items from ${platformId}`);
-          }
-        } catch (error) {
-          console.error(`Error with platform extractor:`, error);
-        }
-      }
-      
-      // For all tabs (platform or not), get generic images
-      const genericImages = await new Promise((resolve) => {
-        chrome.tabs.sendMessage(
-          tab.id,
-          { action: 'extractImages' },
-          (response) => {
+          // Send images to the gallery tab
+          chrome.tabs.sendMessage(tabId, {
+            action: 'syncImagesToGallery',
+            images: pendingImages
+          }, response => {
             if (chrome.runtime.lastError) {
-              console.log(`Need to inject script into tab ${tab.id}`);
-              
-              // Inject script to extract images
-              chrome.scripting.executeScript(
-                {
-                  target: { tabId: tab.id },
-                  function: function() {
-                    // Extract images from DOM
-                    function extractImagesFromDOM() {
-                      const images = Array.from(document.querySelectorAll('img'));
-                      return images
-                        .filter(img => img.src && !img.src.startsWith('data:') && 
-                                img.width > 60 && img.height > 60)
-                        .map(img => ({
-                          src: img.src,
-                          alt: img.alt || '',
-                          title: img.title || '',
-                          naturalWidth: img.naturalWidth || img.width,
-                          naturalHeight: img.naturalHeight || img.height,
-                          domain: window.location.hostname,
-                          path: window.location.pathname,
-                          pageTitle: document.title,
-                          // Try to get prompt or context from surrounding elements
-                          prompt: img.alt || img.title || document.title
-                        }));
-                    }
-                    
-                    return extractImagesFromDOM();
-                  }
-                },
-                (results) => {
-                  if (chrome.runtime.lastError || !results || !results[0]) {
-                    resolve([]);
-                  } else {
-                    resolve(results[0].result || []);
-                  }
-                }
-              );
-            } else if (response && response.images) {
-              resolve(response.images);
-            } else {
-              resolve([]);
+              console.error('Error syncing to gallery:', chrome.runtime.lastError);
+              return;
             }
-          }
-        );
+            
+            console.log('Images synced to gallery tab');
+            
+            // Clear pending images from storage
+            chrome.storage.local.remove(['maingallery_pending_images']);
+          });
+        }
       });
+    }, 2000);
+  }
+});
+
+// Handle authentication callback detection
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url && 
+      tab.url.includes('main-gallery-hub.lovable.app/auth/callback')) {
+    
+    console.log('Auth callback detected:', tab.url);
+    
+    // Get auth token from the URL
+    const url = new URL(tab.url);
+    const accessToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('access_token') : null;
+    const refreshToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('refresh_token') : null;
+    const userEmail = url.hash ? new URLSearchParams(url.hash.substring(1)).get('email') : null;
+    
+    // If we have tokens, store them
+    if (accessToken) {
+      console.log('Auth tokens detected, storing session');
       
-      // Process the generic images
-      if (genericImages && genericImages.length > 0) {
-        const platformName = platformId ? 
-          platformId.charAt(0).toUpperCase() + platformId.slice(1) : 
-          tab.title.split(' ')[0];
+      // Store basic token info with expiry time
+      chrome.storage.sync.set({
+        'main_gallery_auth_token': {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          timestamp: Date.now(),
+          expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours validity
+        },
+        'main_gallery_user_email': userEmail || 'User'
+      }, () => {
+        console.log('Auth token stored in extension storage');
         
-        // Add tab info to images
-        const processedImages = genericImages.map(img => ({
-          ...img,
-          platform: platformId || 'generic',
-          platformName: platformName,
-          favicon: tab.favIconUrl || '',
-          tabUrl: tab.url,
-          tabTitle: tab.title,
-          timestamp: new Date().toISOString()
-        }));
-        
-        // Add to collection
-        allExtractedMedia.push(...processedImages);
-        processedTabs.push({ id: tab.id, count: processedImages.length });
-        
-        console.log(`Extracted ${processedImages.length} images from tab ${tab.id}`);
-      } else {
-        processedTabs.push({ id: tab.id, count: 0 });
-      }
-    } catch (error) {
-      console.error(`Error scanning tab ${tab.id}:`, error);
-      processedTabs.push({ id: tab.id, count: 0, error: error.message });
+        // Close the auth tab after successful login
+        setTimeout(() => {
+          chrome.tabs.remove(tabId);
+          
+          // Open gallery in a new tab
+          openGallery();
+        }, 1000);
+      });
     }
   }
-  
-  // De-duplicate images based on src
-  const uniqueSrcs = new Set();
-  const uniqueImages = allExtractedMedia.filter(img => {
-    if (uniqueSrcs.has(img.src)) return false;
-    uniqueSrcs.add(img.src);
-    return true;
-  });
-  
-  console.log(`Enhanced scan complete. Found ${uniqueImages.length} unique images in ${processedTabs.length} tabs`);
-  return { images: uniqueImages, tabCount: processedTabs.length };
-}
+});
 
-// Handle messages from popup and content scripts
-chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
-  console.log('Received message:', message.action, 'from:', sender.tab?.url || 'popup');
-  
-  switch (message.action) {
-    case 'openGallery':
-      openGallery();
-      sendResponse({ success: true });
-      break;
-      
-    case 'openAuthPage':
-      openAuthPage(null, { forgotPassword: message.forgotPassword, from: message.from });
-      sendResponse({ success: true });
-      break;
-      
-    case 'openAuthWithProvider':
-      openAuthWithProvider(message.provider);
-      sendResponse({ success: true });
-      break;
-      
-    case 'checkLoginStatus':
-      isLoggedIn().then(loggedIn => {
-        sendResponse({ isLoggedIn: loggedIn });
-      });
-      return true; // Will respond asynchronously
-      
-    case 'logout':
-      logout().then(() => {
-        sendResponse({ success: true });
-      });
-      return true; // Will respond asynchronously
-      
-    case 'scanTabs':
-      // Handle scan tabs request from popup
-      console.log('Scan tabs request received from popup');
-      scanAllOpenTabs().then(result => {
-        // Send results back to popup
-        chrome.runtime.sendMessage({
-          action: 'scanTabsResult',
-          images: result.images,
-          tabCount: result.tabCount
-        });
-        sendResponse({ success: true });
-      });
-      return true; // Will respond asynchronously
-      
-    case 'scanTabsEnhanced':
-      // Use enhanced platform-aware scanner
-      console.log('Enhanced scan tabs request received');
-      scanTabsWithPlatformExtractors().then(result => {
-        // Send results back to popup
-        chrome.runtime.sendMessage({
-          action: 'scanTabsResult',
-          images: result.images,
-          tabCount: result.tabCount,
-          enhanced: true
-        });
-        sendResponse({ success: true });
-      });
-      return true; // Will respond asynchronously
-      
-    case 'midjourneyImagesExtracted':
-      // Forward this message to the popup if it's open
-      chrome.runtime.sendMessage({
-        action: 'midjourneyImagesExtracted',
-        count: message.count
-      });
-      sendResponse({ success: true });
-      break;
+// Handle messages from content scripts or popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'galleryImagesReceived') {
+    console.log(`Web app confirmed receipt of ${message.count} images`);
+    
+    // Show a confirmation notification
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon48.png',
+      title: 'Sync Complete',
+      message: `${message.count} images synced to MainGallery`
+    });
+    
+    sendResponse({ success: true });
   }
   
-  // Return true if we plan to respond asynchronously
+  // Return true to indicate async response
   return true;
 });
 
-// Store extracted images from content script
-chrome.runtime.onMessage.addListener(function(message, sender) {
-  if (message.action === 'storeExtractedImages' && message.images) {
-    console.log(`Received ${message.images.length} images for storage from tab:`, sender.tab.id);
-    
-    // Store in chrome.storage.local
-    chrome.storage.local.get(['midjourney_extracted_images'], function(result) {
-      const existingImages = result.midjourney_extracted_images || [];
-      const existingIds = new Set(existingImages.map(img => img.id));
-      
-      // Filter out duplicates
-      const newImages = message.images.filter(img => !existingIds.has(img.id));
-      
-      // Combine and store (keep most recent at the start)
-      const combinedImages = [...newImages, ...existingImages];
-      
-      // Store in chrome.storage.local
-      chrome.storage.local.set({
-        'midjourney_extracted_images': combinedImages
-      }, function() {
-        console.log(`Stored ${newImages.length} new images (${combinedImages.length} total)`);
-      });
-    });
-  }
-});
+console.log('MainGallery background script initialized');

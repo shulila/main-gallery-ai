@@ -5,7 +5,6 @@
   "version": "1.0.0",
   "description": "Unified AI image gallery for Midjourney, DALL·E, Leonardo and more",
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -49,7 +48,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content-injection.js", "popup.html", "icons/*"],
+      "resources": ["content-injection.js", "icons/*"],
       "matches": ["<all_urls>"]
     }
   ]

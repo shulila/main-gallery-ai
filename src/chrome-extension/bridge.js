@@ -9,7 +9,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   if (message.action === 'syncImagesToGallery' && message.images) {
     console.log(`Bridge: syncing ${message.images.length} images to gallery`);
-    console.log('First image data:', message.images[0]);
     
     try {
       // Forward the images to the web app via window.postMessage
