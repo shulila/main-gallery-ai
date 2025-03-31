@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ImageCard } from './ImageCard';
@@ -104,7 +103,11 @@ type ViewMode = 'grid' | 'columns';
 type SortOption = 'newest' | 'oldest' | 'platform';
 type FilterOption = 'all' | 'midjourney' | 'dalle' | 'stable-diffusion' | 'runway' | 'pika';
 
-const GalleryView = () => {
+interface GalleryViewProps {
+  images?: GalleryImage[];
+}
+
+const GalleryView = ({ images: externalImages }: GalleryViewProps) => {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
@@ -251,7 +254,6 @@ const GalleryView = () => {
 
     loadImagesFromDB();
     
-    // Check if we have pending images in session storage
     const pendingImagesJSON = sessionStorage.getItem('maingallery_sync_images');
     if (pendingImagesJSON) {
       try {
@@ -264,6 +266,18 @@ const GalleryView = () => {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (externalImages && externalImages.length > 0) {
+      setImages(prevImages => {
+        const combined = [...externalImages, ...prevImages];
+        const unique = combined.filter((item, index, self) => 
+          index === self.findIndex(i => i.url === item.url)
+        );
+        return unique;
+      });
+    }
+  }, [externalImages]);
 
   useEffect(() => {
     if (isLoading) return;

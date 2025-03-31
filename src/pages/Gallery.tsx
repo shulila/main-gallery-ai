@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -14,9 +13,12 @@ type GalleryImage = {
   url: string;
   src?: string; // For compatibility with extension data
   prompt?: string;
+  alt?: string; // Add missing property used in code
+  title?: string; // Add missing property used in code
   platform?: string;
   creationDate?: string;
   sourceURL: string;
+  tabUrl?: string; // Add missing property used in code
   timestamp?: number;
   type?: string;
 };
@@ -179,7 +181,7 @@ const Gallery = () => {
     <div className="min-h-screen">
       <Navbar />
       <main className="pt-24">
-        <GalleryView externalImages={syncedImages} />
+        <GalleryView images={syncedImages} />
       </main>
       <Footer />
     </div>
