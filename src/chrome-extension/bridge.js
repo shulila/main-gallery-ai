@@ -9,6 +9,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   if (message.action === 'syncImagesToGallery' && message.images) {
     console.log(`Bridge: syncing ${message.images.length} images to gallery`);
+    console.log('First image data:', message.images[0]);
     
     try {
       // Forward the images to the web app via window.postMessage
@@ -18,6 +19,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         source: 'MAIN_GALLERY_EXTENSION'
       }, '*');
       
+      console.log('Images posted to web app via window.postMessage');
       sendResponse({ success: true });
     } catch (err) {
       console.error('Error forwarding images to web app:', err);
@@ -40,6 +42,17 @@ window.addEventListener('message', (event) => {
     
     // Forward to extension background script
     chrome.runtime.sendMessage(event.data);
+  }
+  
+  // Listen for confirmation that the web app received our images
+  if (event.data && event.data.type === 'GALLERY_IMAGES_RECEIVED') {
+    console.log('Web app confirmed receipt of gallery images:', event.data.count);
+    
+    // Forward confirmation to extension
+    chrome.runtime.sendMessage({
+      action: 'galleryImagesReceived',
+      count: event.data.count
+    });
   }
 });
 

@@ -113,6 +113,8 @@ const GalleryView = () => {
 
   useEffect(() => {
     const handleExtensionMessage = (event: MessageEvent) => {
+      console.log('Received message event in GalleryView:', event.origin, event.data?.type);
+      
       if (process.env.NODE_ENV === 'production') {
         const allowedOrigins = [window.location.origin, 'chrome-extension://'];
         if (!allowedOrigins.some(origin => event.origin.startsWith(origin))) {
@@ -122,8 +124,38 @@ const GalleryView = () => {
       }
   
       if (event.data && event.data.type === 'GALLERY_IMAGES') {
-        console.log('Received gallery images:', event.data.images.length);
-        processIncomingImages(event.data.images);
+        console.log('✅ Received gallery images from extension:', event.data.images?.length);
+        console.log('Sample image data:', event.data.images?.[0]);
+        
+        if (event.data.images && Array.isArray(event.data.images) && event.data.images.length > 0) {
+          processIncomingImages(event.data.images);
+          
+          // Send confirmation back to extension
+          window.postMessage({
+            type: 'GALLERY_IMAGES_RECEIVED',
+            count: event.data.images.length,
+            success: true
+          }, '*');
+        } else {
+          console.warn('Invalid or empty images data received:', event.data);
+        }
+      }
+      
+      if (event.data && event.data.type === 'EXTENSION_BRIDGE_READY') {
+        console.log('Extension bridge announced its presence');
+        
+        // Check if we have pending images in session storage
+        const pendingImagesJSON = sessionStorage.getItem('maingallery_sync_images');
+        if (pendingImagesJSON) {
+          try {
+            const pendingImages = JSON.parse(pendingImagesJSON);
+            console.log(`Found ${pendingImages.length} pending images in session storage`);
+            processIncomingImages(pendingImages);
+            sessionStorage.removeItem('maingallery_sync_images');
+          } catch (err) {
+            console.error('Error processing pending images:', err);
+          }
+        }
       }
     };
   
@@ -141,6 +173,8 @@ const GalleryView = () => {
     }
 
     try {
+      console.log('Processing incoming images:', incomingImages.length);
+      
       const formattedImages: GalleryImage[] = incomingImages.map((img) => ({
         id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         url: img.src || img.url || '',
@@ -162,11 +196,13 @@ const GalleryView = () => {
         return;
       }
 
+      console.log(`Adding ${validImages.length} images to IndexedDB`);
       await galleryDB.addImages(validImages);
       
       setImages(prevImages => {
         const existingUrls = new Set(prevImages.map(img => img.url));
         const uniqueImages = validImages.filter(img => !existingUrls.has(img.url));
+        console.log(`Adding ${uniqueImages.length} unique images to state`);
         return [...uniqueImages, ...prevImages];
       });
 
@@ -194,9 +230,9 @@ const GalleryView = () => {
         const dbImages = await galleryDB.getAllImages();
         console.log(`Loaded ${dbImages.length} images from IndexedDB`);
         
-        setImages(dbImages);
-
-        if (dbImages.length === 0 && process.env.NODE_ENV !== 'production') {
+        if (dbImages.length > 0) {
+          setImages(dbImages);
+        } else if (process.env.NODE_ENV !== 'production') {
           console.log('No images found in DB, using mock data');
           setImages(mockImages as unknown as GalleryImage[]);
         }
@@ -211,6 +247,19 @@ const GalleryView = () => {
     };
 
     loadImagesFromDB();
+    
+    // Check if we have pending images in session storage
+    const pendingImagesJSON = sessionStorage.getItem('maingallery_sync_images');
+    if (pendingImagesJSON) {
+      try {
+        const pendingImages = JSON.parse(pendingImagesJSON);
+        console.log(`Found ${pendingImages.length} pending images in session storage`);
+        processIncomingImages(pendingImages);
+        sessionStorage.removeItem('maingallery_sync_images');
+      } catch (err) {
+        console.error('Error processing pending images from session storage:', err);
+      }
+    }
   }, []);
 
   useEffect(() => {

@@ -1,3 +1,4 @@
+
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -372,6 +373,7 @@ function logout() {
 
 // Scan all open tabs for images
 function scanOpenTabs() {
+  console.log('🔍 Starting scan of all open tabs...');
   showToast('Scanning open tabs for images...', 'info');
   
   // Determine which results grid to use based on login state
@@ -469,6 +471,7 @@ function renderImageGrid(images) {
       // Create grid item
       const gridItem = document.createElement('div');
       gridItem.className = 'grid-item';
+      gridItem.dataset.tabUrl = image.tabUrl || image.sourceUrl;
       
       // Create tooltip wrapper
       const tooltipWrapper = document.createElement('div');
@@ -476,10 +479,12 @@ function renderImageGrid(images) {
       
       // Create image thumbnail
       const img = document.createElement('img');
-      img.src = image.src;
+      img.src = image.src || image.url;
       img.className = 'thumbnail';
       img.alt = image.alt || 'Image';
       img.loading = 'lazy';
+      img.dataset.tabUrl = image.tabUrl || image.sourceUrl;
+      img.dataset.sourceUrl = image.sourceUrl || image.tabUrl;
       
       // Create tooltip
       const tooltip = document.createElement('span');
@@ -489,7 +494,7 @@ function renderImageGrid(images) {
       // Create info badge
       const badge = document.createElement('div');
       badge.className = 'domain-badge';
-      badge.textContent = image.platformName || image.domain || '';
+      badge.textContent = image.platformName || image.platform || image.domain || '';
       
       // Create action buttons
       const actions = document.createElement('div');
@@ -545,13 +550,19 @@ function renderImageGrid(images) {
   }
   
   // Show action buttons
-  if (scanActions) {
+  if (scanActions && !scanActions.classList.contains('hidden')) {
+    console.log('Scan actions already visible');
+  } else if (scanActions) {
+    console.log('Making scan actions visible');
     scanActions.classList.remove('hidden');
+  } else {
+    console.log('Scan actions element not found');
   }
 }
 
 // Function to sync images to the main gallery
 function syncImagesToGallery() {
+  console.log('Starting sync to gallery process');
   const isUserLoggedIn = document.getElementById('logged-in').classList.contains('hidden') === false;
   const targetResultsGrid = isUserLoggedIn ? resultsGrid : commonResultsGrid;
   const syncSuccessMessage = document.getElementById('sync-success-message');
@@ -575,17 +586,21 @@ function syncImagesToGallery() {
     
     return {
       src: img?.src,
+      url: img?.src, // Duplicate for compatibility
       alt: img?.alt,
       title: img?.title,
       prompt: tooltip?.textContent,
       platform: badge?.textContent,
+      platformName: badge?.textContent,
       tabUrl: img?.dataset.tabUrl || item.dataset.tabUrl,
       sourceUrl: img?.dataset.sourceUrl || item.dataset.sourceUrl,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      type: 'image' // Explicitly set type
     };
-  }).filter(img => img.src);
+  }).filter(img => img.src || img.url);
   
   console.log(`Preparing to sync ${images.length} images to gallery`);
+  console.log('Sample image data:', images[0]);
   
   // Find a tab with our web app open, or open a new one
   chrome.tabs.query({ url: `${BRAND.urls.baseUrl}/*` }, (tabs) => {
@@ -630,17 +645,21 @@ function syncImagesToGallery() {
     // Show sync success message and update UI
     const showSyncSuccess = (count) => {
       if (syncSuccessMessage && syncCountElement) {
-        syncCountElement.textContent = count;
+        syncCountElement.textContent = count.toString();
         syncSuccessMessage.classList.remove('hidden');
         
-        // Hide results grid
-        if (commonScanResults) {
-          commonResultsGrid.classList.add('hidden');
+        // Hide scan results
+        if (targetResultsGrid) {
+          targetResultsGrid.innerHTML = '';
+        }
+        
+        // Hide scan actions
+        if (scanActions) {
           scanActions.classList.add('hidden');
         }
       }
       
-      showToast(`✅ ${count} images synced to MainGallery`, 'info');
+      showToast(`✅ ${count} images synced to MainGallery`, 'success');
     };
     
     // If we found a tab with our web app
@@ -654,6 +673,13 @@ function syncImagesToGallery() {
       // Open a new gallery tab
       chrome.tabs.create({ url: GALLERY_URL }, (newTab) => {
         console.log('New gallery tab created, waiting for load...');
+        
+        // Store images in session storage for the gallery to retrieve
+        try {
+          sessionStorage.setItem('maingallery_sync_images', JSON.stringify(images));
+        } catch (err) {
+          console.error('Failed to store images in session storage:', err);
+        }
         
         // Wait for tab to load before sending data
         chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, tab) {
@@ -748,11 +774,15 @@ chrome.runtime.onMessage.addListener((message) => {
     // Handle results from tab scanning
     if (message.images && Array.isArray(message.images)) {
       console.log(`Received ${message.images.length} images from background`);
+      console.log('First image:', message.images.length > 0 ? JSON.stringify(message.images[0]) : 'No images');
       renderImageGrid(message.images);
-      showToast(`Found ${message.images.length} images in ${message.tabCount} tabs`, 'info');
+      showToast(`Found ${message.images.length} images in ${message.tabCount} tabs`, 'success');
     } else {
       console.error('Invalid image data received:', message);
       showToast('Error processing images from tabs', 'error');
     }
+  } else if (message.action === 'galleryImagesReceived') {
+    console.log(`Web app confirmed receipt of ${message.count} images`);
+    showToast(`✅ ${message.count} images received by gallery`, 'success');
   }
 });

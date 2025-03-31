@@ -1,4 +1,3 @@
-
 // MainGallery Content Script
 console.log('MainGallery content script loaded');
 
@@ -75,9 +74,9 @@ function injectContentScript() {
   (document.head || document.documentElement).appendChild(script);
 }
 
-// Enhanced Midjourney image extraction with improved DOM selectors
+// Enhanced Midjourney image extraction with improved DOM selectors and detailed logging
 function extractMidjourneyImages() {
-  console.log('Extracting Midjourney images from current page');
+  console.log('⚙️ Extracting Midjourney images from current page:', window.location.href);
   
   try {
     // Check if we're on the Midjourney app page or user gallery page
@@ -86,14 +85,14 @@ function extractMidjourneyImages() {
       return null;
     }
     
-    console.log('Starting Midjourney image extraction...');
+    console.log('✅ URL confirmed as Midjourney, starting image extraction...');
     
     // Collection to store extracted images
     const extractedImages = [];
     
     // Find all image containers on the page
     // Enhanced selectors to work with Midjourney's DOM structure
-    // Look for specific elements that contain image data
+    console.log('🔍 Searching for image containers...');
     const imageContainers = [
       ...document.querySelectorAll('.card, .image-container, .grid-item, [role="img"]'),
       ...document.querySelectorAll('img[srcset*="midjourney"]'),
@@ -103,12 +102,13 @@ function extractMidjourneyImages() {
       ...document.querySelectorAll('.jobContainer, .jobGrid, .gridItem')
     ];
     
-    console.log(`Found ${imageContainers.length} potential image containers`);
+    console.log(`📊 Found ${imageContainers.length} potential image containers`);
     
     // Use a Set to track processed image URLs and avoid duplicates
     const processedUrls = new Set();
     
     // Process each container to extract information
+    console.log('🔄 Processing image containers...');
     imageContainers.forEach((container, index) => {
       try {
         // Extract image URL with more robust selection
@@ -143,8 +143,17 @@ function extractMidjourneyImages() {
         }
         
         // Skip if no valid image URL or already processed
-        if (!imageUrl || processedUrls.has(imageUrl)) return;
+        if (!imageUrl || processedUrls.has(imageUrl)) {
+          if (!imageUrl) {
+            console.log(`⚠️ Container #${index} - No image URL found`);
+          } else {
+            console.log(`⚠️ Container #${index} - Duplicate URL: ${imageUrl.substring(0, 50)}...`);
+          }
+          return;
+        }
+        
         processedUrls.add(imageUrl);
+        console.log(`✅ Container #${index} - Found image: ${imageUrl.substring(0, 50)}...`);
         
         // Find the job ID - try multiple ways
         let jobId = container.dataset?.jobId || 
@@ -169,6 +178,12 @@ function extractMidjourneyImages() {
               prompt = promptElement.textContent.trim();
             }
           }
+        }
+        
+        if (prompt) {
+          console.log(`📝 Container #${index} - Found prompt: ${prompt.substring(0, 50)}...`);
+        } else {
+          console.log(`⚠️ Container #${index} - No prompt found`);
         }
         
         // Extract model information
@@ -211,10 +226,15 @@ function extractMidjourneyImages() {
             url: imageUrl,
             prompt,
             model,
-            platform: 'midjourney',
+            platform: 'Midjourney',
+            platformName: 'Midjourney',
             createdAt: createdAt || new Date().toISOString(),
+            creationDate: createdAt || new Date().toISOString(),
             sourceUrl: window.location.href,
+            tabUrl: window.location.href,
             extractedAt: new Date().toISOString(),
+            timestamp: Date.now(),
+            type: 'image',
             imageHash
           });
         }
@@ -223,7 +243,8 @@ function extractMidjourneyImages() {
       }
     });
     
-    console.log(`Successfully extracted ${extractedImages.length} images from Midjourney`);
+    console.log(`✅ Successfully extracted ${extractedImages.length} images from Midjourney`);
+    console.log('📊 Sample image data:', extractedImages.length > 0 ? extractedImages[0] : 'No images found');
     
     // Display extraction notification
     if (extractedImages.length > 0) {
@@ -246,10 +267,10 @@ function extractMidjourneyImages() {
       count: extractedImages.length
     });
     
-    return extractedImages.length > 0;
+    return extractedImages;
   } catch (error) {
-    console.error('Error extracting Midjourney images:', error);
-    return false;
+    console.error('❌ Error extracting Midjourney images:', error);
+    return [];
   }
 }
 
@@ -555,7 +576,7 @@ function simulateInfiniteScroll() {
     console.log(`Detected platform: ${platform.name} (${platform.id})`);
     
     // Check if on Midjourney app user page
-    if (platform.id === 'midjourney' && window.location.href.includes('midjourney.com/app/users/')) {
+    if (platform.id === 'midjourney' && window.location.href.includes('midjourney.com/app/')) {
       console.log('On Midjourney user gallery page, setting up automatic extraction');
       
       // Initial extraction after page loads
@@ -580,12 +601,12 @@ function simulateInfiniteScroll() {
           const result = extractMidjourneyImages();
           
           // Update notification
-          if (result) {
+          if (result && result.length > 0) {
             notificationEl.innerHTML = `
               <div class="notification-icon success">✓</div>
               <div class="notification-content">
                 <h3>MainGallery</h3>
-                <p>Images synced successfully!</p>
+                <p>Found ${result.length} images!</p>
               </div>
             `;
             
@@ -741,7 +762,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'extractMidjourneyImages':
       // Extract Midjourney images
       const result = extractMidjourneyImages();
-      sendResponse({ success: !!result });
+      sendResponse({ success: !!result, images: result });
       break;
       
     case 'extractLeonardoImages':
@@ -777,7 +798,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ 
         success: !!platformResult, 
         platform: platform.name,
-        count: platformResult ? platformResult.length : 0
+        count: platformResult ? platformResult.length : 0,
+        images: platformResult
       });
       break;
       
