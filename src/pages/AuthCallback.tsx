@@ -65,11 +65,15 @@ const AuthCallback = () => {
                     // Also send a message to the extension if this was initiated from there
                     if (window.chrome?.runtime?.id) {
                       try {
-                        window.chrome.runtime.sendMessage({
-                          action: 'authCompleted',
-                          success: true,
-                          user: { email: email || 'User' }
-                        });
+                        // Correctly call sendMessage with extension ID and message
+                        window.chrome.runtime.sendMessage(
+                          window.chrome.runtime.id,
+                          {
+                            action: 'authCompleted',
+                            success: true,
+                            user: { email: email || 'User' }
+                          }
+                        );
                       } catch (err) {
                         console.log('Error sending auth completed message:', err);
                       }
@@ -147,11 +151,15 @@ const AuthCallback = () => {
                     // Also send a message to the extension if possible
                     if (window.chrome?.runtime?.id) {
                       try {
-                        window.chrome.runtime.sendMessage({
-                          action: 'authCompleted',
-                          success: true,
-                          user: { email: data.session.user.email || 'User' }
-                        });
+                        // Correctly call sendMessage with extension ID and message
+                        window.chrome.runtime.sendMessage(
+                          window.chrome.runtime.id,
+                          {
+                            action: 'authCompleted',
+                            success: true,
+                            user: { email: data.session.user.email || 'User' }
+                          }
+                        );
                       } catch (err) {
                         console.log('Error sending auth completed message:', err);
                       }
