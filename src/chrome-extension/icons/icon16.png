@@ -1,4 +1,4 @@
 
-// This is a placeholder that will be replaced with a binary 16x16 PNG file
-// Since we can't create binary content directly, we'll need to add the file manually
-// or update the manifest to use existing icons
+// This is a placeholder for the binary icon16.png file
+// You'll need to manually upload a 16x16 PNG icon file to this location
+// For now, we'll make sure the Chrome extension manifest has fallbacks
