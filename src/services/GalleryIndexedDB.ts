@@ -1,16 +1,5 @@
-
 // IndexedDB Service for storing and retrieving gallery images
-
-type GalleryImage = {
-  id: string;
-  url: string;
-  prompt?: string;
-  platform?: string;
-  creationDate?: string;
-  sourceURL: string;
-  timestamp: number;
-  type?: string;
-};
+import { GalleryImage } from '@/types/gallery';
 
 // Singleton pattern for the IndexedDB service
 class GalleryIndexedDBService {

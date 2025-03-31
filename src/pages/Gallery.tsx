@@ -6,22 +6,7 @@ import Footer from '@/components/Footer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { galleryDB } from '@/services/GalleryIndexedDB';
-
-// Define GalleryImage type
-type GalleryImage = {
-  id?: string;
-  url: string;
-  src?: string; // For compatibility with extension data
-  prompt?: string;
-  alt?: string; // Add missing property used in code
-  title?: string; // Add missing property used in code
-  platform?: string;
-  creationDate?: string;
-  sourceURL: string;
-  tabUrl?: string; // Add missing property used in code
-  timestamp?: number;
-  type?: string;
-};
+import { GalleryImage } from '@/types/gallery';
 
 const Gallery = () => {
   const { user, isLoading } = useAuth();
@@ -32,7 +17,7 @@ const Gallery = () => {
   // Handle extension messages
   useEffect(() => {
     // Function to process images from extension
-    const processExtensionImages = async (images: GalleryImage[]) => {
+    const processExtensionImages = async (images: Partial<GalleryImage>[]) => {
       console.log(`Received ${images.length} images from extension`);
       
       if (!images || images.length === 0) return;
@@ -46,7 +31,7 @@ const Gallery = () => {
         sourceURL: img.sourceURL || img.tabUrl || window.location.href,
         timestamp: img.timestamp ? (typeof img.timestamp === 'string' ? new Date(img.timestamp).getTime() : img.timestamp) : Date.now(),
         type: img.type || 'image'
-      }));
+      } as GalleryImage));
       
       // Update state with new images
       setSyncedImages(prev => {

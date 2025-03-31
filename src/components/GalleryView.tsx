@@ -5,16 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Grid, Columns, Calendar, Filter, ChevronDown, ImageIcon, Download, Copy, ExternalLink, FileJson, RefreshCw } from 'lucide-react';
 import { galleryDB } from '@/services/GalleryIndexedDB';
 import { useToast } from "@/hooks/use-toast";
-
-type GalleryImage = {
-  id: string;
-  url: string;
-  prompt?: string;
-  platform?: string;
-  creationDate?: string;
-  sourceURL: string;
-  timestamp: number;
-};
+import { GalleryImage } from '@/types/gallery';
 
 const mockImages = [
   {
