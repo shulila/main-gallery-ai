@@ -30,6 +30,9 @@ const commonScanResults = document.getElementById('common-scan-results');
 const resultsGrid = document.getElementById('results-grid');
 const commonResultsGrid = document.getElementById('common-results-grid');
 const userEmailElement = document.getElementById('user-email');
+const scanActions = document.getElementById('scan-actions');
+const copyAllPromptsBtn = document.getElementById('copy-all-prompts-btn');
+const clearResultsBtn = document.getElementById('clear-results-btn');
 
 // Helper functions
 function hideAllStates() {
@@ -390,9 +393,54 @@ function scanOpenTabs() {
   targetResultsContainer.classList.remove('hidden');
   
   // Request background script to scan tabs
-  chrome.runtime.sendMessage({ action: 'scanTabs' }, (response) => {
+  chrome.runtime.sendMessage({ action: 'scanTabsEnhanced' }, (response) => {
     console.log('Scan request sent, waiting for images...');
   });
+}
+
+// Copy all prompts from the results grid
+function copyAllPrompts() {
+  const isUserLoggedIn = document.getElementById('logged-in').classList.contains('hidden') === false;
+  const targetResultsGrid = isUserLoggedIn ? resultsGrid : commonResultsGrid;
+  const prompts = [];
+  
+  // Get all grid items
+  const gridItems = targetResultsGrid.querySelectorAll('.grid-item');
+  gridItems.forEach(item => {
+    const tooltip = item.querySelector('.tooltip');
+    if (tooltip && tooltip.textContent) {
+      prompts.push(tooltip.textContent);
+    }
+  });
+  
+  if (prompts.length > 0) {
+    // Copy to clipboard
+    const text = prompts.join('\n\n');
+    navigator.clipboard.writeText(text).then(() => {
+      showToast(`Copied ${prompts.length} prompts to clipboard`, 'info');
+    }).catch(err => {
+      console.error('Error copying prompts:', err);
+      showToast('Failed to copy prompts', 'error');
+    });
+  } else {
+    showToast('No prompts to copy', 'info');
+  }
+}
+
+// Clear current results
+function clearResults() {
+  const isUserLoggedIn = document.getElementById('logged-in').classList.contains('hidden') === false;
+  const targetResultsGrid = isUserLoggedIn ? resultsGrid : commonResultsGrid;
+  const targetResultsContainer = isUserLoggedIn ? scanResults : commonScanResults;
+  
+  targetResultsGrid.innerHTML = '';
+  targetResultsContainer.classList.add('hidden');
+  
+  if (scanActions) {
+    scanActions.classList.add('hidden');
+  }
+  
+  showToast('Results cleared', 'info');
 }
 
 // Render images in the popup grid
@@ -433,18 +481,51 @@ function renderImageGrid(images) {
       // Create tooltip
       const tooltip = document.createElement('span');
       tooltip.className = 'tooltip';
-      tooltip.textContent = image.title || image.alt || image.domain || 'Image';
+      tooltip.textContent = image.prompt || image.title || image.alt || image.domain || 'Image';
       
       // Create info badge
       const badge = document.createElement('div');
       badge.className = 'domain-badge';
-      badge.textContent = image.domain || '';
+      badge.textContent = image.platformName || image.domain || '';
+      
+      // Create action buttons
+      const actions = document.createElement('div');
+      actions.className = 'image-actions';
+      
+      // Create copy prompt button if prompt exists
+      if (image.prompt) {
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'action-btn copy-btn';
+        copyBtn.textContent = '📝';
+        copyBtn.title = 'Copy Prompt';
+        copyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          navigator.clipboard.writeText(image.prompt).then(() => {
+            showToast('Prompt copied to clipboard', 'info');
+          }).catch(err => {
+            showToast('Failed to copy prompt', 'error');
+          });
+        });
+        actions.appendChild(copyBtn);
+      }
+      
+      // Create open source button
+      const openBtn = document.createElement('button');
+      openBtn.className = 'action-btn open-btn';
+      openBtn.textContent = '🌐';
+      openBtn.title = 'Open Source';
+      openBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        chrome.tabs.create({ url: image.tabUrl || image.sourceUrl });
+      });
+      actions.appendChild(openBtn);
       
       // Assemble the components
       tooltipWrapper.appendChild(img);
       tooltipWrapper.appendChild(tooltip);
       gridItem.appendChild(tooltipWrapper);
       gridItem.appendChild(badge);
+      gridItem.appendChild(actions);
       
       // Add to results grid
       targetResultsGrid.appendChild(gridItem);
@@ -458,6 +539,11 @@ function renderImageGrid(images) {
   const resultsHeader = targetResultsContainer.querySelector('.results-header');
   if (resultsHeader) {
     resultsHeader.textContent = `Images from Open Tabs (${images.length})`;
+  }
+  
+  // Show action buttons
+  if (scanActions) {
+    scanActions.classList.remove('hidden');
   }
 }
 
@@ -497,6 +583,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (scanTabsBtnPublic) {
     scanTabsBtnPublic.addEventListener('click', scanOpenTabs);
     console.log('Scan tabs button listener set up (public)');
+  }
+  
+  // Set up action buttons
+  if (copyAllPromptsBtn) {
+    copyAllPromptsBtn.addEventListener('click', copyAllPrompts);
+  }
+  
+  if (clearResultsBtn) {
+    clearResultsBtn.addEventListener('click', clearResults);
   }
 });
 

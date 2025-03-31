@@ -1,3 +1,4 @@
+
 // MainGallery Content Script
 console.log('MainGallery content script loaded');
 
@@ -248,6 +249,219 @@ function extractMidjourneyImages() {
     return extractedImages.length > 0;
   } catch (error) {
     console.error('Error extracting Midjourney images:', error);
+    return false;
+  }
+}
+
+// Extract Leonardo.ai images with metadata
+function extractLeonardoImages() {
+  console.log('Extracting Leonardo.ai images');
+  
+  try {
+    // Check if we're on a Leonardo.ai page
+    if (!window.location.href.includes('leonardo.ai')) {
+      console.log('Not on Leonardo.ai, skipping extraction');
+      return null;
+    }
+    
+    console.log('Starting Leonardo.ai image extraction...');
+    
+    // Collection to store extracted images
+    const extractedImages = [];
+    
+    // Find all image containers
+    const imageContainers = [
+      ...document.querySelectorAll('.generation-item, .image-item, .image-card'),
+      ...document.querySelectorAll('[data-testid="image-container"]'),
+      ...document.querySelectorAll('.react-photo-album--photo'),
+      ...document.querySelectorAll('.asset-card')
+    ];
+    
+    console.log(`Found ${imageContainers.length} potential Leonardo images`);
+    
+    // Track processed URLs to avoid duplicates
+    const processedUrls = new Set();
+    
+    // Process each container
+    imageContainers.forEach(container => {
+      try {
+        // Find image element
+        const imageElement = container.querySelector('img') || container;
+        let imageUrl = null;
+        
+        // Get image URL
+        if (imageElement.tagName === 'IMG') {
+          imageUrl = imageElement.src;
+        } else {
+          // Try background image
+          const style = window.getComputedStyle(imageElement);
+          const bgImage = style.backgroundImage;
+          if (bgImage && bgImage !== 'none') {
+            imageUrl = bgImage.replace(/^url\(['"](.+)['"]\)$/, '$1');
+          }
+        }
+        
+        // Skip if no URL or already processed
+        if (!imageUrl || processedUrls.has(imageUrl)) return;
+        processedUrls.add(imageUrl);
+        
+        // Extract prompt
+        let promptElement = container.querySelector('.prompt-text, .description, [data-testid="prompt-text"]');
+        let prompt = null;
+        
+        if (promptElement) {
+          prompt = promptElement.textContent.trim();
+        } else {
+          // Try nearby elements
+          prompt = imageElement.alt || imageElement.title;
+        }
+        
+        // Extract model
+        let modelElement = container.querySelector('.model-name, [data-testid="model-name"]');
+        let model = modelElement?.textContent.trim() || 'Leonardo';
+        
+        // Extract date
+        let dateElement = container.querySelector('time, .timestamp, .date');
+        let createdAt = dateElement?.textContent.trim() || new Date().toISOString();
+        
+        // Generate ID
+        const id = `leonardo-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+        
+        extractedImages.push({
+          id,
+          url: imageUrl,
+          prompt,
+          model,
+          platform: 'leonardo',
+          createdAt,
+          sourceUrl: window.location.href,
+          extractedAt: new Date().toISOString(),
+          imageHash: btoa(imageUrl).substring(0, 24)
+        });
+      } catch (err) {
+        console.error('Error extracting Leonardo image:', err);
+      }
+    });
+    
+    console.log(`Successfully extracted ${extractedImages.length} images from Leonardo.ai`);
+    
+    if (extractedImages.length > 0) {
+      // Send images to background script
+      chrome.runtime.sendMessage({
+        action: 'storeExtractedImages',
+        images: extractedImages
+      });
+    }
+    
+    return extractedImages.length > 0;
+  } catch (error) {
+    console.error('Error extracting Leonardo images:', error);
+    return false;
+  }
+}
+
+// Extract Runway images with metadata
+function extractRunwayImages() {
+  console.log('Extracting Runway images');
+  
+  try {
+    // Check if we're on a Runway page
+    if (!window.location.href.includes('runwayml.com')) {
+      console.log('Not on Runway, skipping extraction');
+      return null;
+    }
+    
+    console.log('Starting Runway image extraction...');
+    
+    // Collection to store extracted images
+    const extractedImages = [];
+    
+    // Find all image/video items
+    const mediaContainers = [
+      ...document.querySelectorAll('.media-card, .project-item, .generation-item'),
+      ...document.querySelectorAll('.asset-card, .asset-tile'),
+      ...document.querySelectorAll('.video-asset, .image-asset')
+    ];
+    
+    console.log(`Found ${mediaContainers.length} potential Runway media items`);
+    
+    // Track processed URLs
+    const processedUrls = new Set();
+    
+    // Process each container
+    mediaContainers.forEach(container => {
+      try {
+        // Find image/video element
+        const imageElement = container.querySelector('img') || container.querySelector('video');
+        let mediaUrl = null;
+        
+        if (imageElement) {
+          if (imageElement.tagName === 'IMG') {
+            mediaUrl = imageElement.src;
+          } else if (imageElement.tagName === 'VIDEO') {
+            // Get poster or first frame as image
+            mediaUrl = imageElement.poster || imageElement.src;
+          }
+        } else {
+          // Try background image
+          const style = window.getComputedStyle(container);
+          const bgImage = style.backgroundImage;
+          if (bgImage && bgImage !== 'none') {
+            mediaUrl = bgImage.replace(/^url\(['"](.+)['"]\)$/, '$1');
+          }
+        }
+        
+        // Skip if no URL or already processed
+        if (!mediaUrl || processedUrls.has(mediaUrl)) return;
+        processedUrls.add(mediaUrl);
+        
+        // Extract prompt
+        let promptElement = container.querySelector('.prompt, .caption, .description');
+        let prompt = null;
+        
+        if (promptElement) {
+          prompt = promptElement.textContent.trim();
+        } else {
+          prompt = imageElement?.alt || container.title;
+        }
+        
+        // Extract model/tool info
+        let modelElement = container.querySelector('.model, .tool-name');
+        let model = modelElement?.textContent.trim() || 'Runway';
+        
+        // Generate ID
+        const id = `runway-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+        
+        extractedImages.push({
+          id,
+          url: mediaUrl,
+          prompt,
+          model,
+          platform: 'runway',
+          createdAt: new Date().toISOString(),
+          sourceUrl: window.location.href,
+          extractedAt: new Date().toISOString(),
+          imageHash: btoa(mediaUrl).substring(0, 24),
+          isVideo: imageElement?.tagName === 'VIDEO'
+        });
+      } catch (err) {
+        console.error('Error extracting Runway media:', err);
+      }
+    });
+    
+    console.log(`Successfully extracted ${extractedImages.length} media items from Runway`);
+    
+    if (extractedImages.length > 0) {
+      // Send images to background script
+      chrome.runtime.sendMessage({
+        action: 'storeExtractedImages',
+        images: extractedImages
+      });
+    }
+    
+    return extractedImages.length > 0;
+  } catch (error) {
+    console.error('Error extracting Runway media:', error);
     return false;
   }
 }
@@ -530,12 +744,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: !!result });
       break;
       
+    case 'extractLeonardoImages':
+      // Extract Leonardo.ai images
+      const leonardoResult = extractLeonardoImages();
+      sendResponse({ success: !!leonardoResult });
+      break;
+      
+    case 'extractRunwayImages':
+      // Extract Runway images
+      const runwayResult = extractRunwayImages();
+      sendResponse({ success: !!runwayResult });
+      break;
+      
+    case 'extractPlatformImages':
+      // Auto-detect platform and extract images
+      const platform = detectPlatform();
+      if (!platform) {
+        sendResponse({ success: false, error: 'Platform not detected' });
+        return;
+      }
+      
+      // Based on platform ID, call appropriate extraction function
+      let platformResult = false;
+      if (platform.id === 'midjourney') {
+        platformResult = extractMidjourneyImages();
+      } else if (platform.id === 'leonardo') {
+        platformResult = extractLeonardoImages();
+      } else if (platform.id === 'runway') {
+        platformResult = extractRunwayImages();
+      }
+      
+      sendResponse({ 
+        success: !!platformResult, 
+        platform: platform.name,
+        count: platformResult ? platformResult.length : 0
+      });
+      break;
+      
     case 'checkPlatformLogin':
       // Check if the user is logged into this platform
-      const platform = detectPlatform();
-      if (platform && platform.id === message.platformId) {
+      const detectedPlatform = detectPlatform();
+      if (detectedPlatform && detectedPlatform.id === message.platformId) {
         // For Midjourney, look for signs of being logged in
-        if (platform.id === 'midjourney') {
+        if (detectedPlatform.id === 'midjourney') {
           // Check for avatar or profile elements that suggest a logged-in user
           const avatarEl = document.querySelector('.avatar, .profile-image, [alt*="profile"]');
           const usernameEl = document.querySelector('.username, .user-name, [data-username]');
@@ -555,6 +806,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const extractedImages = extractAllImages();
       sendResponse({ images: extractedImages });
       break;
+      
+    case 'simulateInfiniteScroll':
+      // Simulate infinite scroll and then extract images
+      simulateInfiniteScroll().then(scrolled => {
+        const images = extractAllImages();
+        sendResponse({ scrolled, images });
+      });
+      return true; // Keep channel open for async response
   }
   
   return true; // Keep channel open for async response

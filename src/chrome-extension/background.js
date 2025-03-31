@@ -1,3 +1,4 @@
+
 // Import functions from other modules - avoid dynamic imports in MV3
 // Use standard JS function declarations and move code from imported files
 
@@ -418,6 +419,181 @@ function scanAllOpenTabs() {
   });
 }
 
+// Enhanced function to scan tabs with platform-specific extractors
+async function scanTabsWithPlatformExtractors() {
+  console.log('Starting enhanced scan with platform-specific extractors');
+  
+  // Get all tabs in the current window
+  const tabs = await new Promise((resolve) => 
+    chrome.tabs.query({ currentWindow: true }, tabs => resolve(tabs))
+  );
+  
+  console.log(`Found ${tabs.length} tabs to scan`);
+  const allExtractedMedia = [];
+  const processedTabs = [];
+  
+  // Process each tab
+  for (const tab of tabs) {
+    try {
+      // Skip tabs without URLs or with chrome:// URLs
+      if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+        console.log(`Skipping tab with URL: ${tab.url}`);
+        processedTabs.push({ id: tab.id, count: 0 });
+        continue;
+      }
+      
+      console.log(`Scanning tab ${tab.id}: ${tab.url}`);
+      
+      // Detect platform
+      const platformId = debugPlatformDetection(tab.url);
+      const isPlatformTab = !!platformId;
+      
+      // For supported platforms, use specialized extractors
+      if (isPlatformTab) {
+        console.log(`Tab ${tab.id} is ${platformId} platform`);
+        
+        // Try to use platform-specific extractor
+        try {
+          // Send message to content script
+          const action = `extract${platformId.charAt(0).toUpperCase() + platformId.slice(1)}Images`;
+          
+          await new Promise(resolve => {
+            chrome.tabs.sendMessage(
+              tab.id, 
+              { action: 'simulateInfiniteScroll' },
+              response => {
+                console.log(`Infinite scroll on tab ${tab.id} complete`);
+                resolve();
+              }
+            );
+            
+            // Resolve anyway after timeout
+            setTimeout(resolve, 5000);
+          });
+          
+          const response = await new Promise(resolve => {
+            chrome.tabs.sendMessage(
+              tab.id,
+              { action: 'extractPlatformImages' },
+              response => {
+                if (chrome.runtime.lastError) {
+                  console.log(`Error: ${chrome.runtime.lastError.message}`);
+                  resolve({ success: false });
+                } else {
+                  resolve(response || { success: false });
+                }
+              }
+            );
+            
+            // Fallback if no response
+            setTimeout(() => resolve({ success: false }), 3000);
+          });
+          
+          if (response && response.success) {
+            console.log(`Successfully extracted ${response.count || 'unknown'} items from ${platformId}`);
+          }
+        } catch (error) {
+          console.error(`Error with platform extractor:`, error);
+        }
+      }
+      
+      // For all tabs (platform or not), get generic images
+      const genericImages = await new Promise((resolve) => {
+        chrome.tabs.sendMessage(
+          tab.id,
+          { action: 'extractImages' },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              console.log(`Need to inject script into tab ${tab.id}`);
+              
+              // Inject script to extract images
+              chrome.scripting.executeScript(
+                {
+                  target: { tabId: tab.id },
+                  function: function() {
+                    // Extract images from DOM
+                    function extractImagesFromDOM() {
+                      const images = Array.from(document.querySelectorAll('img'));
+                      return images
+                        .filter(img => img.src && !img.src.startsWith('data:') && 
+                                img.width > 60 && img.height > 60)
+                        .map(img => ({
+                          src: img.src,
+                          alt: img.alt || '',
+                          title: img.title || '',
+                          naturalWidth: img.naturalWidth || img.width,
+                          naturalHeight: img.naturalHeight || img.height,
+                          domain: window.location.hostname,
+                          path: window.location.pathname,
+                          pageTitle: document.title,
+                          // Try to get prompt or context from surrounding elements
+                          prompt: img.alt || img.title || document.title
+                        }));
+                    }
+                    
+                    return extractImagesFromDOM();
+                  }
+                },
+                (results) => {
+                  if (chrome.runtime.lastError || !results || !results[0]) {
+                    resolve([]);
+                  } else {
+                    resolve(results[0].result || []);
+                  }
+                }
+              );
+            } else if (response && response.images) {
+              resolve(response.images);
+            } else {
+              resolve([]);
+            }
+          }
+        );
+      });
+      
+      // Process the generic images
+      if (genericImages && genericImages.length > 0) {
+        const platformName = platformId ? 
+          platformId.charAt(0).toUpperCase() + platformId.slice(1) : 
+          tab.title.split(' ')[0];
+        
+        // Add tab info to images
+        const processedImages = genericImages.map(img => ({
+          ...img,
+          platform: platformId || 'generic',
+          platformName: platformName,
+          favicon: tab.favIconUrl || '',
+          tabUrl: tab.url,
+          tabTitle: tab.title,
+          timestamp: new Date().toISOString()
+        }));
+        
+        // Add to collection
+        allExtractedMedia.push(...processedImages);
+        processedTabs.push({ id: tab.id, count: processedImages.length });
+        
+        console.log(`Extracted ${processedImages.length} images from tab ${tab.id}`);
+      } else {
+        processedTabs.push({ id: tab.id, count: 0 });
+      }
+    } catch (error) {
+      console.error(`Error scanning tab ${tab.id}:`, error);
+      processedTabs.push({ id: tab.id, count: 0, error: error.message });
+    }
+  }
+  
+  // De-duplicate images based on src
+  const uniqueSrcs = new Set();
+  const uniqueImages = allExtractedMedia.filter(img => {
+    if (uniqueSrcs.has(img.src)) return false;
+    uniqueSrcs.add(img.src);
+    return true;
+  });
+  
+  console.log(`Enhanced scan complete. Found ${uniqueImages.length} unique images in ${processedTabs.length} tabs`);
+  return { images: uniqueImages, tabCount: processedTabs.length };
+}
+
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   console.log('Received message:', message.action, 'from:', sender.tab?.url || 'popup');
@@ -459,6 +635,21 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
           action: 'scanTabsResult',
           images: result.images,
           tabCount: result.tabCount
+        });
+        sendResponse({ success: true });
+      });
+      return true; // Will respond asynchronously
+      
+    case 'scanTabsEnhanced':
+      // Use enhanced platform-aware scanner
+      console.log('Enhanced scan tabs request received');
+      scanTabsWithPlatformExtractors().then(result => {
+        // Send results back to popup
+        chrome.runtime.sendMessage({
+          action: 'scanTabsResult',
+          images: result.images,
+          tabCount: result.tabCount,
+          enhanced: true
         });
         sendResponse({ success: true });
       });
