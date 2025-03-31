@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -31,10 +30,18 @@ console.log('Supabase client initialized');
 console.log('Auth redirect URL:', getProductionAuthRedirectUrl());
 console.log('Google Client ID:', GOOGLE_CLIENT_ID);
 
-// Direct Google OAuth URL construction
+// Improved Google OAuth URL construction using URLSearchParams
 const constructGoogleOAuthUrl = (redirectUrl: string) => {
-  const stateParam = Math.random().toString(36).substring(2, 15);
-  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true&state=${stateParam}`;
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUrl,
+    response_type: 'token',
+    scope: 'profile email openid',
+    include_granted_scopes: 'true',
+    prompt: 'consent'
+  });
+  
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 };
 
 type AuthContextType = {
@@ -254,8 +261,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('Starting Google login with redirect to:', redirectUrl);
       console.log('Using Google Client ID:', GOOGLE_CLIENT_ID);
       
-      // INSTEAD of using Supabase OAuth, manually construct and open the URL
-      // This works better with Chrome extension
+      // Use the improved OAuth URL construction
       const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl);
       
       // Log the URL for debugging

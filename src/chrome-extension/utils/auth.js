@@ -1,4 +1,3 @@
-
 // Auth utilities for Chrome extension
 
 // Updated Google OAuth Client ID
@@ -100,12 +99,18 @@ export function openAuthPage(tabId = null, options = {}) {
   console.log('Opened auth URL:', fullAuthUrl);
 }
 
-// Construct Google OAuth URL directly
+// Improved Google OAuth URL construction using URLSearchParams
 function constructGoogleOAuthUrl(redirectUrl) {
-  // Build URL directly with the corrected client ID - NO localhost in redirectUrl
-  const stateParam = Math.random().toString(36).substring(2, 15);
-  console.log('Using Google Client ID for OAuth:', GOOGLE_CLIENT_ID);
-  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&response_type=token&scope=email%20profile&prompt=select_account&include_granted_scopes=true&state=${stateParam}`;
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUrl,
+    response_type: 'token',
+    scope: 'profile email openid',
+    include_granted_scopes: 'true',
+    prompt: 'consent'
+  });
+  
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
 // Handle OAuth sign-in with provider
@@ -116,7 +121,7 @@ export function openAuthWithProvider(provider) {
     console.log(`Opening ${provider} auth with redirect to:`, redirectUrl);
     
     if (provider === 'google') {
-      // Create Google OAuth URL directly - avoiding Supabase client
+      // Create Google OAuth URL using the improved method
       const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl);
       
       // Log the URL for debugging
