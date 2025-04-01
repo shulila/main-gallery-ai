@@ -4,8 +4,26 @@ const PRODUCTION_URL = 'https://main-gallery-hub.lovable.app';
 const GALLERY_URL = `${PRODUCTION_URL}/gallery`;
 const AUTH_URL = `${PRODUCTION_URL}/auth`;
 
-// Import utility function for notifications
-const { createNotification } = await import('./utils/notifications.js');
+// Import utility functions - must be done inside functions when using ES modules
+let createNotification;
+
+// Initialize utilities 
+async function initUtils() {
+  const { createNotification: notificationFn } = await import('./utils/notifications.js');
+  createNotification = notificationFn;
+}
+
+// Init function that runs when service worker starts
+async function initialize() {
+  console.log('MainGallery background script initializing...');
+  await initUtils();
+  console.log('Utilities initialized');
+}
+
+// Run initialization
+initialize().catch(error => {
+  console.error('Error during initialization:', error);
+});
 
 // Check if user is logged in with token validation
 async function isLoggedIn() {
@@ -34,22 +52,62 @@ async function isLoggedIn() {
   return false;
 }
 
+// Check if URL is from a supported domain/path
+async function isSupportedTab(tab) {
+  if (!tab || !tab.url) return false;
+  
+  // Skip chrome:// URLs and extension pages
+  if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+    return false;
+  }
+  
+  try {
+    // Dynamic import of gallery types
+    const module = await import('../types/gallery.js').catch(() => {
+      // Fallback to relative path if extension context
+      return import('./types/gallery.js');
+    });
+    
+    return module.isSupportedURL(tab.url);
+  } catch (error) {
+    console.error('Error checking supported URL:', error);
+    
+    // Manual check as fallback
+    const supportedDomains = [
+      'midjourney.com', 
+      'www.midjourney.com',
+      'openai.com', 
+      'leonardo.ai'
+    ];
+    
+    const supportedPaths = [
+      '/imagine',
+      '/archive',
+      '/app'
+    ];
+    
+    const url = new URL(tab.url);
+    const isDomainSupported = supportedDomains.some(domain => 
+      url.hostname === domain || url.hostname.endsWith(`.${domain}`)
+    );
+    
+    const isPathSupported = supportedPaths.some(path => 
+      url.pathname === path || url.pathname.startsWith(path)
+    );
+    
+    return isDomainSupported && isPathSupported;
+  }
+}
+
 // Extract images from the current active tab
 async function extractImagesFromActiveTab() {
   try {
-    // Show notification that scanning is starting
-    createNotification(
-      'maingallery_scanning', 
-      'Scanning Current Tab', 
-      'Looking for AI creations...'
-    );
-    
     // Get active tab in current window
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     
     if (!tabs || !tabs[0] || !tabs[0].id) {
       console.log('No active tab found');
-      return { images: [], success: false };
+      return { images: [], success: false, reason: 'no_tab' };
     }
     
     const tab = tabs[0];
@@ -57,8 +115,23 @@ async function extractImagesFromActiveTab() {
     // Skip tabs without URLs or with chrome:// URLs
     if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
       console.log(`Skipping tab with URL: ${tab.url}`);
-      return { images: [], success: false };
+      return { images: [], success: false, reason: 'invalid_url' };
     }
+    
+    // Check if the tab is from a supported domain
+    const isSupported = await isSupportedTab(tab);
+    
+    if (!isSupported) {
+      console.log(`Tab URL not supported: ${tab.url}`);
+      return { images: [], success: false, reason: 'unsupported_url' };
+    }
+    
+    // Show notification that scanning is starting
+    createNotification(
+      'maingallery_scanning', 
+      'Scanning Current Tab', 
+      'Looking for AI creations...'
+    );
     
     console.log(`Extracting images from active tab: ${tab.url}`);
     
@@ -102,7 +175,8 @@ async function extractImagesFromActiveTab() {
             tabTitle: tab.title,
             timestamp: Date.now(),
             sourceURL: tab.url,
-            type: 'image'
+            type: 'image',
+            fromSupportedDomain: true
           }));
           
           console.log(`Extracted ${processedImages.length} platform-specific images`);
@@ -120,7 +194,7 @@ async function extractImagesFromActiveTab() {
     }
   } catch (error) {
     console.error('Error extracting images:', error);
-    return { images: [], success: false };
+    return { images: [], success: false, reason: 'error' };
   }
 }
 
@@ -204,7 +278,8 @@ async function genericExtraction(tab) {
           tabUrl: tab.url,
           tabTitle: tab.title,
           type: 'image',
-          sourceURL: tab.url
+          sourceURL: tab.url,
+          fromSupportedDomain: true
         }));
         
         console.log(`Processed ${processedImages.length} images with metadata`);
@@ -212,10 +287,10 @@ async function genericExtraction(tab) {
       }
     }
     
-    return { images: [], success: false };
+    return { images: [], success: false, reason: 'no_images' };
   } catch (error) {
     console.error(`Error in generic extraction:`, error);
-    return { images: [], success: false };
+    return { images: [], success: false, reason: 'error' };
   }
 }
 
@@ -301,19 +376,46 @@ chrome.action.onClicked.addListener(async (tab) => {
       return;
     }
     
-    // User is logged in, extract images from the active tab
+    // Check if current tab is from a supported platform
+    const isSupported = await isSupportedTab(tab);
+    
+    if (!isSupported) {
+      console.log('Current tab is not from a supported platform:', tab.url);
+      
+      // Show notification about unsupported platform
+      createNotification(
+        'maingallery_unsupported_url', 
+        'Unsupported Platform', 
+        'Please open Midjourney, DALL·E or another supported AI platform to sync images'
+      );
+      
+      return;
+    }
+    
+    // User is logged in and tab is supported, extract images from the active tab
     console.log('User logged in, extracting images from active tab');
     
-    const { images, success } = await extractImagesFromActiveTab();
+    const { images, success, reason } = await extractImagesFromActiveTab();
     
     if (!success || !images || images.length === 0) {
-      console.log('No images found in active tab');
+      console.log('No images found in active tab, reason:', reason);
+      
+      let title = 'No Images Found';
+      let message = 'No images were found on the current page';
+      
+      if (reason === 'unsupported_url') {
+        title = 'Unsupported Page';
+        message = 'Please open Midjourney, DALL·E or another supported AI platform to sync images';
+      } else if (reason === 'error') {
+        title = 'Extraction Error';
+        message = 'There was a problem extracting images from this page';
+      }
       
       // Show notification
       createNotification(
         'maingallery_no_images', 
-        'No Images Found', 
-        'No images were found on the current page'
+        title, 
+        message
       );
       return;
     }
@@ -437,4 +539,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-console.log('MainGallery background script initialized with streamlined one-click flow');
+console.log('MainGallery background script initialized with domain-restricted one-click flow');

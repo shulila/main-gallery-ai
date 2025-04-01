@@ -26,4 +26,51 @@ export type GalleryImage = {
   domain?: string;
   path?: string;
   pageTitle?: string;
+  // Domain/platform verification
+  fromSupportedDomain?: boolean;
 };
+
+// List of supported domains for auto-sync
+export const SUPPORTED_DOMAINS = [
+  'midjourney.com',
+  'www.midjourney.com',
+  'openai.com',
+  'leonardo.ai',
+  'www.leonardo.ai',
+  'runwayml.com',
+  'www.runwayml.com',
+  'pika.art',
+  'www.pika.art'
+];
+
+// List of supported paths/routes that are gallery or creation pages
+export const SUPPORTED_PATHS = [
+  '/imagine',
+  '/archive',
+  '/app',
+  '/feed',
+  '/gallery',
+  '/create',
+  '/generations',
+  '/projects'
+];
+
+// Function to check if a URL is from a supported domain and path
+export function isSupportedURL(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    const isDomainSupported = SUPPORTED_DOMAINS.some(domain => 
+      urlObj.hostname === domain || urlObj.hostname.endsWith(`.${domain}`)
+    );
+    
+    // Check if the path is supported
+    const isPathSupported = SUPPORTED_PATHS.some(path => 
+      urlObj.pathname === path || urlObj.pathname.startsWith(path)
+    );
+    
+    return isDomainSupported && isPathSupported;
+  } catch (e) {
+    console.error('Error parsing URL:', e);
+    return false;
+  }
+}
