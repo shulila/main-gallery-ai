@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -38,21 +39,23 @@ export default function AuthCallback() {
         });
         
         if (token) {
-          console.log('Token found, storing in localStorage and creating session');
+          console.log('Token found, storing in session and creating session');
           
           // Calculate expiration time (24 hours from now if not provided)
           const expiresAt = expiresIn 
             ? Date.now() + (parseInt(expiresIn) * 1000) 
             : Date.now() + (24 * 60 * 60 * 1000);
             
-          // Store tokens in localStorage in multiple formats to ensure compatibility
-          localStorage.setItem('access_token', token);
-          localStorage.setItem('main_gallery_auth_token', JSON.stringify({
+          // Store tokens in localStorage for the web app
+          const tokenData = {
             access_token: token,
             refresh_token: refreshToken || '',
             timestamp: Date.now(),
             expires_at: expiresAt
-          }));
+          };
+          
+          localStorage.setItem('access_token', token);
+          localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
           
           if (refreshToken) {
             localStorage.setItem('refresh_token', refreshToken);
@@ -82,12 +85,7 @@ export default function AuthCallback() {
                 if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
                   try {
                     window.chrome.storage.sync.set({
-                      'main_gallery_auth_token': {
-                        access_token: token,
-                        refresh_token: refreshToken || '',
-                        timestamp: Date.now(),
-                        expires_at: expiresAt
-                      },
+                      'main_gallery_auth_token': tokenData,
                       'main_gallery_user_email': data.session.user.email
                     }, () => {
                       console.log('Auth data synced to chrome.storage');
@@ -129,11 +127,18 @@ export default function AuthCallback() {
           setTimeout(() => {
             console.log('Redirecting to destination');
             
+            // Check for extension login
+            const fromExtension = new URLSearchParams(window.location.search).get('from') === 'extension';
+            
             // If there's pending sync data, redirect to gallery
             if (syncData && syncData.images && syncData.images.length > 0) {
               // Store the sync data in session storage for the gallery to pick up
               sessionStorage.setItem('maingallery_sync_images', JSON.stringify(syncData.images));
               navigate('/gallery');
+            } else if (fromExtension) {
+              // If from extension, we'll let the extension handle the redirect
+              console.log('Login from extension completed, waiting for extension to handle redirect');
+              // Extension listener will close this tab and open gallery
             } else {
               // Otherwise redirect to gallery as default destination
               navigate('/gallery');

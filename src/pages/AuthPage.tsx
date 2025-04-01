@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,26 +24,36 @@ const AuthPage = () => {
   const defaultTabParam = searchParams.get('signup') === 'true' ? 'signup' : 'signin';
   
   const showForgotPassword = searchParams.get('forgotPassword') === 'true';
+  const fromExtension = searchParams.get('from') === 'extension';
   
   const [activeTab, setActiveTab] = useState(defaultTabParam);
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(showForgotPassword);
 
   useEffect(() => {
     if (session) {
-      const redirectPath = searchParams.get('redirect');
-      if (redirectPath) {
-        if (redirectPath.startsWith('chrome-extension://') || 
-            redirectPath.startsWith('http://') || 
-            redirectPath.startsWith('https://')) {
-          window.location.href = redirectPath;
-        } else {
-          navigate(redirectPath);
-        }
+      const redirectPath = searchParams.get('redirect') || '/gallery';
+      
+      // Special handling for extension redirects
+      if (fromExtension) {
+        console.log('Logged in from extension, will redirect to gallery and notify extension');
+        toast({
+          title: "Login successful",
+          description: "You can now close this tab and return to the extension",
+        });
+        
+        // Minimal delay before redirect
+        setTimeout(() => {
+          navigate('/gallery');
+        }, 1000);
+      } else if (redirectPath.startsWith('chrome-extension://') || 
+                redirectPath.startsWith('http://') || 
+                redirectPath.startsWith('https://')) {
+        window.location.href = redirectPath;
       } else {
-        navigate('/gallery');
+        navigate(redirectPath);
       }
     }
-  }, [session, navigate, searchParams]);
+  }, [session, navigate, searchParams, fromExtension, toast]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,9 +114,15 @@ const AuthPage = () => {
 
   const handleGoogleSignIn = async () => {
     try {
+      console.log('Starting Google sign-in flow');
       await signInWithGoogle();
     } catch (error) {
       console.error('Google sign-in error:', error);
+      toast({
+        title: "Google sign-in failed",
+        description: "Could not authenticate with Google. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 

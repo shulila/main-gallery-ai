@@ -9,6 +9,32 @@ const getProductionRedirectUrl = () => {
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
+// Supported platforms for extension activation
+const SUPPORTED_PLATFORMS = [
+  'midjourney.com',
+  'leonardo.ai',
+  'openai.com',
+  'dreamstudio.ai',
+  'stability.ai',
+  'runwayml.com',
+  'pika.art',
+  'discord.com/channels'
+];
+
+// Check if URL is supported for extension activation
+function isSupportedPlatform(url) {
+  if (!url) return false;
+  
+  try {
+    const urlObj = new URL(url);
+    return SUPPORTED_PLATFORMS.some(platform => urlObj.hostname.includes(platform) || 
+      (platform.includes('discord.com') && urlObj.pathname.includes('midjourney')));
+  } catch (e) {
+    console.error('Invalid URL:', url);
+    return false;
+  }
+}
+
 // Set up a listener for auth callback
 export function setupAuthCallbackListener() {
   try {
@@ -66,19 +92,6 @@ export function setupAuthCallbackListener() {
               console.error('Error showing auth success notification:', err);
             }
             
-            // Also store in localStorage for web app access if possible
-            try {
-              localStorage.setItem('main_gallery_auth_token', JSON.stringify({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                timestamp: Date.now(),
-                expires_at: expiresAt
-              }));
-              localStorage.setItem('main_gallery_user_email', userEmail || 'User');
-            } catch (err) {
-              console.error('Error setting localStorage:', err);
-            }
-            
             // Close the auth tab after successful login
             setTimeout(() => {
               chrome.tabs.remove(tabId);
@@ -122,7 +135,7 @@ export function openAuthPage(tabId = null, options = {}) {
   const searchParams = new URLSearchParams();
   if (options.redirect) searchParams.append('redirect', options.redirect);
   if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
-  if (options.signup) searchParams.append('signup', 'true');
+  if (options.signup) searchParams.append('signup', options.signup);
   if (options.from) searchParams.append('from', options.from);
   
   const queryString = searchParams.toString();
@@ -209,32 +222,6 @@ export function isLoggedIn() {
           }
         }
         
-        // Try to get session from web localStorage as fallback
-        try {
-          const localToken = localStorage.getItem('main_gallery_auth_token');
-          if (localToken) {
-            const parsedToken = JSON.parse(localToken);
-            
-            // Check if token from localStorage is valid
-            const hasExpiry = parsedToken.expires_at !== undefined;
-            const isExpired = hasExpiry && Date.now() > parsedToken.expires_at;
-            
-            if (!isExpired) {
-              // Valid token from localStorage, also sync to extension storage
-              chrome.storage.sync.set({
-                'main_gallery_auth_token': parsedToken,
-                'main_gallery_user_email': localStorage.getItem('main_gallery_user_email') || 'User'
-              });
-              
-              resolve(true);
-              return;
-            }
-          }
-        } catch (err) {
-          console.error('Error checking localStorage:', err);
-        }
-        
-        // No valid token found in any storage
         resolve(false);
       });
     } catch (err) {
@@ -245,30 +232,11 @@ export function isLoggedIn() {
   });
 }
 
-// Get user email if available - improved to check both sources
+// Get user email if available
 export function getUserEmail() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(['main_gallery_user_email'], (result) => {
-      if (result.main_gallery_user_email) {
-        resolve(result.main_gallery_user_email);
-      } else {
-        // Try localStorage as fallback
-        try {
-          const userEmail = localStorage.getItem('main_gallery_user_email');
-          if (userEmail) {
-            // Also sync to extension storage
-            chrome.storage.sync.set({
-              'main_gallery_user_email': userEmail
-            });
-            resolve(userEmail);
-          } else {
-            resolve(null);
-          }
-        } catch (err) {
-          console.error('Error checking localStorage for email:', err);
-          resolve(null);
-        }
-      }
+      resolve(result.main_gallery_user_email || null);
     });
   });
 }
@@ -276,20 +244,10 @@ export function getUserEmail() {
 // Log out from all platforms
 export function logout() {
   try {
-    // Clear both extension storage and localStorage
+    // Clear extension storage
     return new Promise((resolve) => {
       chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
         console.log('Successfully logged out from extension storage');
-        
-        // Also clear localStorage if possible
-        try {
-          localStorage.removeItem('main_gallery_auth_token');
-          localStorage.removeItem('main_gallery_user_email');
-          console.log('Successfully logged out from localStorage');
-        } catch (err) {
-          console.error('Error clearing localStorage:', err);
-        }
-        
         resolve(true);
       });
     });
@@ -298,3 +256,6 @@ export function logout() {
     return Promise.resolve(false);
   }
 }
+
+// Export the isSupportedPlatform function
+export { isSupportedPlatform };

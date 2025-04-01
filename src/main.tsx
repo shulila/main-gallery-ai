@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // This helps hosting platforms handle routes correctly
     if (window.location.pathname !== '/' && !window.location.pathname.includes('.')) {
       console.log('SPA route detected on direct load:', window.location.pathname);
+      // Handle hash fragment in URL (especially for auth callbacks)
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        console.log('Auth token detected in hash fragment');
+      }
     }
   }
 });
