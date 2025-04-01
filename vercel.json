@@ -1,15 +1,10 @@
 
 {
   "rewrites": [
-    { "source": "/auth/callback", "destination": "/" },
-    { "source": "/auth/:path*", "destination": "/" },
-    { "source": "/(.*)", "destination": "/" }
-  ],
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/auth/callback", "dest": "/" },
-    { "src": "/auth/:path*", "dest": "/" },
-    { "src": "/(.*)", "dest": "/" }
+    { "source": "/auth/callback", "destination": "/index.html" },
+    { "source": "/auth/callback/:path*", "destination": "/index.html" },
+    { "source": "/auth/:path*", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {

@@ -78,7 +78,7 @@ function openAuthPage(tabId = null, options = {}) {
   const searchParams = new URLSearchParams();
   if (options.redirect) searchParams.append('redirect', options.redirect);
   if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
-  if (options.signup) searchParams.append('signup', 'true');
+  if (options.signup) searchParams.append('signup', options.signup);
   if (options.from) searchParams.append('from', options.from);
   
   const queryString = searchParams.toString();

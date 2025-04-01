@@ -44,6 +44,9 @@ function App() {
         {/* Special wildcard route to handle auth callback with hash fragments */}
         <Route path="/auth/callback/*" element={<AuthCallback />} />
         
+        {/* Special fallback for auth callback with fragment */}
+        <Route path="/_callback/*" element={<AuthCallback />} />
+        
         {/* Catch all unknown routes */}
         <Route path="*" element={<NotFound />} />
       </Routes>
