@@ -1,70 +1,209 @@
-
 // Production URL for consistent redirects
 const PRODUCTION_URL = 'https://main-gallery-hub.lovable.app';
 const GALLERY_URL = `${PRODUCTION_URL}/gallery`;
 const AUTH_URL = `${PRODUCTION_URL}/auth`;
 
-// Global variables for utilities
-let createNotification;
-let isLoggedIn;
-let openAuthPage;
-let setupAuthCallbackListener;
-let isSupportedURL;
-
-// Initialize utilities - proper pattern for service workers
-async function initUtils() {
-  try {
-    console.log('Loading utility modules...');
-    
-    // Load auth utilities
-    const authModule = await import('./utils/auth.js');
-    isLoggedIn = authModule.isLoggedIn;
-    openAuthPage = authModule.openAuthPage;
-    setupAuthCallbackListener = authModule.setupAuthCallbackListener;
-    
-    // Load notification utilities - using inline fallback if module fails
+// Inline utility functions instead of importing them
+// Auth utilities
+function isLoggedIn() {
+  return new Promise((resolve) => {
     try {
-      const notificationModule = await import('./utils/notifications.js');
-      createNotification = notificationModule.createNotification;
-      console.log('Notification utility loaded successfully');
-    } catch (error) {
-      console.error('Failed to load notification utility, using fallback:', error);
-      // Fallback notification function
-      createNotification = (id, title, message) => {
-        chrome.notifications.create(id, {
-          type: 'basic',
-          iconUrl: 'icons/icon128.png',
-          title: title,
-          message: message,
-        });
-      };
+      // Check for token in chrome.storage.sync with expiration validation
+      chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
+        const token = result.main_gallery_auth_token;
+        
+        if (token && token.access_token) {
+          // Check if token has expiration and is still valid
+          const hasExpiry = token.expires_at !== undefined;
+          const isExpired = hasExpiry && Date.now() > token.expires_at;
+          
+          console.log('Token found, checking expiration:', 
+                     hasExpiry ? `expires at ${new Date(token.expires_at).toISOString()}` : 'no expiry',
+                     isExpired ? 'EXPIRED' : 'VALID');
+          
+          if (!isExpired) {
+            // Token exists and is not expired
+            resolve(true);
+            return;
+          } else {
+            console.log('Token expired, will remove it');
+            // Token exists but is expired, clean it up
+            chrome.storage.sync.remove(['main_gallery_auth_token'], () => {
+              resolve(false);
+            });
+            return;
+          }
+        }
+        
+        // Try to get session from web localStorage as fallback
+        try {
+          const localToken = localStorage.getItem('main_gallery_auth_token');
+          if (localToken) {
+            const parsedToken = JSON.parse(localToken);
+            
+            // Check if token from localStorage is valid
+            const hasExpiry = parsedToken.expires_at !== undefined;
+            const isExpired = hasExpiry && Date.now() > parsedToken.expires_at;
+            
+            if (!isExpired) {
+              // Valid token from localStorage, also sync to extension storage
+              chrome.storage.sync.set({
+                'main_gallery_auth_token': parsedToken,
+                'main_gallery_user_email': localStorage.getItem('main_gallery_user_email') || 'User'
+              });
+              
+              resolve(true);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error('Error checking localStorage:', err);
+        }
+        
+        // No valid token found in any storage
+        resolve(false);
+      });
+    } catch (err) {
+      console.error('Error in isLoggedIn:', err);
+      // If there's an error, consider the user not logged in
+      resolve(false);
     }
-    
-    // Set up auth callback listener
-    setupAuthCallbackListener();
-    
-    console.log('All utilities loaded successfully');
-    return true;
-  } catch (error) {
-    console.error('Error initializing utilities:', error);
-    return false;
-  }
-}
-
-// Safe initialization function that doesn't use top-level await
-function initialize() {
-  console.log('MainGallery background script initializing...');
-  
-  // Initialize utilities without using top-level await
-  initUtils().then(() => {
-    console.log('MainGallery extension initialized successfully');
-  }).catch(error => {
-    console.error('Error during initialization:', error);
   });
 }
 
-// Run initialization
-initialize();
+function openAuthPage(tabId = null, options = {}) {
+  const authUrl = 'https://main-gallery-hub.lovable.app/auth';
+  
+  // Add any query parameters
+  const searchParams = new URLSearchParams();
+  if (options.redirect) searchParams.append('redirect', options.redirect);
+  if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
+  if (options.signup) searchParams.append('signup', 'true');
+  if (options.from) searchParams.append('from', options.from);
+  
+  const queryString = searchParams.toString();
+  const fullAuthUrl = queryString ? `${authUrl}?${queryString}` : authUrl;
+  
+  // Open the URL
+  if (tabId) {
+    chrome.tabs.update(tabId, { url: fullAuthUrl });
+  } else {
+    chrome.tabs.create({ url: fullAuthUrl });
+  }
+  
+  console.log('Opened auth URL:', fullAuthUrl);
+}
+
+// Updated Google OAuth Client ID
+const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
+
+// Get the production auth callback URL - NEVER use localhost
+const getProductionRedirectUrl = () => {
+  return 'https://main-gallery-hub.lovable.app/auth/callback';
+};
+
+function setupAuthCallbackListener() {
+  try {
+    console.log('Setting up auth callback listener');
+    
+    // Use tabs.onUpdated to detect auth callbacks
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+      // Only process completed loads with our auth callback URL
+      if (changeInfo.status === 'complete' && tab.url && 
+          (tab.url.includes('main-gallery-hub.lovable.app/auth/callback') || 
+           tab.url.includes('/auth?access_token='))) {
+        
+        console.log('Auth callback detected:', tab.url);
+        
+        // Get auth token from the URL - handle both hash and query params
+        const url = new URL(tab.url);
+        
+        // Check for token in hash first (fragment identifier)
+        const hashParams = new URLSearchParams(url.hash ? url.hash.substring(1) : '');
+        const queryParams = new URLSearchParams(url.search);
+        
+        // Try to get token from both locations
+        const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
+        const userEmail = hashParams.get('email') || queryParams.get('email');
+        
+        // If we have tokens, validate and store them
+        if (accessToken) {
+          console.log('Auth tokens detected, will store session');
+          
+          // Calculate token expiration (24 hours from now)
+          const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+          
+          // Store token info and user email for extension usage
+          chrome.storage.sync.set({
+            'main_gallery_auth_token': {
+              access_token: accessToken,
+              refresh_token: refreshToken,
+              timestamp: Date.now(),
+              expires_at: expiresAt
+            },
+            'main_gallery_user_email': userEmail || 'User'
+          }, () => {
+            console.log('Auth token and user info stored in extension storage with expiration');
+            
+            // Show success notification to let user know auth worked
+            try {
+              chrome.notifications.create('auth_success', {
+                type: 'basic',
+                iconUrl: 'icons/icon128.png',
+                title: 'Login Successful',
+                message: 'You are now logged in to MainGallery'
+              });
+            } catch (err) {
+              console.error('Error showing auth success notification:', err);
+            }
+            
+            // Close the auth tab after successful login
+            setTimeout(() => {
+              chrome.tabs.remove(tabId);
+              
+              // Open gallery in a new tab
+              chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery' });
+              
+            }, 1000);
+          });
+        } else {
+          console.error('Auth callback detected but no access token found');
+          
+          // Show error notification
+          try {
+            chrome.notifications.create('auth_error', {
+              type: 'basic',
+              iconUrl: 'icons/icon128.png',
+              title: 'Login Failed',
+              message: 'Unable to login. Please try again.'
+            });
+          } catch (err) {
+            console.error('Error showing auth error notification:', err);
+          }
+        }
+      }
+    });
+    
+    console.log('Auth callback listener set up using tabs API');
+  } catch (error) {
+    console.error('Error setting up auth callback listener:', error);
+  }
+}
+
+// Notification utility function (inlined from notifications.js)
+function createNotification(id, title, message) {
+  try {
+    chrome.notifications.create(id, {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: title,
+      message: message
+    });
+  } catch (err) {
+    console.error('Error creating notification:', err);
+  }
+}
 
 // Domain and path verification
 function checkSupportedURL(url) {
@@ -78,7 +217,7 @@ function checkSupportedURL(url) {
   try {
     const urlObj = new URL(url);
     
-    // Get supported domains and paths from shared types
+    // Get supported domains and paths
     const SUPPORTED_DOMAINS = [
       'midjourney.com',
       'www.midjourney.com',
@@ -487,12 +626,17 @@ async function openNewGalleryTab(images) {
   return true;
 }
 
+// Initialize extension on load
+console.log('MainGallery background script initializing...');
+setupAuthCallbackListener();
+console.log('Auth callback listener set up');
+
 // Main action handler - triggered when extension icon is clicked
 chrome.action.onClicked.addListener(async (tab) => {
   console.log('Extension icon clicked in tab:', tab.url);
   
   try {
-    // Check if the user is logged in using the imported function
+    // Check if the user is logged in
     const loggedIn = await isLoggedIn();
     console.log('isLoggedIn check result:', loggedIn);
     

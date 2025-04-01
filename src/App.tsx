@@ -1,48 +1,55 @@
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider } from "@/components/theme-provider";
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from '@/contexts/AuthContext';
+import { useEffect } from 'react';
+import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
 
-// Pages
-import Index from '@/pages/Index';
-import Start from '@/pages/Start';
-import FeatureDetail from '@/pages/FeatureDetail';
-import Gallery from '@/pages/Gallery';
-import Detail from '@/pages/Detail';
-import Platforms from '@/pages/Platforms';
-import AuthPage from '@/pages/AuthPage';
-import AuthCallback from '@/pages/AuthCallback';
-import Settings from '@/pages/Settings';
-import NotFound from '@/pages/NotFound';
+import { AuthProvider } from './contexts/AuthContext';
+import AuthPage from './pages/AuthPage';
+import AuthCallback from './pages/AuthCallback';
+import Gallery from './pages/Gallery';
+import Index from './pages/Index';
+import NotFound from './pages/NotFound';
+import Detail from './pages/Detail';
+import Start from './pages/Start';
+import Settings from './pages/Settings';
+import Platforms from './pages/Platforms';
+import FeatureDetail from './pages/FeatureDetail';
 
-// Create a QueryClient once
-const queryClient = new QueryClient();
+import './App.css';
 
 function App() {
+  const location = useLocation();
+
+  // Special handling for auth callbacks with hash fragments
+  useEffect(() => {
+    // Check if we're on any URL with an access_token in the hash or query params
+    const hash = window.location.hash;
+    const search = window.location.search;
+    
+    if ((hash && hash.includes('access_token=')) || (search && search.includes('access_token='))) {
+      console.log('Detected access token in URL - this should trigger AuthCallback component');
+    }
+  }, [location]);
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ThemeProvider defaultTheme="light" storageKey="maingallery-theme">
-          <Router>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/start" element={<Start />} />
-              <Route path="/features/:featureId" element={<FeatureDetail />} />
-              <Route path="/gallery" element={<Gallery />} />
-              <Route path="/gallery/:imageId" element={<Detail />} />
-              <Route path="/platforms" element={<Platforms />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/auth" element={<AuthPage />} />
-              <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Router>
-          <Toaster />
-        </ThemeProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <AuthProvider>
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/gallery" element={<Gallery />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/platforms" element={<Platforms />} />
+        <Route path="/start" element={<Start />} />
+        <Route path="/detail/:id" element={<Detail />} />
+        <Route path="/features/:id" element={<FeatureDetail />} />
+        
+        {/* Special wildcard route to handle auth callback with hash fragments */}
+        <Route path="/auth/callback/*" element={<AuthCallback />} />
+        
+        {/* Catch all unknown routes */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AuthProvider>
   );
 }
 
