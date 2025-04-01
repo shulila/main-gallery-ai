@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -81,10 +82,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 localStorage.setItem('main_gallery_user_email', session.user.email || 'User');
                 
                 // Store token in localStorage for extension to access
+                // Calculate expiration time (24 hours from now or use session expiry if available)
+                const expiresAt = session.expires_at
+                  ? session.expires_at * 1000  // Convert seconds to milliseconds
+                  : Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+                
                 const tokenData = {
                   access_token: session.access_token,
                   refresh_token: session.refresh_token || '',
-                  timestamp: Date.now()
+                  timestamp: Date.now(),
+                  expires_at: expiresAt
                 };
                 
                 localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
@@ -134,10 +141,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             localStorage.setItem('main_gallery_user_email', session.user.email || 'User');
             
             // Store token in localStorage for extension to access
+            // Calculate expiration time (24 hours from now or use session expiry if available)
+            const expiresAt = session.expires_at
+              ? session.expires_at * 1000  // Convert seconds to milliseconds
+              : Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+            
             const tokenData = {
               access_token: session.access_token,
               refresh_token: session.refresh_token || '',
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              expires_at: expiresAt
             };
             
             localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
@@ -158,6 +171,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           } catch (err) {
             console.error('Error storing user data:', err);
+          }
+        }
+        
+        // Also check for token in localStorage and try to restore session if Supabase session is missing
+        if (!session) {
+          try {
+            const tokenStr = localStorage.getItem('main_gallery_auth_token');
+            if (tokenStr) {
+              const tokenData = JSON.parse(tokenStr);
+              
+              // Check if token is valid and not expired
+              const hasExpiry = tokenData.expires_at !== undefined;
+              const isExpired = hasExpiry && Date.now() > tokenData.expires_at;
+              
+              if (tokenData.access_token && !isExpired) {
+                console.log('Found valid token in localStorage, restoring session');
+                
+                // Try to restore Supabase session with the token
+                const { data, error } = await supabase.auth.setSession({
+                  access_token: tokenData.access_token,
+                  refresh_token: tokenData.refresh_token || ''
+                });
+                
+                if (error) {
+                  console.error('Error restoring session from localStorage token:', error);
+                  
+                  // Clear invalid token
+                  localStorage.removeItem('main_gallery_auth_token');
+                  localStorage.removeItem('main_gallery_user_email');
+                } else if (data?.session) {
+                  console.log('Successfully restored session from localStorage token');
+                  // No need to set session/user state as onAuthStateChange will handle it
+                }
+              } else if (isExpired) {
+                console.log('Found expired token in localStorage, removing it');
+                localStorage.removeItem('main_gallery_auth_token');
+                localStorage.removeItem('main_gallery_user_email');
+              }
+            }
+          } catch (err) {
+            console.error('Error checking localStorage for token:', err);
           }
         }
         

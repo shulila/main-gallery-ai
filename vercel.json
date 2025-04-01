@@ -6,7 +6,7 @@
   ],
   "routes": [
     { "handle": "filesystem" },
-    { "src": "/auth/callback(.*)", "dest": "/" },
+    { "src": "/auth/callback", "dest": "/" },
     { "src": "/(.*)", "dest": "/" }
   ]
 }

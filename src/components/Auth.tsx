@@ -13,7 +13,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
-// Form schemas
 const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
   password: z.string().min(6, { message: "Password must be at least 6 characters" }),
@@ -46,9 +45,7 @@ const Auth = ({
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
   const { signIn, signUp, signInWithGoogle, resetPassword } = useAuth();
   
-  // Set the active tab based on initialTab prop or query parameter
   useEffect(() => {
-    // Check URL query parameters for tab
     const searchParams = new URLSearchParams(location.search);
     const tabParam = searchParams.get('tab');
     const forgotParam = searchParams.get('forgotPassword');
@@ -92,41 +89,31 @@ const Auth = ({
     try {
       await signIn(values.email, values.password);
       
-      // Get parameters from query string
       const searchParams = new URLSearchParams(location.search);
       const redirectParam = searchParams.get('redirect');
       const fromExtension = searchParams.get('from') === 'extension';
       
-      // Handle different navigation flows based on entry point
       if (fromExtension) {
-        // If login came from extension, just close the tab or show success message
         toast({
           title: "Login successful",
           description: "You can now close this tab and return to the extension",
         });
-        
-        // Optional: show a message that they can close this tab
-        // For now, we'll redirect them to the gallery after a brief delay
         setTimeout(() => {
           navigate('/gallery');
         }, 3000);
       } else if (redirectParam) {
-        // Check if it's an external URL (like a chrome-extension:// URL)
         if (redirectParam.startsWith('chrome-extension://') || 
             redirectParam.startsWith('http://') || 
             redirectParam.startsWith('https://')) {
           window.location.href = redirectParam;
         } else {
-          // For internal routes
           navigate(redirectParam);
         }
       } else {
-        // Default redirect to gallery
         navigate(redirectTo);
       }
     } catch (error) {
       console.error('Login handler error:', error);
-      // Error is already handled by the signIn function
     } finally {
       setLoading(false);
     }
@@ -138,12 +125,10 @@ const Auth = ({
     try {
       await signUp(values.email, values.password);
       
-      // Check if the signup was initiated from the extension
       const searchParams = new URLSearchParams(location.search);
       const fromExtension = searchParams.get('from') === 'extension';
       
       if (fromExtension) {
-        // Show special message for extension users
         toast({
           title: "Account created",
           description: "Please log in to continue using the extension",
@@ -155,11 +140,9 @@ const Auth = ({
         });
       }
       
-      // Switch to login tab after signup
       setActiveTab('login');
     } catch (error) {
       console.error('Signup handler error:', error);
-      // Error is already handled by the signUp function
     } finally {
       setLoading(false);
     }
@@ -170,12 +153,10 @@ const Auth = ({
     try {
       await signInWithGoogle();
       
-      // Get parameters from query string
       const searchParams = new URLSearchParams(location.search);
       const redirectParam = searchParams.get('redirect');
       
       if (redirectParam) {
-        // Handle redirect after successful OAuth login
         if (redirectParam.startsWith('chrome-extension://') || 
             redirectParam.startsWith('http://') || 
             redirectParam.startsWith('https://')) {
@@ -233,7 +214,6 @@ const Auth = ({
       
       <CardContent>
         {isForgotPasswordMode ? (
-          // Forgot Password Form
           <Form {...forgotPasswordForm}>
             <form onSubmit={forgotPasswordForm.handleSubmit(handleForgotPassword)} className="space-y-4">
               <FormField
@@ -272,14 +252,12 @@ const Auth = ({
             </form>
           </Form>
         ) : (
-          // Login/Signup Tabs
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="login">Log In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
             
-            {/* Google Button - Always show for both login and signup */}
             <Button 
               type="button" 
               variant="outline" 
