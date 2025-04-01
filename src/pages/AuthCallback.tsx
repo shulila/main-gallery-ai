@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -29,7 +30,13 @@ export default function AuthCallback() {
         const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
         const expiresIn = hashParams.get('expires_in') || queryParams.get('expires_in');
         
-        console.log('🔑 access_token detected:', token ? 'YES' : 'NO');
+        console.log('🔑 Token detection attempt', { 
+          hashToken: !!tokenFromHash, 
+          queryToken: !!tokenFromQuery,
+          refreshToken: !!refreshToken,
+          hash: window.location.hash,
+          search: window.location.search
+        });
         
         if (token) {
           console.log('Token found, storing in localStorage and creating session');
@@ -54,6 +61,7 @@ export default function AuthCallback() {
           
           // Try to create a session with Supabase using the token
           try {
+            console.log('Setting Supabase session with token');
             const { data, error } = await supabase.auth.setSession({
               access_token: token,
               refresh_token: refreshToken || ''
@@ -113,6 +121,11 @@ export default function AuthCallback() {
             sessionStorage.removeItem('maingallery_pending_sync');
           }
           
+          toast({
+            title: "Login Successful",
+            description: "You've been logged in successfully!",
+          });
+          
           // Slight delay before redirect to ensure processing
           setTimeout(() => {
             console.log('Redirecting to destination');
@@ -129,8 +142,18 @@ export default function AuthCallback() {
           }, 1000);
         } else {
           console.error('No access token found in URL');
+          console.log('URL params:', { 
+            hash: window.location.hash,
+            search: window.location.search
+          });
           setStatus('Login failed. No access token found.');
           setError('We couldn\'t find an authentication token in the URL. Please try logging in again.');
+          
+          toast({
+            title: "Login Failed",
+            description: "No authentication token found. Please try again.",
+            variant: "destructive",
+          });
           
           // Redirect to login page after a delay
           setTimeout(() => navigate('/auth'), 3000);
@@ -140,6 +163,12 @@ export default function AuthCallback() {
         setStatus('Authentication error');
         setError('An error occurred during login. Please try again.');
         
+        toast({
+          title: "Authentication Error",
+          description: "An error occurred during login. Please try again.",
+          variant: "destructive",
+        });
+        
         // Redirect to login page after a delay
         setTimeout(() => navigate('/auth'), 3000);
       }
@@ -147,7 +176,7 @@ export default function AuthCallback() {
     
     // Execute the auth completion function
     completeAuth();
-  }, [navigate]);
+  }, [navigate, toast]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
