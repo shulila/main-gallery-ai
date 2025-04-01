@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,33 +19,26 @@ const AuthPage = () => {
   const { toast } = useToast();
   const location = useLocation();
 
-  // Get the initial tab from URL parameters
   const searchParams = new URLSearchParams(location.search);
   const defaultTabParam = searchParams.get('signup') === 'true' ? 'signup' : 'signin';
   
-  // Check if we should show the forgot password screen
   const showForgotPassword = searchParams.get('forgotPassword') === 'true';
   
   const [activeTab, setActiveTab] = useState(defaultTabParam);
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(showForgotPassword);
 
-  // Redirect if already logged in
   useEffect(() => {
     if (session) {
-      // Get the redirect parameter from URL if it exists
       const redirectPath = searchParams.get('redirect');
       if (redirectPath) {
-        // Check if it's an external redirect (like a chrome-extension:// URL)
         if (redirectPath.startsWith('chrome-extension://') || 
             redirectPath.startsWith('http://') || 
             redirectPath.startsWith('https://')) {
           window.location.href = redirectPath;
         } else {
-          // For internal routes
           navigate(redirectPath);
         }
       } else {
-        // Default redirect to gallery
         navigate('/gallery');
       }
     }
@@ -66,10 +58,13 @@ const AuthPage = () => {
     setIsSubmitting(true);
     try {
       await signIn(email, password);
-      // Navigation is handled in the useEffect above
     } catch (error: any) {
       console.error('Login error:', error);
-      // Toast message is shown by the auth context
+      toast({
+        title: "Login failed",
+        description: error.message || "Please check your email and password",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -96,7 +91,11 @@ const AuthPage = () => {
       setActiveTab('signin');
     } catch (error: any) {
       console.error('Signup error:', error);
-      // Toast message is shown by the auth context
+      toast({
+        title: "Signup failed",
+        description: error.message || "Please check your email and try again",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -105,7 +104,6 @@ const AuthPage = () => {
   const handleGoogleSignIn = async () => {
     try {
       await signInWithGoogle();
-      // Navigation is handled by the OAuth redirect
     } catch (error) {
       console.error('Google sign-in error:', error);
     }
@@ -156,7 +154,6 @@ const AuthPage = () => {
         </CardHeader>
         <CardContent>
           {isForgotPasswordMode ? (
-            // Forgot Password Form
             <form onSubmit={handleForgotPassword} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="reset-email">Email</Label>
@@ -189,7 +186,6 @@ const AuthPage = () => {
               </Button>
             </form>
           ) : (
-            // Regular Login/Signup Tabs
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-4">
                 <TabsTrigger value="signin">Log In</TabsTrigger>

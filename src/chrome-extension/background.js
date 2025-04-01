@@ -4,26 +4,50 @@ const PRODUCTION_URL = 'https://main-gallery-hub.lovable.app';
 const GALLERY_URL = `${PRODUCTION_URL}/gallery`;
 const AUTH_URL = `${PRODUCTION_URL}/auth`;
 
-// Global variable for the notification util
+// Global variables for utilities
 let createNotification;
+let isLoggedIn;
+let openAuthPage;
+let setupAuthCallbackListener;
+let isSupportedURL;
 
 // Initialize utilities - proper pattern for service workers
 async function initUtils() {
   try {
-    const { default: notificationModule } = await import('./utils/notifications.js');
-    createNotification = notificationModule.createNotification;
-    console.log('Notification utility loaded successfully');
+    console.log('Loading utility modules...');
+    
+    // Load auth utilities
+    const authModule = await import('./utils/auth.js');
+    isLoggedIn = authModule.isLoggedIn;
+    openAuthPage = authModule.openAuthPage;
+    setupAuthCallbackListener = authModule.setupAuthCallbackListener;
+    
+    // Load notification utilities - using inline fallback if module fails
+    try {
+      const notificationModule = await import('./utils/notifications.js');
+      createNotification = notificationModule.createNotification;
+      console.log('Notification utility loaded successfully');
+    } catch (error) {
+      console.error('Failed to load notification utility, using fallback:', error);
+      // Fallback notification function
+      createNotification = (id, title, message) => {
+        chrome.notifications.create(id, {
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: title,
+          message: message,
+        });
+      };
+    }
+    
+    // Set up auth callback listener
+    setupAuthCallbackListener();
+    
+    console.log('All utilities loaded successfully');
+    return true;
   } catch (error) {
-    console.error('Failed to load notification utility:', error);
-    // Fallback notification function if import fails
-    createNotification = (id, title, message) => {
-      chrome.notifications.create(id, {
-        type: 'basic',
-        iconUrl: 'icons/icon128.png',
-        title: title,
-        message: message,
-      });
-    };
+    console.error('Error initializing utilities:', error);
+    return false;
   }
 }
 
@@ -42,37 +66,8 @@ function initialize() {
 // Run initialization
 initialize();
 
-// Check if user is logged in with token validation
-async function isLoggedIn() {
-  try {
-    // Check token in extension storage
-    const result = await chrome.storage.sync.get(['main_gallery_auth_token']);
-    const token = result.main_gallery_auth_token;
-    
-    // Validate token exists and is not expired
-    if (token) {
-      const hasExpiry = token.expires_at !== undefined;
-      const isExpired = hasExpiry && Date.now() > token.expires_at;
-      
-      if (!isExpired) {
-        console.log('Valid auth token found');
-        return true;
-      }
-      
-      console.log('Token expired, removing it');
-      await chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
-    } else {
-      console.log('No auth token found in storage');
-    }
-  } catch (error) {
-    console.error('Error checking login status:', error);
-  }
-  
-  return false;
-}
-
 // Domain and path verification
-async function isSupportedURL(url) {
+function checkSupportedURL(url) {
   if (!url) return false;
   
   // Skip chrome:// URLs and extension pages
@@ -83,21 +78,27 @@ async function isSupportedURL(url) {
   try {
     const urlObj = new URL(url);
     
-    // List of supported domains
-    const supportedDomains = [
+    // Get supported domains and paths from shared types
+    const SUPPORTED_DOMAINS = [
       'midjourney.com',
       'www.midjourney.com',
       'openai.com',
+      'chat.openai.com',
+      'labs.openai.com',
       'leonardo.ai',
       'www.leonardo.ai',
+      'app.leonardo.ai',
       'runwayml.com',
       'www.runwayml.com',
+      'runway.com',
       'pika.art',
-      'www.pika.art'
+      'www.pika.art',
+      'beta.dreamstudio.ai',
+      'dreamstudio.ai',
+      'stability.ai'
     ];
     
-    // List of supported paths/routes
-    const supportedPaths = [
+    const SUPPORTED_PATHS = [
       '/imagine',
       '/archive',
       '/app',
@@ -105,18 +106,30 @@ async function isSupportedURL(url) {
       '/gallery',
       '/create',
       '/generations',
-      '/projects'
+      '/projects',
+      '/dalle',
+      '/playground',
+      '/assets',
+      '/workspace',
+      '/dream',
+      '/video'
     ];
     
     // Check if domain is supported
-    const isDomainSupported = supportedDomains.some(domain => 
+    const isDomainSupported = SUPPORTED_DOMAINS.some(domain => 
       urlObj.hostname === domain || urlObj.hostname.endsWith(`.${domain}`)
     );
     
     // Check if path is supported
-    const isPathSupported = supportedPaths.some(path => 
+    const isPathSupported = SUPPORTED_PATHS.some(path => 
       urlObj.pathname === path || urlObj.pathname.startsWith(path)
     );
+    
+    // Special case for OpenAI dalleCreate path
+    if (urlObj.hostname.includes('openai.com') && 
+        (urlObj.pathname.includes('/image') || urlObj.pathname.includes('/dalle'))) {
+      return true;
+    }
     
     return isDomainSupported && isPathSupported;
   } catch (error) {
@@ -145,7 +158,7 @@ async function extractImagesFromActiveTab() {
     }
     
     // Check if the tab is from a supported domain
-    const isSupported = await isSupportedURL(tab.url);
+    const isSupported = checkSupportedURL(tab.url);
     
     if (!isSupported) {
       console.log(`Tab URL not supported: ${tab.url}`);
@@ -153,13 +166,11 @@ async function extractImagesFromActiveTab() {
     }
     
     // Show notification that scanning is starting
-    if (createNotification) {
-      createNotification(
-        'maingallery_scanning', 
-        'Scanning Current Tab', 
-        'Looking for AI creations...'
-      );
-    }
+    createNotification(
+      'maingallery_scanning', 
+      'Scanning Current Tab', 
+      'Looking for AI creations...'
+    );
     
     console.log(`Extracting images from active tab: ${tab.url}`);
     
@@ -438,13 +449,11 @@ async function syncImagesToGallery(images) {
       console.log('Images synced to existing gallery tab');
       
       // Show notification
-      if (createNotification) {
-        createNotification(
-          'maingallery_sync_success', 
-          'Images Synced', 
-          `Successfully synced ${images.length} images to MainGallery`
-        );
-      }
+      createNotification(
+        'maingallery_sync_success', 
+        'Images Synced', 
+        `Successfully synced ${images.length} images to MainGallery`
+      );
       
       return true;
     } catch (error) {
@@ -469,22 +478,13 @@ async function openNewGalleryTab(images) {
   console.log('Created new gallery tab, images stored for pickup');
   
   // Show notification
-  if (createNotification) {
-    createNotification(
-      'maingallery_sync_ready', 
-      'Images Ready', 
-      `${images.length} images ready to sync to MainGallery`
-    );
-  }
+  createNotification(
+    'maingallery_sync_ready', 
+    'Images Ready', 
+    `${images.length} images ready to sync to MainGallery`
+  );
   
   return true;
-}
-
-// Open auth page for login
-async function openAuthPage() {
-  const authUrl = `${AUTH_URL}?from=extension&redirect=gallery`;
-  console.log('Opening auth URL:', authUrl);
-  await chrome.tabs.create({ url: authUrl });
 }
 
 // Main action handler - triggered when extension icon is clicked
@@ -492,30 +492,40 @@ chrome.action.onClicked.addListener(async (tab) => {
   console.log('Extension icon clicked in tab:', tab.url);
   
   try {
-    // Check if the user is logged in
+    // Check if the user is logged in using the imported function
     const loggedIn = await isLoggedIn();
+    console.log('isLoggedIn check result:', loggedIn);
     
     if (!loggedIn) {
       console.log('User not logged in, redirecting to auth page');
-      await openAuthPage();
+      
+      // Show notification
+      createNotification(
+        'maingallery_auth_required', 
+        'Login Required', 
+        'Please log in to sync images to your gallery'
+      );
+      
+      // Open auth page with redirect parameters
+      openAuthPage(null, { 
+        from: 'extension', 
+        redirect: 'gallery' 
+      });
       return;
     }
     
     // Check if current tab is from a supported platform
-    const isSupported = await isSupportedURL(tab.url);
+    const isSupported = checkSupportedURL(tab.url);
     
     if (!isSupported) {
       console.log('Current tab is not from a supported platform:', tab.url);
       
       // Show notification about unsupported platform
-      if (createNotification) {
-        createNotification(
-          'maingallery_unsupported_url', 
-          'Unsupported Platform', 
-          'Please open Midjourney, DALL·E or another supported AI platform to sync images'
-        );
-      }
-      
+      createNotification(
+        'maingallery_unsupported_url', 
+        'Unsupported Platform', 
+        'Please open Midjourney, DALL·E or another supported AI platform to sync images'
+      );
       return;
     }
     
@@ -539,13 +549,11 @@ chrome.action.onClicked.addListener(async (tab) => {
       }
       
       // Show notification
-      if (createNotification) {
-        createNotification(
-          'maingallery_no_images', 
-          title, 
-          message
-        );
-      }
+      createNotification(
+        'maingallery_no_images', 
+        title, 
+        message
+      );
       return;
     }
     
@@ -558,17 +566,15 @@ chrome.action.onClicked.addListener(async (tab) => {
     console.error('Error during scan or sync:', error);
     
     // Show error notification
-    if (createNotification) {
-      createNotification(
-        'maingallery_error', 
-        'Sync Error', 
-        'There was an error syncing images. Please try again.'
-      );
-    }
+    createNotification(
+      'maingallery_error', 
+      'Sync Error', 
+      'There was an error syncing images. Please try again.'
+    );
   }
 });
 
-// Listen for tab updates to specifically detect gallery page with sync request
+// Handle tab updates to specifically detect gallery page with sync request
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && 
       tab.url && 
@@ -601,55 +607,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             chrome.storage.local.remove(['maingallery_pending_images']);
             
             // Show notification
-            if (createNotification) {
-              createNotification(
-                'maingallery_sync_complete', 
-                'Sync Complete', 
-                `${pendingImages.length} images synced to MainGallery`
-              );
-            }
+            createNotification(
+              'maingallery_sync_complete', 
+              'Sync Complete', 
+              `${pendingImages.length} images synced to MainGallery`
+            );
           });
         }
       });
     }, 2000);
-  }
-});
-
-// Handle authentication callback detection
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url && 
-      tab.url.includes('main-gallery-hub.lovable.app/auth/callback')) {
-    
-    console.log('Auth callback detected:', tab.url);
-    
-    // Get auth token from the URL
-    const url = new URL(tab.url);
-    const accessToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('access_token') : null;
-    const refreshToken = url.hash ? new URLSearchParams(url.hash.substring(1)).get('refresh_token') : null;
-    const userEmail = url.hash ? new URLSearchParams(url.hash.substring(1)).get('email') : null;
-    
-    // If we have tokens, store them
-    if (accessToken) {
-      console.log('Auth tokens detected, storing session');
-      
-      // Store basic token info with expiry time
-      chrome.storage.sync.set({
-        'main_gallery_auth_token': {
-          access_token: accessToken,
-          refresh_token: refreshToken,
-          timestamp: Date.now(),
-          expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours validity
-        },
-        'main_gallery_user_email': userEmail || 'User'
-      }, () => {
-        console.log('Auth token stored in extension storage');
-        
-        // Close the auth tab after successful login
-        setTimeout(() => {
-          chrome.tabs.remove(tabId);
-        }, 1000);
-      });
-    }
   }
 });
 
@@ -659,13 +625,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log(`Web app confirmed receipt of ${message.count} images`);
     
     // Show a confirmation notification
-    if (createNotification) {
-      createNotification(
-        'maingallery_sync_confirmed', 
-        'Sync Complete', 
-        `${message.count} images synced to MainGallery`
-      );
-    }
+    createNotification(
+      'maingallery_sync_confirmed', 
+      'Sync Complete', 
+      `${message.count} images synced to MainGallery`
+    );
     
     sendResponse({ success: true });
   }

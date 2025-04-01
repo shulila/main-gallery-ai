@@ -1,3 +1,4 @@
+
 // Auth utilities for Chrome extension
 
 // Updated Google OAuth Client ID
@@ -31,23 +32,28 @@ export function setupAuthCallbackListener() {
         if (accessToken) {
           console.log('Auth tokens detected, will store session');
           
+          // Calculate token expiration (24 hours from now)
+          const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+          
           // Store token info and user email for extension usage
           chrome.storage.sync.set({
             'main_gallery_auth_token': {
               access_token: accessToken,
               refresh_token: refreshToken,
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              expires_at: expiresAt
             },
             'main_gallery_user_email': userEmail || 'User'
           }, () => {
-            console.log('Auth token and user info stored in extension storage');
+            console.log('Auth token and user info stored in extension storage with expiration');
             
             // Also store in localStorage for web app access if possible
             try {
               localStorage.setItem('main_gallery_auth_token', JSON.stringify({
                 access_token: accessToken,
                 refresh_token: refreshToken,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                expires_at: expiresAt
               }));
               localStorage.setItem('main_gallery_user_email', userEmail || 'User');
             } catch (err) {
@@ -139,80 +145,64 @@ export function openAuthWithProvider(provider) {
   }
 }
 
-// Check if user is logged in - improved to check both extension storage and localStorage
+// Improved isLoggedIn to check expiration
 export function isLoggedIn() {
   return new Promise((resolve) => {
-    // Try to get session from Supabase first if available
-    try {
-      // Check if Supabase is available
-      if (typeof window !== 'undefined' && window.supabase) {
-        window.supabase.auth.getSession().then(({ data: { session }}) => {
-          if (session) {
-            // If we have a valid Supabase session, sync it to extension storage
+    // Check for token in chrome.storage.sync with expiration validation
+    chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
+      const token = result.main_gallery_auth_token;
+      
+      if (token && token.access_token) {
+        // Check if token has expiration and is still valid
+        const hasExpiry = token.expires_at !== undefined;
+        const isExpired = hasExpiry && Date.now() > token.expires_at;
+        
+        console.log('Token found, checking expiration:', 
+                    hasExpiry ? `expires at ${new Date(token.expires_at).toISOString()}` : 'no expiry',
+                    isExpired ? 'EXPIRED' : 'VALID');
+        
+        if (!isExpired) {
+          // Token exists and is not expired
+          resolve(true);
+          return;
+        } else {
+          console.log('Token expired, will remove it');
+          // Token exists but is expired, clean it up
+          chrome.storage.sync.remove(['main_gallery_auth_token'], () => {
+            resolve(false);
+          });
+          return;
+        }
+      }
+      
+      // Try to get session from web localStorage as fallback
+      try {
+        const localToken = localStorage.getItem('main_gallery_auth_token');
+        if (localToken) {
+          const parsedToken = JSON.parse(localToken);
+          
+          // Check if token from localStorage is valid
+          const hasExpiry = parsedToken.expires_at !== undefined;
+          const isExpired = hasExpiry && Date.now() > parsedToken.expires_at;
+          
+          if (!isExpired) {
+            // Valid token from localStorage, also sync to extension storage
             chrome.storage.sync.set({
-              'main_gallery_auth_token': {
-                access_token: session.access_token,
-                refresh_token: session.refresh_token,
-                timestamp: Date.now()
-              },
-              'main_gallery_user_email': session.user?.email || 'User'
+              'main_gallery_auth_token': parsedToken,
+              'main_gallery_user_email': localStorage.getItem('main_gallery_user_email') || 'User'
             });
+            
             resolve(true);
             return;
-          } else {
-            // If no Supabase session, fall back to storage checks
-            checkStorage();
-          }
-        }).catch(() => {
-          // If error checking Supabase, fall back to storage checks
-          checkStorage();
-        });
-        return;
-      } else {
-        // If Supabase not available, check storage
-        checkStorage();
-      }
-    } catch (err) {
-      // If any error, check storage
-      checkStorage();
-    }
-    
-    // Helper function to check storage options
-    function checkStorage() {
-      // Check if token exists in storage
-      chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
-        if (result.main_gallery_auth_token) {
-          resolve(true);
-        } else {
-          // If not in extension storage, try localStorage as fallback
-          try {
-            const localToken = localStorage.getItem('main_gallery_auth_token');
-            if (localToken) {
-              // If found in localStorage, also sync to extension storage
-              const parsedToken = JSON.parse(localToken);
-              chrome.storage.sync.set({
-                'main_gallery_auth_token': parsedToken
-              });
-              
-              // Also get user email if available
-              const userEmail = localStorage.getItem('main_gallery_user_email');
-              if (userEmail) {
-                chrome.storage.sync.set({
-                  'main_gallery_user_email': userEmail
-                });
-              }
-              
-              resolve(true);
-            } else {
-              resolve(false);
-            }
-          } catch (err) {
-            console.error('Error checking localStorage:', err);
-            resolve(false);
           }
         }
-      });
-    }
+      } catch (err) {
+        console.error('Error checking localStorage:', err);
+      }
+      
+      // No valid token found in any storage
+      resolve(false);
+    });
   });
 }
 

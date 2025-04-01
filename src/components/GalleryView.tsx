@@ -517,8 +517,9 @@ const GalleryView = ({ images: externalImages, isNewSync = false }: GalleryViewP
               <ImageIcon className="h-16 w-16 mx-auto opacity-30" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No images found</h3>
-            <p className="text-muted-foreground mb-6">Try adjusting your filters or use the Chrome extension to scan for images.</p>
-            <Button>Connect a Platform</Button>
+            <p className="text-muted-foreground mb-6">
+              No images found yet – click the MainGallery extension to sync from a supported platform.
+            </p>
           </div>
         )}
       </div>
