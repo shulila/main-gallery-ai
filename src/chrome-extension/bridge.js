@@ -1,69 +1,104 @@
 
-// Content script bridge for communication between the extension and web app
+console.log('MainGallery.AI bridge script loaded');
 
-console.log('MainGallery bridge content script loaded');
+// This script acts as a bridge between the web app and the extension content script
+// It runs in the context of the web app and can forward messages
 
-// Handle messages from the extension background script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Bridge received message:', message.action);
-  
-  if (message.action === 'syncImagesToGallery' && message.images) {
-    console.log(`Bridge: syncing ${message.images.length} images to gallery`);
-    
-    try {
-      // Forward the images to the web app via window.postMessage
-      window.postMessage({
-        type: 'GALLERY_IMAGES',
-        images: message.images,
-        source: 'MAIN_GALLERY_EXTENSION'
-      }, '*');
+// Handle messages from extension to web app
+function setupBridge() {
+  // Listen for runtime messages from the extension
+  try {
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      console.log('Bridge received message from extension:', message);
       
-      console.log('Images posted to web app via window.postMessage');
-      sendResponse({ success: true });
-    } catch (err) {
-      console.error('Error forwarding images to web app:', err);
-      sendResponse({ success: false, error: err.message });
+      // Pass the message to the web application
+      if (message.type === 'GALLERY_IMAGES') {
+        // Forward the images to the web app via postMessage
+        window.postMessage({
+          type: 'GALLERY_IMAGES',
+          images: message.images,
+          source: 'extension_bridge'
+        }, '*');
+        
+        sendResponse({ success: true });
+      }
+    });
+    
+    // Let the background script know the bridge is active
+    chrome.runtime.sendMessage({
+      action: 'bridgeConnected',
+      host: window.location.host,
+      path: window.location.pathname
+    }).catch(err => {
+      console.log('Could not notify background about bridge connection:', err);
+    });
+  } catch (err) {
+    console.error('Error setting up message bridge:', err);
+  }
+  
+  // Listen for messages from web app to extension
+  window.addEventListener('message', (event) => {
+    // Only handle messages from this window and with the right format
+    if (event.source !== window) return;
+    
+    // Forward web app messages to extension
+    if (event.data && event.data.type === 'WEB_APP_TO_EXTENSION') {
+      console.log('Bridge forwarding message from web app to extension:', event.data);
+      
+      try {
+        chrome.runtime.sendMessage(event.data).catch(err => {
+          console.error('Error forwarding message to extension:', err);
+        });
+      } catch (err) {
+        console.error('Failed to forward message to extension:', err);
+      }
     }
     
-    return true; // Keep channel open for async response
-  }
+    // Handle ready for sync messages
+    if (event.data && event.data.type === 'GALLERY_PAGE_READY') {
+      console.log('Gallery page is ready for sync, checking for pending images');
+      
+      try {
+        // Check if we have pending images stored in session storage
+        const pendingSyncStr = sessionStorage.getItem('maingallery_sync_images');
+        if (pendingSyncStr) {
+          try {
+            const pendingImages = JSON.parse(pendingSyncStr);
+            console.log('Found pending sync images, forwarding to gallery:', pendingImages.length);
+            
+            if (Array.isArray(pendingImages) && pendingImages.length > 0) {
+              // Forward the images to the web app
+              window.postMessage({
+                type: 'GALLERY_IMAGES',
+                images: pendingImages,
+                source: 'extension_bridge'
+              }, '*');
+            }
+            
+            // Clear the pending sync data
+            sessionStorage.removeItem('maingallery_sync_images');
+          } catch (e) {
+            console.error('Error processing pending sync images:', e);
+          }
+        }
+      } catch (err) {
+        console.error('Error checking for pending sync images:', err);
+      }
+    }
+  });
   
-  // Always return true if we want to send a response asynchronously
-  return true;
-});
-
-// Listen for messages from the web app
-window.addEventListener('message', (event) => {
-  // Verify the sender is our own window
-  if (event.source !== window) return;
-  
-  // Handle messages from web app to extension
-  if (event.data && event.data.type === 'WEB_APP_TO_EXTENSION') {
-    console.log('Bridge received message from web app:', event.data);
-    
-    // Forward to extension background script
-    chrome.runtime.sendMessage(event.data);
-  }
-  
-  // Listen for confirmation that the web app received our images
-  if (event.data && event.data.type === 'GALLERY_IMAGES_RECEIVED') {
-    console.log('Web app confirmed receipt of gallery images:', event.data.count);
-    
-    // Forward confirmation to extension
-    chrome.runtime.sendMessage({
-      action: 'galleryImagesReceived',
-      count: event.data.count
-    });
-  }
-});
-
-// Notify that bridge is ready
-console.log('MainGallery bridge ready for communication');
-
-// Announce bridge presence to web app
-setTimeout(() => {
-  window.postMessage({ 
+  // Notify the page that the bridge is active
+  window.postMessage({
     type: 'EXTENSION_BRIDGE_READY',
-    source: 'MAIN_GALLERY_EXTENSION'
+    timestamp: Date.now()
   }, '*');
-}, 1000);
+  
+  console.log('MainGallery.AI bridge ready');
+}
+
+// Set up the bridge when the DOM is fully loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupBridge);
+} else {
+  setupBridge();
+}

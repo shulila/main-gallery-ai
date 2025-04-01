@@ -100,3 +100,66 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
     return false;
   }
 };
+
+/**
+ * Handle OAuth token directly from the URL hash
+ * @param {string} [callbackUrl] Optional URL to extract token from (defaults to window.location.href)
+ * @returns {boolean} Whether token was successfully extracted and processed
+ */
+export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
+  try {
+    const url = callbackUrl || window.location.href;
+    // Try to get hash fragment
+    const hashPart = url.split('#')[1];
+    
+    if (!hashPart) {
+      return false;
+    }
+    
+    const params = new URLSearchParams(hashPart);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token') || '';
+    const email = params.get('email') || 'User';
+    
+    if (!accessToken) {
+      console.log('No access token found in URL hash');
+      return false;
+    }
+    
+    console.log('Found access token in URL hash');
+    
+    // Calculate expiration (24 hours)
+    const expiresAt = Date.now() + (24 * 60 * 60 * 1000);
+    
+    // Store token data
+    const tokenData = {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      timestamp: Date.now(),
+      expires_at: expiresAt
+    };
+    
+    // Store in localStorage
+    localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
+    localStorage.setItem('main_gallery_user_email', email);
+    
+    // If in Chrome extension context, also store in chrome.storage
+    if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
+      try {
+        window.chrome.storage.sync.set({
+          'main_gallery_auth_token': tokenData,
+          'main_gallery_user_email': email
+        }, () => {
+          console.log('Auth data synced to chrome.storage from hash handler');
+        });
+      } catch (err) {
+        console.error('Error syncing to chrome.storage from hash handler:', err);
+      }
+    }
+    
+    return true;
+  } catch (err) {
+    console.error('Error handling OAuth token from hash:', err);
+    return false;
+  }
+};

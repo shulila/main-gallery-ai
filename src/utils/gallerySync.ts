@@ -1,6 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { GalleryImage } from '@/types/gallery';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * Sync images from extension to the gallery
@@ -54,8 +55,8 @@ export const syncImagesToGallery = async (images: Partial<GalleryImage>[]): Prom
     // Insert into Supabase if available
     try {
       if (supabase) {
-        // Use any type assertion to bypass TypeScript errors while table definition is pending
-        // This is a temporary fix until the gallery_images table is properly defined in Supabase types
+        // We need to use type assertion until the proper Supabase types are generated
+        // This will be fixed once the gallery_images table is properly defined in Supabase
         const { error } = await (supabase as any)
           .from('gallery_images')
           .upsert(
@@ -146,4 +147,141 @@ export const listenForGallerySyncMessages = (
   }, '*');
   
   return () => window.removeEventListener('message', handleMessage);
+};
+
+/**
+ * Scan a page by scrolling to load lazy-loaded images and then extract all gallery images
+ * @param scrollDelay Milliseconds to wait between scroll actions
+ * @param scrollStep Pixels to scroll each step
+ * @returns Promise with extracted images
+ */
+export const scanPageWithAutoScroll = async (
+  scrollDelay = 500, 
+  scrollStep = 800
+): Promise<GalleryImage[]> => {
+  return new Promise((resolve) => {
+    const images: GalleryImage[] = [];
+    const extractedUrls = new Set<string>();
+    
+    // Function to extract images from the current view
+    const extractCurrentImages = () => {
+      // Select all image elements in the page
+      const imgElements = document.querySelectorAll('img[src]:not([src=""])');
+      
+      imgElements.forEach(img => {
+        const src = img.getAttribute('src') || '';
+        
+        // Skip if already extracted or too small (likely icons)
+        if (extractedUrls.has(src) || !src || src.startsWith('data:') || 
+            (img.width < 200 && img.height < 200)) {
+          return;
+        }
+        
+        // Extract image data
+        const alt = img.getAttribute('alt') || '';
+        const title = img.getAttribute('title') || '';
+        const parentNode = img.parentElement;
+        let prompt = alt || title || '';
+        
+        // Try to find prompt in parent elements (common in gallery sites)
+        if (!prompt && parentNode) {
+          const promptElement = parentNode.querySelector('.prompt, [data-prompt], .caption, .description');
+          if (promptElement) {
+            prompt = promptElement.textContent || '';
+          }
+        }
+        
+        // Extract the platform name from URL or document title
+        const platformHint = document.title.toLowerCase();
+        let platform = 'unknown';
+        
+        if (window.location.hostname.includes('midjourney')) {
+          platform = 'midjourney';
+        } else if (window.location.hostname.includes('leonardo') || 
+                  window.location.hostname.includes('dreamstudio') || 
+                  platformHint.includes('leonardo')) {
+          platform = 'leonardo';
+        } else if (window.location.hostname.includes('openai') || 
+                  window.location.hostname.includes('dall-e') || 
+                  platformHint.includes('dall-e')) {
+          platform = 'dalle';
+        } else if (window.location.hostname.includes('stability') || 
+                  platformHint.includes('stability')) {
+          platform = 'stability';
+        } else if (window.location.hostname.includes('pika') || 
+                  platformHint.includes('pika')) {
+          platform = 'pika';
+        } else if (window.location.hostname.includes('runway') || 
+                  platformHint.includes('runway')) {
+          platform = 'runway';
+        }
+        
+        // Add to results and mark as processed
+        images.push({
+          id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          url: src,
+          prompt: prompt.trim(),
+          platform: platform,
+          sourceURL: window.location.href,
+          timestamp: Date.now(),
+          type: 'image'
+        } as GalleryImage);
+        
+        extractedUrls.add(src);
+      });
+      
+      console.log(`Found ${images.length} images so far (${extractedUrls.size} unique).`);
+    };
+    
+    // Get initial images before scrolling
+    extractCurrentImages();
+    
+    const maxScrollAttempts = 30; // Prevent infinite scrolling
+    let scrollAttempts = 0;
+    let previousHeight = 0;
+    
+    // Start scrolling process
+    const scrollAndExtract = () => {
+      // Get current scroll position and document height
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const scrollHeight = Math.max(
+        document.body.scrollHeight,
+        document.documentElement.scrollHeight
+      );
+      
+      // Check if we've reached bottom or made too many attempts
+      if (scrollTop + window.innerHeight >= scrollHeight - 200 || 
+          scrollAttempts >= maxScrollAttempts ||
+          (scrollHeight === previousHeight && scrollAttempts > 5)) {
+        
+        // Final extraction to make sure we got everything
+        extractCurrentImages();
+        
+        console.log(`Scrolling complete. Found ${images.length} images total.`);
+        resolve(images);
+        return;
+      }
+      
+      // Scroll down
+      window.scrollBy({
+        top: scrollStep,
+        behavior: 'smooth'
+      });
+      
+      // Update counters
+      scrollAttempts++;
+      previousHeight = scrollHeight;
+      
+      // Wait and then extract new images that may have loaded
+      setTimeout(() => {
+        extractCurrentImages();
+        
+        // Continue scrolling
+        setTimeout(scrollAndExtract, scrollDelay);
+      }, scrollDelay);
+    };
+    
+    // Start the scrolling process
+    setTimeout(scrollAndExtract, scrollDelay);
+  });
 };

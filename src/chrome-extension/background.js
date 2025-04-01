@@ -276,17 +276,38 @@ chrome.action.onClicked.addListener(async (tab) => {
   const isSupported = checkSupportedURL(tab.url);
   
   if (!isSupported) {
-    console.log('Tab URL not supported, opening gallery instead');
-    // Check if logged in first
-    const loggedIn = await isLoggedIn();
+    console.log('Tab URL not supported');
     
-    if (loggedIn) {
-      // If logged in, open gallery
-      chrome.tabs.create({ url: GALLERY_URL });
-    } else {
-      // If not logged in, open auth page
-      openAuthPage(null, { redirect: 'gallery', from: 'extension' });
+    try {
+      // Send message to show an unsupported tab toast
+      await chrome.tabs.sendMessage(tab.id, { 
+        action: 'showUnsupportedTabToast',
+        message: "Please switch to a supported AI platform (Midjourney, DALL·E, etc) to use MainGallery.AI"
+      }).catch(() => {
+        // Messaging error is expected in non-injected pages
+      });
+      
+      // Check if logged in
+      const loggedIn = await isLoggedIn();
+      
+      if (loggedIn) {
+        // If logged in, open gallery
+        chrome.tabs.create({ url: GALLERY_URL });
+      } else {
+        // If not logged in, open auth page
+        openAuthPage(null, { redirect: 'gallery', from: 'extension' });
+      }
+      
+      // Show notification to inform user
+      createNotification(
+        'maingallery_unsupported_tab', 
+        'Unsupported Page', 
+        'Please switch to a supported AI platform like Midjourney or DALL-E to use MainGallery.'
+      );
+    } catch (error) {
+      console.error('Error handling unsupported tab:', error);
     }
+    
     return;
   }
   
@@ -303,23 +324,55 @@ chrome.action.onClicked.addListener(async (tab) => {
   
   // Authenticate first, then extract images
   try {
-    const result = await extractImagesFromActiveTab();
-    
-    if (result.success && result.images.length > 0) {
-      console.log(`Extracted ${result.images.length} images, syncing to gallery...`);
+    // Tell the content script to start auto-scrolling and scanning
+    chrome.tabs.sendMessage(tab.id, { 
+      action: 'startAutoScan', 
+      options: { scrollDelay: 500, scrollStep: 800 }
+    }).then(result => {
+      if (result && result.success) {
+        console.log('Auto-scan initiated on page');
+        
+        createNotification(
+          'maingallery_scan_started', 
+          'Scanning Started', 
+          'MainGallery is scanning the page for AI images. Please keep the tab open.'
+        );
+      } else {
+        console.log('Auto-scan could not be started, using fallback extraction');
+        
+        // Fallback to standard extraction
+        chrome.tabs.sendMessage(tab.id, { action: 'extractImages' }).then(response => {
+          if (response && response.images && response.images.length > 0) {
+            console.log(`Extracted ${response.images.length} images, syncing to gallery...`);
+            syncImagesToGallery(response.images);
+          } else {
+            console.log('No images extracted or extraction failed');
+            
+            createNotification(
+              'maingallery_extraction_failed', 
+              'No AI Images Found', 
+              'We couldn\'t find any AI-generated images on this page.'
+            );
+          }
+        }).catch(err => {
+          console.error('Error extracting images:', err);
+          createNotification(
+            'maingallery_error', 
+            'Error Processing Images', 
+            'An error occurred while extracting images from this page.'
+          );
+        });
+      }
+    }).catch(err => {
+      console.error('Error starting auto-scan:', err);
       
-      // Sync extracted images to gallery
-      await syncImagesToGallery(result.images);
-    } else {
-      console.log('No images extracted or extraction failed:', result.reason);
-      
-      // Show notification
+      // Show error notification
       createNotification(
-        'maingallery_extraction_failed', 
-        'No AI Images Found', 
-        'We couldn\'t find any AI-generated images on this page.'
+        'maingallery_error', 
+        'Error Scanning Page', 
+        'Could not scan the current page. Please try again.'
       );
-    }
+    });
   } catch (error) {
     console.error('Error during image extraction:', error);
     
@@ -371,15 +424,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
       });
       return true; // Required for async response
-    } else if (message.type === 'SYNC_IMAGE') {
-      console.log('Received image sync request:', message.payload);
-      syncImageToGallery(message.payload).then(result => {
+    } else if (message.type === 'SYNC_IMAGES') {
+      console.log('Received image sync request with images:', message.images?.length);
+      syncImagesToGallery(message.images).then(result => {
         sendResponse({ success: true, result });
       }).catch(err => {
-        console.error('Error syncing image:', err);
+        console.error('Error syncing images:', err);
         sendResponse({ success: false, error: err.message });
       });
       return true; // Required for async response
+    } else if (message.action === 'scanComplete') {
+      // Handle scan complete message from content script
+      console.log('Scan completed with', message.images?.length || 0, 'images');
+      
+      // Sync the images to gallery
+      if (message.images && message.images.length > 0) {
+        syncImagesToGallery(message.images);
+        
+        // Show success notification
+        createNotification(
+          'maingallery_sync_success', 
+          'Images Synced', 
+          `${message.images.length} images were found and synced to your gallery`
+        );
+      } else {
+        // Show no images found notification
+        createNotification(
+          'maingallery_no_images', 
+          'No Images Found', 
+          'No AI images were found on this page.'
+        );
+      }
+      
+      sendResponse({ success: true });
     }
   } catch (err) {
     console.error('Error handling message:', err);
@@ -474,68 +551,6 @@ async function scanAllTabsForImages() {
   }
 }
 
-async function syncImageToGallery(imageData) {
-  try {
-    // Add metadata
-    const enrichedData = {
-      ...imageData,
-      timestamp: imageData.timestamp || Date.now(),
-      synced_at: Date.now()
-    };
-    
-    // First, check if user is logged in
-    const loggedIn = await isLoggedIn();
-    
-    if (!loggedIn) {
-      console.log('User not logged in, storing image for later sync');
-      
-      // Store image data for later sync after login
-      let pendingSync = [];
-      try {
-        const pendingSyncStr = sessionStorage.getItem('maingallery_pending_sync');
-        if (pendingSyncStr) {
-          pendingSync = JSON.parse(pendingSyncStr);
-        }
-      } catch (err) {
-        console.error('Error parsing pending sync:', err);
-      }
-      
-      pendingSync.push(enrichedData);
-      sessionStorage.setItem('maingallery_pending_sync', JSON.stringify(pendingSync));
-      
-      // Redirect to login
-      openAuthPage(null, { redirect: 'gallery', from: 'extension' });
-      return { success: false, reason: 'not_logged_in' };
-    }
-    
-    // If user is logged in, send to gallery using message bridge
-    console.log('User is logged in, sending image to gallery');
-    
-    // Send to web app via bridge or open gallery with sync parameter
-    chrome.tabs.query({ url: 'https://main-gallery-hub.lovable.app/gallery*' }, (tabs) => {
-      if (tabs.length > 0) {
-        // If gallery is open, send message
-        chrome.tabs.sendMessage(tabs[0].id, {
-          type: 'GALLERY_IMAGES',
-          images: [enrichedData]
-        }).catch(err => {
-          console.log('Could not send to gallery tab, might open new one:', err.message);
-          chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery?sync=true' });
-        });
-      } else {
-        // Store in session storage and open gallery
-        sessionStorage.setItem('maingallery_sync_images', JSON.stringify([enrichedData]));
-        chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery?sync=true' });
-      }
-    });
-    
-    return { success: true };
-  } catch (err) {
-    console.error('Error syncing image to gallery:', err);
-    return { success: false, error: err.message };
-  }
-}
-
 async function syncImagesToGallery(images) {
   if (!images || images.length === 0) {
     console.log('No images to sync');
@@ -558,6 +573,11 @@ async function syncImagesToGallery(images) {
           chrome.tabs.sendMessage(tabs[0].id, {
             type: 'GALLERY_IMAGES',
             images: enrichedImages
+          }).catch(err => {
+            console.error('Error sending to gallery tab:', err);
+            // Store images and open gallery
+            sessionStorage.setItem('maingallery_sync_images', JSON.stringify(enrichedImages));
+            chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery?sync=true' });
           });
           
           createNotification(
@@ -569,13 +589,42 @@ async function syncImagesToGallery(images) {
           console.error('Error sending to gallery tab:', err);
           
           // Store images and open gallery
-          sessionStorage.setItem('maingallery_sync_images', JSON.stringify(enrichedImages));
           chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery?sync=true' });
+          
+          // Can't use sessionStorage from background script, send message to tab
+          chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, tab) {
+            if (changeInfo.status === 'complete' && 
+                tab.url && tab.url.includes('main-gallery-hub.lovable.app/gallery')) {
+              
+              chrome.tabs.sendMessage(tabId, {
+                type: 'GALLERY_IMAGES',
+                images: enrichedImages
+              }).catch(err => console.error('Error sending images to new tab:', err));
+              
+              chrome.tabs.onUpdated.removeListener(listener);
+            }
+          });
         }
       } else {
-        // Store images and open gallery
-        sessionStorage.setItem('maingallery_sync_images', JSON.stringify(enrichedImages));
+        // Open gallery in a new tab
         chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery?sync=true' });
+        
+        // Set up listener for when gallery tab is ready
+        chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, tab) {
+          if (changeInfo.status === 'complete' && 
+              tab.url && tab.url.includes('main-gallery-hub.lovable.app/gallery')) {
+            
+            // Wait a bit to ensure the page is fully loaded
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tabId, {
+                type: 'GALLERY_IMAGES',
+                images: enrichedImages
+              }).catch(err => console.error('Error sending images to new tab:', err));
+            }, 1000);
+            
+            chrome.tabs.onUpdated.removeListener(listener);
+          }
+        });
       }
     });
     
