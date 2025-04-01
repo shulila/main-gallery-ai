@@ -54,8 +54,9 @@ export const syncImagesToGallery = async (images: Partial<GalleryImage>[]): Prom
     // Insert into Supabase if available
     try {
       if (supabase) {
-        // Use upsert to avoid duplicates
-        const { data, error } = await supabase
+        // Use any type assertion to bypass TypeScript errors while table definition is pending
+        // This is a temporary fix until the gallery_images table is properly defined in Supabase types
+        const { error } = await (supabase as any)
           .from('gallery_images')
           .upsert(
             processedImages.map(img => ({
@@ -70,7 +71,7 @@ export const syncImagesToGallery = async (images: Partial<GalleryImage>[]): Prom
           return { success: false, count: 0, errors: [error] };
         }
         
-        console.log('Successfully synced images to Supabase:', data);
+        console.log('Successfully synced images to Supabase');
       }
     } catch (err) {
       console.error('Error in Supabase sync:', err);
