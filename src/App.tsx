@@ -1,6 +1,6 @@
 
 import { useEffect } from 'react';
-import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
+import { Route, Routes, Navigate } from 'react-router-dom';
 
 import { AuthProvider } from './contexts/AuthContext';
 import AuthPage from './pages/AuthPage';
@@ -17,8 +17,6 @@ import FeatureDetail from './pages/FeatureDetail';
 import './App.css';
 
 function App() {
-  const location = useLocation();
-
   // Special handling for auth callbacks with hash fragments
   useEffect(() => {
     // Check if we're on any URL with an access_token in the hash or query params
@@ -28,7 +26,7 @@ function App() {
     if ((hash && hash.includes('access_token=')) || (search && search.includes('access_token='))) {
       console.log('Detected access token in URL - this should trigger AuthCallback component');
     }
-  }, [location]);
+  }, []);
 
   return (
     <AuthProvider>

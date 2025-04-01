@@ -1,5 +1,6 @@
 
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import App from './App.tsx';
 import './index.css';
 
@@ -7,7 +8,11 @@ import './index.css';
 document.addEventListener('DOMContentLoaded', () => {
   const root = document.getElementById("root");
   if (root) {
-    createRoot(root).render(<App />);
+    createRoot(root).render(
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    );
     
     // Apply SPA routing fix for direct URL access
     // This helps hosting platforms handle routes correctly
