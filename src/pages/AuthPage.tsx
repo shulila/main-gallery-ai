@@ -25,20 +25,32 @@ const AuthPage = () => {
   
   const showForgotPassword = searchParams.get('forgotPassword') === 'true';
   const fromExtension = searchParams.get('from') === 'extension';
+  const redirectPath = searchParams.get('redirect') || '/gallery';
   
   const [activeTab, setActiveTab] = useState(defaultTabParam);
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(showForgotPassword);
+  
+  // Always log the query parameters for debugging
+  useEffect(() => {
+    console.log('AuthPage loaded with params:', {
+      searchParams: Object.fromEntries(searchParams),
+      defaultTab: defaultTabParam,
+      forgotPassword: showForgotPassword,
+      fromExtension,
+      redirectPath
+    });
+  }, [searchParams, defaultTabParam, showForgotPassword, fromExtension, redirectPath]);
 
   useEffect(() => {
     if (session) {
-      const redirectPath = searchParams.get('redirect') || '/gallery';
+      console.log('User is already logged in, redirecting to:', redirectPath);
       
       // Special handling for extension redirects
       if (fromExtension) {
         console.log('Logged in from extension, will redirect to gallery and notify extension');
         toast({
           title: "Login successful",
-          description: "You can now close this tab and return to the extension",
+          description: "You are now logged in",
         });
         
         // Minimal delay before redirect
@@ -53,7 +65,7 @@ const AuthPage = () => {
         navigate(redirectPath);
       }
     }
-  }, [session, navigate, searchParams, fromExtension, toast]);
+  }, [session, navigate, redirectPath, fromExtension, toast]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +81,8 @@ const AuthPage = () => {
     setIsSubmitting(true);
     try {
       await signIn(email, password);
+      
+      // The session effect will handle redirect
     } catch (error: any) {
       console.error('Login error:', error);
       toast({
@@ -116,6 +130,8 @@ const AuthPage = () => {
     try {
       console.log('Starting Google sign-in flow');
       await signInWithGoogle();
+      
+      // The redirect will be handled by the AuthCallback component
     } catch (error) {
       console.error('Google sign-in error:', error);
       toast({

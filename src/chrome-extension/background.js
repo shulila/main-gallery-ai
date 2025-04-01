@@ -189,7 +189,7 @@ function createNotification(id, title, message) {
   }
 }
 
-// Domain and path verification
+// Domain and path verification - make sure this matches manifest.json content_scripts
 function checkSupportedURL(url) {
   if (!url) return false;
   
@@ -218,7 +218,9 @@ function checkSupportedURL(url) {
       'www.pika.art',
       'beta.dreamstudio.ai',
       'dreamstudio.ai',
-      'stability.ai'
+      'stability.ai',
+      'playgroundai.com',
+      'creator.nightcafe.studio'
     ];
     
     const SUPPORTED_PATHS = [
@@ -369,6 +371,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
       });
       return true; // Required for async response
+    } else if (message.type === 'SYNC_IMAGE') {
+      console.log('Received image sync request:', message.payload);
+      syncImageToGallery(message.payload).then(result => {
+        sendResponse({ success: true, result });
+      }).catch(err => {
+        console.error('Error syncing image:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+      return true; // Required for async response
     }
   } catch (err) {
     console.error('Error handling message:', err);
@@ -376,12 +387,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Required functions for images extraction - stub implementations
-// Full implementation would be required in the final version
+// Implement image extraction and syncing
 async function extractImagesFromActiveTab() {
   try {
-    // This is a placeholder that would need to be fully implemented
-    return { images: [], success: false, reason: 'not_implemented' };
+    return new Promise((resolve, reject) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (!tabs || !tabs[0] || !tabs[0].id) {
+          return resolve({ images: [], success: false, reason: 'no_active_tab' });
+        }
+        
+        const tab = tabs[0];
+        
+        // Check if URL is supported
+        if (!checkSupportedURL(tab.url)) {
+          return resolve({ images: [], success: false, reason: 'unsupported_url' });
+        }
+        
+        // Send message to content script to extract images
+        try {
+          chrome.tabs.sendMessage(tab.id, { action: 'extractImages' }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.error('Error sending message to content script:', chrome.runtime.lastError);
+              return resolve({ images: [], success: false, reason: 'content_script_error' });
+            }
+            
+            if (response && response.images) {
+              resolve({ images: response.images, success: true });
+            } else {
+              resolve({ images: [], success: false, reason: 'no_images' });
+            }
+          });
+        } catch (err) {
+          console.error('Error sending extractImages message:', err);
+          resolve({ images: [], success: false, reason: 'message_error' });
+        }
+      });
+    });
   } catch (err) {
     console.error('Error extracting images:', err);
     return { images: [], success: false, reason: 'error', error: err.message };
@@ -390,21 +431,157 @@ async function extractImagesFromActiveTab() {
 
 async function scanAllTabsForImages() {
   try {
-    // This is a placeholder that would need to be fully implemented
-    return { images: [], tabCount: 0 };
+    return new Promise((resolve) => {
+      chrome.tabs.query({}, (tabs) => {
+        const supportedTabs = tabs.filter(tab => checkSupportedURL(tab.url));
+        const images = [];
+        
+        if (supportedTabs.length === 0) {
+          return resolve({ images: [], tabCount: 0 });
+        }
+        
+        let completedTabs = 0;
+        
+        for (const tab of supportedTabs) {
+          try {
+            chrome.tabs.sendMessage(tab.id, { action: 'extractImages' }, (response) => {
+              completedTabs++;
+              
+              if (chrome.runtime.lastError) {
+                console.log(`Error with tab ${tab.id}:`, chrome.runtime.lastError);
+              } else if (response && response.images && response.images.length > 0) {
+                images.push(...response.images);
+              }
+              
+              if (completedTabs === supportedTabs.length) {
+                resolve({ images, tabCount: supportedTabs.length });
+              }
+            });
+          } catch (err) {
+            console.error(`Error sending message to tab ${tab.id}:`, err);
+            completedTabs++;
+            
+            if (completedTabs === supportedTabs.length) {
+              resolve({ images, tabCount: supportedTabs.length });
+            }
+          }
+        }
+      });
+    });
   } catch (err) {
     console.error('Error scanning tabs:', err);
     return { images: [], tabCount: 0, error: err.message };
   }
 }
 
-async function syncImagesToGallery(images) {
+async function syncImageToGallery(imageData) {
   try {
-    // This is a placeholder that would need to be fully implemented
-    console.log(`Would sync ${images.length} images to gallery`);
+    // Add metadata
+    const enrichedData = {
+      ...imageData,
+      timestamp: imageData.timestamp || Date.now(),
+      synced_at: Date.now()
+    };
+    
+    // First, check if user is logged in
+    const loggedIn = await isLoggedIn();
+    
+    if (!loggedIn) {
+      console.log('User not logged in, storing image for later sync');
+      
+      // Store image data for later sync after login
+      let pendingSync = [];
+      try {
+        const pendingSyncStr = sessionStorage.getItem('maingallery_pending_sync');
+        if (pendingSyncStr) {
+          pendingSync = JSON.parse(pendingSyncStr);
+        }
+      } catch (err) {
+        console.error('Error parsing pending sync:', err);
+      }
+      
+      pendingSync.push(enrichedData);
+      sessionStorage.setItem('maingallery_pending_sync', JSON.stringify(pendingSync));
+      
+      // Redirect to login
+      openAuthPage(null, { redirect: 'gallery', from: 'extension' });
+      return { success: false, reason: 'not_logged_in' };
+    }
+    
+    // If user is logged in, send to gallery using message bridge
+    console.log('User is logged in, sending image to gallery');
+    
+    // Send to web app via bridge or open gallery with sync parameter
+    chrome.tabs.query({ url: 'https://main-gallery-hub.lovable.app/gallery*' }, (tabs) => {
+      if (tabs.length > 0) {
+        // If gallery is open, send message
+        chrome.tabs.sendMessage(tabs[0].id, {
+          type: 'GALLERY_IMAGES',
+          images: [enrichedData]
+        }).catch(err => {
+          console.log('Could not send to gallery tab, might open new one:', err.message);
+          chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery?sync=true' });
+        });
+      } else {
+        // Store in session storage and open gallery
+        sessionStorage.setItem('maingallery_sync_images', JSON.stringify([enrichedData]));
+        chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery?sync=true' });
+      }
+    });
+    
+    return { success: true };
+  } catch (err) {
+    console.error('Error syncing image to gallery:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+async function syncImagesToGallery(images) {
+  if (!images || images.length === 0) {
+    console.log('No images to sync');
+    return false;
+  }
+  
+  try {
+    // Add metadata
+    const enrichedImages = images.map(img => ({
+      ...img,
+      timestamp: img.timestamp || Date.now(),
+      synced_at: Date.now()
+    }));
+    
+    // Send to web app or store for later
+    chrome.tabs.query({ url: 'https://main-gallery-hub.lovable.app/gallery*' }, (tabs) => {
+      if (tabs.length > 0) {
+        // If gallery is open, send message
+        try {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            type: 'GALLERY_IMAGES',
+            images: enrichedImages
+          });
+          
+          createNotification(
+            'maingallery_sync_success', 
+            'Images Synced', 
+            `${enrichedImages.length} images sent to your gallery`
+          );
+        } catch (err) {
+          console.error('Error sending to gallery tab:', err);
+          
+          // Store images and open gallery
+          sessionStorage.setItem('maingallery_sync_images', JSON.stringify(enrichedImages));
+          chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery?sync=true' });
+        }
+      } else {
+        // Store images and open gallery
+        sessionStorage.setItem('maingallery_sync_images', JSON.stringify(enrichedImages));
+        chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery?sync=true' });
+      }
+    });
+    
     return true;
   } catch (err) {
-    console.error('Error syncing images:', err);
+    console.error('Error syncing images to gallery:', err);
     return false;
   }
 }

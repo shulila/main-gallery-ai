@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { galleryDB } from '@/services/GalleryIndexedDB';
 import { GalleryImage } from '@/types/gallery';
+import { listenForGallerySyncMessages, syncImagesToGallery } from '@/utils/gallerySync';
 
 const Gallery = () => {
   const { user, isLoading } = useAuth();
@@ -16,57 +17,53 @@ const Gallery = () => {
   const [syncedImages, setSyncedImages] = useState<GalleryImage[]>([]);
   const [isExtensionSync, setIsExtensionSync] = useState(false);
   
-  // Handle extension messages
+  // Handle extension messages and image syncing
   useEffect(() => {
     // Function to process images from extension
-    const processExtensionImages = async (images: Partial<GalleryImage>[]) => {
+    const processExtensionImages = async (images: GalleryImage[]) => {
       console.log(`Received ${images.length} images from extension`);
       
       if (!images || images.length === 0) return;
       
       setIsExtensionSync(true);
       
-      // Process and format the incoming images
-      const processedImages = images.map(img => ({
-        id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        url: img.src || img.url || '',
-        prompt: img.prompt || img.alt || img.title || '',
-        platform: img.platform || 'unknown',
-        sourceURL: img.sourceURL || img.tabUrl || window.location.href,
-        timestamp: img.timestamp ? (typeof img.timestamp === 'string' ? new Date(img.timestamp).getTime() : img.timestamp) : Date.now(),
-        type: img.type || 'image'
-      } as GalleryImage));
-      
       // Update state with new images
       setSyncedImages(prev => {
         // Combine and deduplicate
-        const combined = [...processedImages, ...prev];
+        const combined = [...images, ...prev];
         const unique = combined.filter((item, index, self) => 
           index === self.findIndex(i => i.url === item.url)
         );
         return unique;
       });
       
-      // Store in IndexedDB
+      // Store in IndexedDB and sync to backend
       try {
         await galleryDB.init();
-        await galleryDB.addImages(processedImages);
-        console.log(`Stored ${processedImages.length} images in IndexedDB`);
+        await galleryDB.addImages(images);
+        console.log(`Stored ${images.length} images in IndexedDB`);
         
-        // Show toast notification
-        toast({
-          title: "Images Synced",
-          description: `${processedImages.length} images added to your gallery`,
-          duration: 3000,
-        });
+        // Sync to backend if available
+        const syncResult = await syncImagesToGallery(images);
+        
+        if (syncResult.success) {
+          // Show toast notification
+          toast({
+            title: "Images Synced",
+            description: `${images.length} images added to your gallery`,
+            duration: 3000,
+          });
+        } else {
+          console.error('Error syncing to backend:', syncResult.errors);
+        }
         
         // Send confirmation back to extension
         window.postMessage({
           type: 'GALLERY_IMAGES_RECEIVED',
-          count: processedImages.length
+          count: images.length
         }, '*');
       } catch (error) {
-        console.error('Error storing images in IndexedDB:', error);
+        console.error('Error processing extension images:', error);
         toast({
           title: "Sync Error",
           description: "There was an error saving the images",
@@ -79,43 +76,8 @@ const Gallery = () => {
       }, 3000);
     };
     
-    // Listen for extension messages
-    const handleExtensionMessage = (event: MessageEvent) => {
-      // Verify the sender is our own window
-      if (event.source !== window) return;
-      
-      // Check for gallery images from extension
-      if (event.data && event.data.type === 'GALLERY_IMAGES' && event.data.images) {
-        processExtensionImages(event.data.images);
-      }
-      
-      // Handle extension bridge ready event
-      if (event.data && event.data.type === 'EXTENSION_BRIDGE_READY') {
-        console.log('Extension bridge is ready for communication');
-        
-        // Check if there was a sync request in URL params
-        const urlParams = new URLSearchParams(window.location.search);
-        const syncRequested = urlParams.get('sync') === 'true';
-        
-        if (syncRequested) {
-          console.log('Sync requested via URL parameter, notifying extension');
-          // Notify the extension that we're ready for the images
-          window.postMessage({
-            type: 'WEB_APP_TO_EXTENSION',
-            action: 'readyForSync'
-          }, '*');
-        }
-      }
-    };
-    
-    // Add message listener
-    window.addEventListener('message', handleExtensionMessage);
-    
-    // Notify bridge that page is ready
-    window.postMessage({
-      type: 'GALLERY_PAGE_READY',
-      timestamp: Date.now()
-    }, '*');
+    // Set up listener for gallery sync messages
+    const cleanup = listenForGallerySyncMessages(processExtensionImages);
     
     // Load existing images from IndexedDB
     const loadExistingImages = async () => {
@@ -148,6 +110,22 @@ const Gallery = () => {
       window.history.replaceState({}, document.title, cleanUrl);
     }
     
+    // Check for pending sync data in sessionStorage (from previous auth flow)
+    const pendingSyncStr = sessionStorage.getItem('maingallery_sync_images');
+    if (pendingSyncStr) {
+      try {
+        const pendingImages = JSON.parse(pendingSyncStr);
+        console.log('Found pending sync images in session storage:', pendingImages.length);
+        if (Array.isArray(pendingImages) && pendingImages.length > 0) {
+          processExtensionImages(pendingImages);
+        }
+        // Clear the pending sync data
+        sessionStorage.removeItem('maingallery_sync_images');
+      } catch (e) {
+        console.error('Error processing pending sync images:', e);
+      }
+    }
+    
     // Extension connection notification
     const fromExtension = urlParams.get('from') === 'extension';
     if (fromExtension) {
@@ -158,10 +136,7 @@ const Gallery = () => {
       });
     }
     
-    return () => {
-      // Clean up
-      window.removeEventListener('message', handleExtensionMessage);
-    };
+    return cleanup;
   }, [toast]);
   
   // Redirect to auth page if not logged in
