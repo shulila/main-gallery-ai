@@ -140,7 +140,15 @@ function setupAuthCallbackListener() {
               chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery' });
               
               // Send message to update UI in popup if open
-              chrome.runtime.sendMessage({ action: 'updateUI' });
+              try {
+                chrome.runtime.sendMessage({ action: 'updateUI' }).catch(err => {
+                  // This is expected if popup is not open
+                  console.log('Could not send updateUI, popup may be closed');
+                });
+              } catch (err) {
+                // This is expected if popup is not open
+                console.log('Error sending updateUI message, popup may be closed');
+              }
             }, 1000);
           });
         } else {
@@ -326,54 +334,77 @@ chrome.action.onClicked.addListener(async (tab) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received in background script:', message);
   
-  if (message.action === 'openAuthPage') {
-    openAuthPage(null, message);
-    sendResponse({ success: true });
-  } else if (message.action === 'openAuthWithProvider') {
-    // Implement provider-specific auth logic here
-    sendResponse({ success: true });
-  } else if (message.action === 'scanTabsEnhanced') {
-    // Scan all tabs for images
-    scanAllTabsForImages().then(result => {
-      // Send results back to popup
-      chrome.runtime.sendMessage({ 
-        action: 'scanTabsResult',
-        images: result.images,
-        tabCount: result.tabCount
-      });
-    });
-    sendResponse({ success: true });
-  } else if (message.action === 'openGallery') {
-    // Open gallery in a new tab
-    chrome.tabs.create({ url: GALLERY_URL });
-    sendResponse({ success: true });
-  } else if (message.action === 'logout') {
-    // Log out and clear storage
-    chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-      console.log('Logged out: cleared auth tokens');
+  try {
+    if (message.action === 'openAuthPage') {
+      openAuthPage(null, message);
       sendResponse({ success: true });
-    });
-    return true; // Required for async response
+    } else if (message.action === 'openAuthWithProvider') {
+      // Implement provider-specific auth logic here
+      sendResponse({ success: true });
+    } else if (message.action === 'scanTabsEnhanced') {
+      // Scan all tabs for images
+      scanAllTabsForImages().then(result => {
+        // Send results back to popup
+        try {
+          chrome.runtime.sendMessage({ 
+            action: 'scanTabsResult',
+            images: result.images,
+            tabCount: result.tabCount
+          }).catch(err => {
+            console.log('Could not send scanTabsResult, popup may be closed');
+          });
+        } catch (err) {
+          console.log('Error sending scanTabsResult, popup may be closed');
+        }
+      });
+      sendResponse({ success: true });
+    } else if (message.action === 'openGallery') {
+      // Open gallery in a new tab
+      chrome.tabs.create({ url: GALLERY_URL });
+      sendResponse({ success: true });
+    } else if (message.action === 'logout') {
+      // Log out and clear storage
+      chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
+        console.log('Logged out: cleared auth tokens');
+        sendResponse({ success: true });
+      });
+      return true; // Required for async response
+    }
+  } catch (err) {
+    console.error('Error handling message:', err);
+    sendResponse({ success: false, error: err.message });
   }
 });
 
 // Required functions for images extraction - stub implementations
 // Full implementation would be required in the final version
 async function extractImagesFromActiveTab() {
-  // Implementation for image extraction
-  // This is a placeholder that would need to be fully implemented
-  return { images: [], success: false, reason: 'not_implemented' };
+  try {
+    // This is a placeholder that would need to be fully implemented
+    return { images: [], success: false, reason: 'not_implemented' };
+  } catch (err) {
+    console.error('Error extracting images:', err);
+    return { images: [], success: false, reason: 'error', error: err.message };
+  }
 }
 
 async function scanAllTabsForImages() {
-  // Implementation for scanning all tabs
-  // This is a placeholder that would need to be fully implemented
-  return { images: [], tabCount: 0 };
+  try {
+    // This is a placeholder that would need to be fully implemented
+    return { images: [], tabCount: 0 };
+  } catch (err) {
+    console.error('Error scanning tabs:', err);
+    return { images: [], tabCount: 0, error: err.message };
+  }
 }
 
 async function syncImagesToGallery(images) {
-  // Implementation for syncing images to gallery
-  // This is a placeholder that would need to be fully implemented
-  console.log(`Would sync ${images.length} images to gallery`);
-  return true;
+  try {
+    // This is a placeholder that would need to be fully implemented
+    console.log(`Would sync ${images.length} images to gallery`);
+    return true;
+  } catch (err) {
+    console.error('Error syncing images:', err);
+    return false;
+  }
 }
