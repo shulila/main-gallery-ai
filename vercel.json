@@ -1,28 +1,12 @@
 
 {
   "rewrites": [
-    { "source": "/auth/callback", "destination": "/index.html" },
-    { "source": "/auth/callback/:path*", "destination": "/index.html" },
-    { "source": "/auth/:path*", "destination": "/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/auth/callback", "destination": "/" },
+    { "source": "/auth/callback/:path*", "destination": "/" }
   ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization"
-        }
-      ]
-    }
+  "routes": [
+    { "src": "/auth/callback", "dest": "/" },
+    { "src": "/auth/callback/(.*)", "dest": "/" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }

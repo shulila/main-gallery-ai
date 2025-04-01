@@ -15,24 +15,31 @@ export default function AuthCallback() {
     console.log('AuthCallback component mounted');
     console.log('Current URL:', window.location.href);
     
+    // Function to extract token from URL (handles both hash and query params)
+    const extractToken = () => {
+      // Try to extract token from hash
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const tokenFromHash = hashParams.get('access_token');
+      
+      // Try to extract token from query params (some OAuth flows use this)
+      const queryParams = new URLSearchParams(window.location.search);
+      const tokenFromQuery = queryParams.get('access_token');
+      
+      const token = tokenFromHash || tokenFromQuery;
+      const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
+      const expiresIn = hashParams.get('expires_in') || queryParams.get('expires_in');
+      
+      return { token, refreshToken, expiresIn };
+    };
+    
     // Function to handle token and complete authentication
     const completeAuth = async () => {
       try {
-        // Try to extract token from hash
-        const hashParams = new URLSearchParams(window.location.hash.slice(1));
-        const tokenFromHash = hashParams.get('access_token');
-        
-        // Try to extract token from query params (some OAuth flows use this)
-        const queryParams = new URLSearchParams(window.location.search);
-        const tokenFromQuery = queryParams.get('access_token');
-        
-        const token = tokenFromHash || tokenFromQuery;
-        const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
-        const expiresIn = hashParams.get('expires_in') || queryParams.get('expires_in');
+        const { token, refreshToken, expiresIn } = extractToken();
         
         console.log('🔑 Token detection attempt', { 
-          hashToken: !!tokenFromHash, 
-          queryToken: !!tokenFromQuery,
+          hashToken: !!token && !!window.location.hash, 
+          queryToken: !!token && !!window.location.search,
           refreshToken: !!refreshToken,
           hash: window.location.hash,
           search: window.location.search

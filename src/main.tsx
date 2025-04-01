@@ -15,12 +15,12 @@ document.addEventListener('DOMContentLoaded', () => {
     );
     
     // Apply SPA routing fix for direct URL access
-    // This helps hosting platforms handle routes correctly
     if (window.location.pathname !== '/' && !window.location.pathname.includes('.')) {
       console.log('SPA route detected on direct load:', window.location.pathname);
+      
       // Handle hash fragment in URL (especially for auth callbacks)
       if (window.location.hash && window.location.hash.includes('access_token')) {
-        console.log('Auth token detected in hash fragment');
+        console.log('Auth token detected in hash fragment - will be handled by AuthCallback component');
       }
     }
   }

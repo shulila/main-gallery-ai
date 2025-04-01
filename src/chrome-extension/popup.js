@@ -1,4 +1,3 @@
-
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -57,7 +56,6 @@ try {
     
     supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: {
-        storage: localStorage,
         persistSession: true,
         autoRefreshToken: true
       }
@@ -69,41 +67,37 @@ try {
   console.error('Error creating Supabase client:', err);
 }
 
-// Enhanced localStorage session check with validation
-function checkLocalStorageAuth() {
-  try {
-    const tokenStr = localStorage.getItem('main_gallery_auth_token');
-    if (tokenStr) {
-      const token = JSON.parse(tokenStr);
-      
-      // Check if token is valid and not expired
-      const hasExpiry = token.expires_at !== undefined;
-      const isExpired = hasExpiry && Date.now() > token.expires_at;
-      
-      if (token && !isExpired) {
-        console.log('Valid auth token found in localStorage');
-        
-        // Sync to Chrome storage
-        chrome.storage.sync.set({
-          'main_gallery_auth_token': token,
-          'main_gallery_user_email': localStorage.getItem('main_gallery_user_email') || 'User'
-        }, () => {
-          console.log('Synced web session to extension storage');
-        });
-        
-        return true;
-      } else {
-        console.log('Expired token found in localStorage');
-        localStorage.removeItem('main_gallery_auth_token');
-        localStorage.removeItem('main_gallery_user_email');
-        return false;
-      }
-    }
-  } catch (error) {
-    console.error('Error checking localStorage:', error);
+// Improved isLoggedIn check with token validation
+async function isLoggedIn() {
+  // First try Supabase session
+  if (await checkSupabaseSession()) {
+    return true;
   }
   
-  return false;
+  // Check extension storage with validation
+  return new Promise(resolve => {
+    chrome.storage.sync.get(['main_gallery_auth_token'], result => {
+      const token = result.main_gallery_auth_token;
+      
+      // Check if token exists and is not expired
+      if (token) {
+        const hasExpiry = token.expires_at !== undefined;
+        const isExpired = hasExpiry && Date.now() > token.expires_at;
+        
+        if (!isExpired) {
+          console.log('Valid token found in extension storage');
+          resolve(true);
+          return;
+        } 
+        
+        // Token is expired, clean it up
+        console.log('Expired token found in extension storage');
+        chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
+      }
+      
+      resolve(false);
+    });
+  });
 }
 
 // Check Supabase session if client is available
@@ -132,14 +126,6 @@ async function checkSupabaseSession() {
           console.log('Synced Supabase session to extension storage');
         });
         
-        // Also store in localStorage
-        try {
-          localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
-          localStorage.setItem('main_gallery_user_email', session.user.email || 'User');
-        } catch (err) {
-          console.error('Error storing in localStorage:', err);
-        }
-        
         return true;
       }
     } catch (err) {
@@ -148,59 +134,6 @@ async function checkSupabaseSession() {
   }
   
   return false;
-}
-
-// Improved isLoggedIn check with token validation
-async function isLoggedIn() {
-  // First try Supabase session
-  if (await checkSupabaseSession()) {
-    return true;
-  }
-  
-  // Then check localStorage 
-  if (checkLocalStorageAuth()) {
-    return true;
-  }
-  
-  // Finally check extension storage with validation
-  return new Promise(resolve => {
-    chrome.storage.sync.get(['main_gallery_auth_token'], result => {
-      const token = result.main_gallery_auth_token;
-      
-      // Check if token exists and is not expired
-      if (token) {
-        const hasExpiry = token.expires_at !== undefined;
-        const isExpired = hasExpiry && Date.now() > token.expires_at;
-        
-        if (!isExpired) {
-          console.log('Valid token found in extension storage');
-          
-          // Sync to localStorage for web access if possible
-          try {
-            localStorage.setItem('main_gallery_auth_token', JSON.stringify(token));
-            
-            // Also get user email if available
-            chrome.storage.sync.get(['main_gallery_user_email'], emailResult => {
-              if (emailResult.main_gallery_user_email) {
-                localStorage.setItem('main_gallery_user_email', emailResult.main_gallery_user_email);
-              }
-            });
-          } catch (err) {
-            console.error('Error syncing to localStorage:', err);
-          }
-          
-          resolve(true);
-          return;
-        } 
-        
-        // Token is expired, clean it up
-        console.log('Expired token found in extension storage');
-        chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
-      }
-      
-      resolve(false);
-    });
-  });
 }
 
 // Get user email from any available sources
@@ -217,17 +150,7 @@ async function getUserEmail() {
     }
   }
   
-  // Then check localStorage for web session
-  try {
-    const userEmail = localStorage.getItem('main_gallery_user_email');
-    if (userEmail) {
-      return userEmail;
-    }
-  } catch (error) {
-    console.error('Error getting email from localStorage:', error);
-  }
-  
-  // Finally check extension storage
+  // Check extension storage
   return new Promise(resolve => {
     chrome.storage.sync.get(['main_gallery_user_email'], result => {
       resolve(result.main_gallery_user_email || 'User');
@@ -313,7 +236,7 @@ function openGallery() {
   }
 }
 
-// Open auth page with email login
+// Open auth page with email login - make sure to use the same login page for all flows
 function openAuthPage() {
   try {
     showState(states.authLoading);
@@ -334,16 +257,17 @@ function openAuthPage() {
   }
 }
 
-// Open auth with Google provider
+// Open auth with Google provider - make sure this goes to the same login page as email login
 function openAuthWithProvider(provider) {
   try {
     showState(states.authLoading);
     console.log(`Opening ${provider} login...`);
     showToast(`Opening ${provider} login...`, 'info');
     
+    // Direct to auth page with from=extension to ensure consistent flow
     chrome.runtime.sendMessage({
-      action: 'openAuthWithProvider',
-      provider: provider
+      action: 'openAuthPage',
+      from: 'extension'
     });
     
     // Close popup after a short delay
@@ -358,14 +282,6 @@ function openAuthWithProvider(provider) {
 // Log out the user
 function logout() {
   chrome.runtime.sendMessage({ action: 'logout' }, response => {
-    // Also remove from localStorage
-    try {
-      localStorage.removeItem('main_gallery_auth_token');
-      localStorage.removeItem('main_gallery_user_email');
-    } catch (err) {
-      console.error('Error clearing localStorage:', err);
-    }
-    
     showState(states.notLoggedIn);
     showToast('You have been logged out', 'info');
   });
