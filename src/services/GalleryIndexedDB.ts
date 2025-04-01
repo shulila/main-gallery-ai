@@ -1,3 +1,4 @@
+
 // IndexedDB Service for storing and retrieving gallery images
 import { GalleryImage } from '@/types/gallery';
 
@@ -35,10 +36,12 @@ class GalleryIndexedDBService {
         // Create object store if it doesn't exist
         if (!db.objectStoreNames.contains(this.storeName)) {
           const store = db.createObjectStore(this.storeName, { keyPath: 'id' });
+          // Create indexes for common query patterns
           store.createIndex('url', 'url', { unique: false });
           store.createIndex('platform', 'platform', { unique: false });
           store.createIndex('timestamp', 'timestamp', { unique: false });
-          console.log('Object store created');
+          store.createIndex('sourceURL', 'sourceURL', { unique: false });
+          console.log('Object store created with indexes');
         }
       };
     });
@@ -153,7 +156,9 @@ class GalleryIndexedDBService {
       const request = store.getAll();
 
       request.onsuccess = () => {
-        resolve(request.result);
+        // Sort by timestamp, newest first
+        const images = request.result.sort((a, b) => b.timestamp - a.timestamp);
+        resolve(images);
       };
 
       request.onerror = (event) => {
@@ -181,7 +186,9 @@ class GalleryIndexedDBService {
       const request = index.getAll(platform);
 
       request.onsuccess = () => {
-        resolve(request.result);
+        // Sort by timestamp, newest first
+        const images = request.result.sort((a, b) => b.timestamp - a.timestamp);
+        resolve(images);
       };
 
       request.onerror = (event) => {

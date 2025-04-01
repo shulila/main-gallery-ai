@@ -3,7 +3,7 @@
 
 console.log('MainGallery bridge content script loaded');
 
-// Handle messages from the extension popup/background
+// Handle messages from the extension background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Bridge received message:', message.action);
   

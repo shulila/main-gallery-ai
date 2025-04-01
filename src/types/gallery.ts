@@ -13,4 +13,17 @@ export type GalleryImage = {
   tabUrl?: string;
   timestamp: number;
   type?: string;
+  // Additional optional fields for AI generation metadata
+  model?: string;
+  seed?: string;
+  status?: string;
+  // Platform-specific fields
+  platformName?: string;
+  favicon?: string;
+  tabTitle?: string;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  domain?: string;
+  path?: string;
+  pageTitle?: string;
 };

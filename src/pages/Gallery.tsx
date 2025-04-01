@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -13,6 +14,7 @@ const Gallery = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [syncedImages, setSyncedImages] = useState<GalleryImage[]>([]);
+  const [isExtensionSync, setIsExtensionSync] = useState(false);
   
   // Handle extension messages
   useEffect(() => {
@@ -21,6 +23,8 @@ const Gallery = () => {
       console.log(`Received ${images.length} images from extension`);
       
       if (!images || images.length === 0) return;
+      
+      setIsExtensionSync(true);
       
       // Process and format the incoming images
       const processedImages = images.map(img => ({
@@ -69,16 +73,38 @@ const Gallery = () => {
           variant: "destructive"
         });
       }
+      
+      setTimeout(() => {
+        setIsExtensionSync(false);
+      }, 3000);
     };
     
     // Listen for extension messages
     const handleExtensionMessage = (event: MessageEvent) => {
-      // Security check
+      // Verify the sender is our own window
       if (event.source !== window) return;
       
       // Check for gallery images from extension
       if (event.data && event.data.type === 'GALLERY_IMAGES' && event.data.images) {
         processExtensionImages(event.data.images);
+      }
+      
+      // Handle extension bridge ready event
+      if (event.data && event.data.type === 'EXTENSION_BRIDGE_READY') {
+        console.log('Extension bridge is ready for communication');
+        
+        // Check if there was a sync request in URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const syncRequested = urlParams.get('sync') === 'true';
+        
+        if (syncRequested) {
+          console.log('Sync requested via URL parameter, notifying extension');
+          // Notify the extension that we're ready for the images
+          window.postMessage({
+            type: 'WEB_APP_TO_EXTENSION',
+            action: 'readyForSync'
+          }, '*');
+        }
       }
     };
     
@@ -166,7 +192,7 @@ const Gallery = () => {
     <div className="min-h-screen">
       <Navbar />
       <main className="pt-24">
-        <GalleryView images={syncedImages} />
+        <GalleryView images={syncedImages} isNewSync={isExtensionSync} />
       </main>
       <Footer />
     </div>
