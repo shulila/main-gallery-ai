@@ -4,26 +4,43 @@ const PRODUCTION_URL = 'https://main-gallery-hub.lovable.app';
 const GALLERY_URL = `${PRODUCTION_URL}/gallery`;
 const AUTH_URL = `${PRODUCTION_URL}/auth`;
 
-// Import utility functions - must be done inside functions when using ES modules
+// Global variable for the notification util
 let createNotification;
 
-// Initialize utilities 
+// Initialize utilities - proper pattern for service workers
 async function initUtils() {
-  const { createNotification: notificationFn } = await import('./utils/notifications.js');
-  createNotification = notificationFn;
+  try {
+    const { default: notificationModule } = await import('./utils/notifications.js');
+    createNotification = notificationModule.createNotification;
+    console.log('Notification utility loaded successfully');
+  } catch (error) {
+    console.error('Failed to load notification utility:', error);
+    // Fallback notification function if import fails
+    createNotification = (id, title, message) => {
+      chrome.notifications.create(id, {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: title,
+        message: message,
+      });
+    };
+  }
 }
 
-// Init function that runs when service worker starts
-async function initialize() {
+// Safe initialization function that doesn't use top-level await
+function initialize() {
   console.log('MainGallery background script initializing...');
-  await initUtils();
-  console.log('Utilities initialized');
+  
+  // Initialize utilities without using top-level await
+  initUtils().then(() => {
+    console.log('MainGallery extension initialized successfully');
+  }).catch(error => {
+    console.error('Error during initialization:', error);
+  });
 }
 
 // Run initialization
-initialize().catch(error => {
-  console.error('Error during initialization:', error);
-});
+initialize();
 
 // Check if user is logged in with token validation
 async function isLoggedIn() {
@@ -44,6 +61,8 @@ async function isLoggedIn() {
       
       console.log('Token expired, removing it');
       await chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email']);
+    } else {
+      console.log('No auth token found in storage');
     }
   } catch (error) {
     console.error('Error checking login status:', error);
@@ -52,50 +71,57 @@ async function isLoggedIn() {
   return false;
 }
 
-// Check if URL is from a supported domain/path
-async function isSupportedTab(tab) {
-  if (!tab || !tab.url) return false;
+// Domain and path verification
+async function isSupportedURL(url) {
+  if (!url) return false;
   
   // Skip chrome:// URLs and extension pages
-  if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+  if (url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
     return false;
   }
   
   try {
-    // Dynamic import of gallery types
-    const module = await import('../types/gallery.js').catch(() => {
-      // Fallback to relative path if extension context
-      return import('./types/gallery.js');
-    });
+    const urlObj = new URL(url);
     
-    return module.isSupportedURL(tab.url);
-  } catch (error) {
-    console.error('Error checking supported URL:', error);
-    
-    // Manual check as fallback
+    // List of supported domains
     const supportedDomains = [
-      'midjourney.com', 
+      'midjourney.com',
       'www.midjourney.com',
-      'openai.com', 
-      'leonardo.ai'
+      'openai.com',
+      'leonardo.ai',
+      'www.leonardo.ai',
+      'runwayml.com',
+      'www.runwayml.com',
+      'pika.art',
+      'www.pika.art'
     ];
     
+    // List of supported paths/routes
     const supportedPaths = [
       '/imagine',
       '/archive',
-      '/app'
+      '/app',
+      '/feed',
+      '/gallery',
+      '/create',
+      '/generations',
+      '/projects'
     ];
     
-    const url = new URL(tab.url);
+    // Check if domain is supported
     const isDomainSupported = supportedDomains.some(domain => 
-      url.hostname === domain || url.hostname.endsWith(`.${domain}`)
+      urlObj.hostname === domain || urlObj.hostname.endsWith(`.${domain}`)
     );
     
+    // Check if path is supported
     const isPathSupported = supportedPaths.some(path => 
-      url.pathname === path || url.pathname.startsWith(path)
+      urlObj.pathname === path || urlObj.pathname.startsWith(path)
     );
     
     return isDomainSupported && isPathSupported;
+  } catch (error) {
+    console.error('Error parsing URL:', error);
+    return false;
   }
 }
 
@@ -119,7 +145,7 @@ async function extractImagesFromActiveTab() {
     }
     
     // Check if the tab is from a supported domain
-    const isSupported = await isSupportedTab(tab);
+    const isSupported = await isSupportedURL(tab.url);
     
     if (!isSupported) {
       console.log(`Tab URL not supported: ${tab.url}`);
@@ -127,11 +153,13 @@ async function extractImagesFromActiveTab() {
     }
     
     // Show notification that scanning is starting
-    createNotification(
-      'maingallery_scanning', 
-      'Scanning Current Tab', 
-      'Looking for AI creations...'
-    );
+    if (createNotification) {
+      createNotification(
+        'maingallery_scanning', 
+        'Scanning Current Tab', 
+        'Looking for AI creations...'
+      );
+    }
     
     console.log(`Extracting images from active tab: ${tab.url}`);
     
@@ -154,12 +182,105 @@ async function extractImagesFromActiveTab() {
       platformId = 'midjourney';
     }
     
-    // Try platform-specific extraction first if applicable
+    // Try platform-specific extraction with auto-scroll
     if (platformId) {
-      console.log(`Detected ${platformId} platform, using specialized extraction`);
+      console.log(`Detected ${platformId} platform, using specialized extraction with auto-scroll`);
       
       try {
-        // Try to message the content script for platform-specific extraction
+        // First, inject the auto-scroll functionality and wait for it to complete
+        const scrollResult = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          function: async function() {
+            return new Promise((resolve) => {
+              let lastHeight = document.body.scrollHeight;
+              let scrollCount = 0;
+              const maxScrolls = 10; // Limit scrolling attempts
+              let newImagesFound = 0;
+              let previousImageCount = document.querySelectorAll('img').length;
+              
+              console.log(`Starting auto-scroll, found ${previousImageCount} images initially`);
+              
+              // Show scroll progress indicator
+              const createScrollIndicator = () => {
+                const indicator = document.createElement('div');
+                indicator.id = 'mg-scroll-indicator';
+                indicator.style.cssText = `
+                  position: fixed;
+                  top: 20px;
+                  right: 20px;
+                  background: rgba(0, 0, 0, 0.8);
+                  color: white;
+                  padding: 10px 15px;
+                  border-radius: 8px;
+                  font-family: sans-serif;
+                  z-index: 99999;
+                  transition: opacity 0.3s;
+                `;
+                indicator.textContent = 'MainGallery: Scanning page... 0%';
+                document.body.appendChild(indicator);
+                return indicator;
+              };
+              
+              const indicator = createScrollIndicator();
+              
+              const scrollInterval = setInterval(() => {
+                // Scroll down
+                window.scrollTo(0, document.body.scrollHeight);
+                
+                scrollCount++;
+                
+                // Update indicator
+                const progress = Math.min(Math.round((scrollCount / maxScrolls) * 100), 100);
+                if (indicator) {
+                  indicator.textContent = `MainGallery: Scanning page... ${progress}%`;
+                }
+                
+                // After a small delay, check if we've loaded new content
+                setTimeout(() => {
+                  // Check if we found new images
+                  const currentImageCount = document.querySelectorAll('img').length;
+                  if (currentImageCount > previousImageCount) {
+                    newImagesFound += (currentImageCount - previousImageCount);
+                    console.log(`Found ${currentImageCount - previousImageCount} new images`);
+                    previousImageCount = currentImageCount;
+                  }
+                  
+                  const newHeight = document.body.scrollHeight;
+                  
+                  // If we've reached the bottom or max scroll attempts
+                  if (newHeight === lastHeight || scrollCount >= maxScrolls) {
+                    clearInterval(scrollInterval);
+                    
+                    // Hide indicator with fade out
+                    if (indicator) {
+                      indicator.style.opacity = '0';
+                      setTimeout(() => indicator.remove(), 300);
+                    }
+                    
+                    // Scroll back to top
+                    window.scrollTo(0, 0);
+                    
+                    console.log(`Scroll complete: ${scrollCount} scrolls performed, found ${newImagesFound} new images`);
+                    resolve({
+                      scrolled: true,
+                      scrollAttempts: scrollCount,
+                      newImagesFound: newImagesFound,
+                      totalImageCount: currentImageCount
+                    });
+                  }
+                  
+                  lastHeight = newHeight;
+                }, 1000);
+              }, 1500);
+            });
+          }
+        });
+        
+        if (scrollResult && scrollResult[0] && scrollResult[0].result) {
+          console.log('Auto-scroll completed:', scrollResult[0].result);
+        }
+        
+        // Now extract images after scrolling
         const response = await chrome.tabs.sendMessage(
           tab.id,
           { action: 'extractPlatformImages', platformId }
@@ -201,7 +322,7 @@ async function extractImagesFromActiveTab() {
 // Generic image extraction as fallback
 async function genericExtraction(tab) {
   try {
-    console.log('Performing generic image extraction');
+    console.log('Performing generic image extraction with auto-scroll');
     
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -317,11 +438,13 @@ async function syncImagesToGallery(images) {
       console.log('Images synced to existing gallery tab');
       
       // Show notification
-      createNotification(
-        'maingallery_sync_success', 
-        'Images Synced', 
-        `Successfully synced ${images.length} images to MainGallery`
-      );
+      if (createNotification) {
+        createNotification(
+          'maingallery_sync_success', 
+          'Images Synced', 
+          `Successfully synced ${images.length} images to MainGallery`
+        );
+      }
       
       return true;
     } catch (error) {
@@ -334,7 +457,7 @@ async function syncImagesToGallery(images) {
 }
 
 async function openNewGalleryTab(images) {
-  // No gallery tab exists, create one and store images in storage for it to pick up
+  // No gallery tab exists, create one and store images for it to pick up
   console.log('Opening new gallery tab');
   
   // Store images temporarily in local storage
@@ -346,11 +469,13 @@ async function openNewGalleryTab(images) {
   console.log('Created new gallery tab, images stored for pickup');
   
   // Show notification
-  createNotification(
-    'maingallery_sync_ready', 
-    'Images Ready', 
-    `${images.length} images ready to sync to MainGallery`
-  );
+  if (createNotification) {
+    createNotification(
+      'maingallery_sync_ready', 
+      'Images Ready', 
+      `${images.length} images ready to sync to MainGallery`
+    );
+  }
   
   return true;
 }
@@ -377,17 +502,19 @@ chrome.action.onClicked.addListener(async (tab) => {
     }
     
     // Check if current tab is from a supported platform
-    const isSupported = await isSupportedTab(tab);
+    const isSupported = await isSupportedURL(tab.url);
     
     if (!isSupported) {
       console.log('Current tab is not from a supported platform:', tab.url);
       
       // Show notification about unsupported platform
-      createNotification(
-        'maingallery_unsupported_url', 
-        'Unsupported Platform', 
-        'Please open Midjourney, DALL·E or another supported AI platform to sync images'
-      );
+      if (createNotification) {
+        createNotification(
+          'maingallery_unsupported_url', 
+          'Unsupported Platform', 
+          'Please open Midjourney, DALL·E or another supported AI platform to sync images'
+        );
+      }
       
       return;
     }
@@ -412,11 +539,13 @@ chrome.action.onClicked.addListener(async (tab) => {
       }
       
       // Show notification
-      createNotification(
-        'maingallery_no_images', 
-        title, 
-        message
-      );
+      if (createNotification) {
+        createNotification(
+          'maingallery_no_images', 
+          title, 
+          message
+        );
+      }
       return;
     }
     
@@ -429,11 +558,13 @@ chrome.action.onClicked.addListener(async (tab) => {
     console.error('Error during scan or sync:', error);
     
     // Show error notification
-    createNotification(
-      'maingallery_error', 
-      'Sync Error', 
-      'There was an error syncing images. Please try again.'
-    );
+    if (createNotification) {
+      createNotification(
+        'maingallery_error', 
+        'Sync Error', 
+        'There was an error syncing images. Please try again.'
+      );
+    }
   }
 });
 
@@ -470,11 +601,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             chrome.storage.local.remove(['maingallery_pending_images']);
             
             // Show notification
-            createNotification(
-              'maingallery_sync_complete', 
-              'Sync Complete', 
-              `${pendingImages.length} images synced to MainGallery`
-            );
+            if (createNotification) {
+              createNotification(
+                'maingallery_sync_complete', 
+                'Sync Complete', 
+                `${pendingImages.length} images synced to MainGallery`
+              );
+            }
           });
         }
       });
@@ -526,11 +659,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log(`Web app confirmed receipt of ${message.count} images`);
     
     // Show a confirmation notification
-    createNotification(
-      'maingallery_sync_confirmed', 
-      'Sync Complete', 
-      `${message.count} images synced to MainGallery`
-    );
+    if (createNotification) {
+      createNotification(
+        'maingallery_sync_confirmed', 
+        'Sync Complete', 
+        `${message.count} images synced to MainGallery`
+      );
+    }
     
     sendResponse({ success: true });
   }

@@ -28,6 +28,8 @@ export type GalleryImage = {
   pageTitle?: string;
   // Domain/platform verification
   fromSupportedDomain?: boolean;
+  // Deduplication helpers
+  imageHash?: string;
 };
 
 // List of supported domains for auto-sync
@@ -35,12 +37,19 @@ export const SUPPORTED_DOMAINS = [
   'midjourney.com',
   'www.midjourney.com',
   'openai.com',
+  'chat.openai.com',
+  'labs.openai.com',
   'leonardo.ai',
   'www.leonardo.ai',
+  'app.leonardo.ai',
   'runwayml.com',
   'www.runwayml.com',
+  'runway.com',
   'pika.art',
-  'www.pika.art'
+  'www.pika.art',
+  'beta.dreamstudio.ai',
+  'dreamstudio.ai',
+  'stability.ai'
 ];
 
 // List of supported paths/routes that are gallery or creation pages
@@ -52,7 +61,13 @@ export const SUPPORTED_PATHS = [
   '/gallery',
   '/create',
   '/generations',
-  '/projects'
+  '/projects',
+  '/dalle',
+  '/playground',
+  '/assets',
+  '/workspace',
+  '/dream',
+  '/video'
 ];
 
 // Function to check if a URL is from a supported domain and path
@@ -67,6 +82,12 @@ export function isSupportedURL(url: string): boolean {
     const isPathSupported = SUPPORTED_PATHS.some(path => 
       urlObj.pathname === path || urlObj.pathname.startsWith(path)
     );
+
+    // Special case for OpenAI dalleCreate path
+    if (urlObj.hostname.includes('openai.com') && 
+        (urlObj.pathname.includes('/image') || urlObj.pathname.includes('/dalle'))) {
+      return true;
+    }
     
     return isDomainSupported && isPathSupported;
   } catch (e) {

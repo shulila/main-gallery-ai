@@ -1,3 +1,4 @@
+
 // MainGallery Content Script
 console.log('MainGallery content script loaded');
 
@@ -74,15 +75,95 @@ function injectContentScript() {
   (document.head || document.documentElement).appendChild(script);
 }
 
+// Function to simulate infinite scroll
+async function simulateInfiniteScroll() {
+  console.log('Starting infinite scroll simulation');
+  
+  return new Promise((resolve) => {
+    const originalScrollHeight = document.body.scrollHeight;
+    let scrollAttempts = 0;
+    const maxScrollAttempts = 10; // Limit to prevent endless scrolling
+    let lastScrollHeight = originalScrollHeight;
+    let newImagesFound = 0;
+    let previousImageCount = document.querySelectorAll('img').length;
+    
+    console.log(`Starting scroll with ${previousImageCount} images initially visible`);
+    
+    // Create a visual indicator for scrolling progress
+    const indicator = document.createElement('div');
+    indicator.id = 'mg-scroll-indicator';
+    indicator.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-family: sans-serif;
+      z-index: 99999;
+      transition: opacity 0.3s;
+    `;
+    indicator.textContent = 'MainGallery: Scanning page... 0%';
+    document.body.appendChild(indicator);
+    
+    const scrollInterval = setInterval(() => {
+      // Scroll down
+      window.scrollTo(0, document.body.scrollHeight);
+      scrollAttempts++;
+      
+      // Update indicator
+      const progress = Math.min(Math.round((scrollAttempts / maxScrollAttempts) * 100), 100);
+      indicator.textContent = `MainGallery: Scanning page... ${progress}%`;
+      
+      // After a delay, check if we loaded more content
+      setTimeout(() => {
+        const currentHeight = document.body.scrollHeight;
+        const currentImageCount = document.querySelectorAll('img').length;
+        
+        // Check if we found new images
+        if (currentImageCount > previousImageCount) {
+          newImagesFound += (currentImageCount - previousImageCount);
+          console.log(`Found ${currentImageCount - previousImageCount} new images after scroll ${scrollAttempts}`);
+          previousImageCount = currentImageCount;
+        }
+        
+        // If we've reached the bottom or max attempts
+        if ((currentHeight === lastScrollHeight && scrollAttempts > 2) || scrollAttempts >= maxScrollAttempts) {
+          clearInterval(scrollInterval);
+          
+          // Fade out indicator
+          indicator.style.opacity = '0';
+          setTimeout(() => indicator.remove(), 300);
+          
+          // Scroll back to top
+          window.scrollTo(0, 0);
+          
+          console.log(`Scroll complete: ${scrollAttempts} scrolls, ${newImagesFound} new images found`);
+          resolve({
+            scrolled: true,
+            newImages: newImagesFound,
+            totalScrolls: scrollAttempts
+          });
+        }
+        
+        lastScrollHeight = currentHeight;
+      }, 1000);
+    }, 1500);
+  });
+}
+
 // Enhanced Midjourney image extraction with improved DOM selectors and detailed logging
 function extractMidjourneyImages() {
   console.log('⚙️ Extracting Midjourney images from current page:', window.location.href);
   
   try {
     // Check if we're on the Midjourney app page or user gallery page
-    if (!window.location.href.includes('midjourney.com/app')) {
-      console.log('Not on Midjourney app page, skipping extraction');
-      return null;
+    if (!window.location.href.includes('midjourney.com/app') && 
+        !window.location.href.includes('midjourney.com/imagine') &&
+        !window.location.href.includes('midjourney.com/archive')) {
+      console.log('Not on Midjourney supported page, skipping extraction');
+      return [];
     }
     
     console.log('✅ URL confirmed as Midjourney, starting image extraction...');
@@ -144,11 +225,6 @@ function extractMidjourneyImages() {
         
         // Skip if no valid image URL or already processed
         if (!imageUrl || processedUrls.has(imageUrl)) {
-          if (!imageUrl) {
-            console.log(`⚠️ Container #${index} - No image URL found`);
-          } else {
-            console.log(`⚠️ Container #${index} - Duplicate URL: ${imageUrl.substring(0, 50)}...`);
-          }
           return;
         }
         
@@ -178,12 +254,6 @@ function extractMidjourneyImages() {
               prompt = promptElement.textContent.trim();
             }
           }
-        }
-        
-        if (prompt) {
-          console.log(`📝 Container #${index} - Found prompt: ${prompt.substring(0, 50)}...`);
-        } else {
-          console.log(`⚠️ Container #${index} - No prompt found`);
         }
         
         // Extract model information
@@ -230,7 +300,7 @@ function extractMidjourneyImages() {
             platformName: 'Midjourney',
             createdAt: createdAt || new Date().toISOString(),
             creationDate: createdAt || new Date().toISOString(),
-            sourceUrl: window.location.href,
+            sourceURL: window.location.href,
             tabUrl: window.location.href,
             extractedAt: new Date().toISOString(),
             timestamp: Date.now(),
@@ -244,7 +314,6 @@ function extractMidjourneyImages() {
     });
     
     console.log(`✅ Successfully extracted ${extractedImages.length} images from Midjourney`);
-    console.log('📊 Sample image data:', extractedImages.length > 0 ? extractedImages[0] : 'No images found');
     
     // Display extraction notification
     if (extractedImages.length > 0) {
@@ -261,12 +330,6 @@ function extractMidjourneyImages() {
       });
     }
     
-    // Trigger UI update in popup if open
-    chrome.runtime.sendMessage({
-      action: 'midjourneyImagesExtracted',
-      count: extractedImages.length
-    });
-    
     return extractedImages;
   } catch (error) {
     console.error('❌ Error extracting Midjourney images:', error);
@@ -282,7 +345,7 @@ function extractLeonardoImages() {
     // Check if we're on a Leonardo.ai page
     if (!window.location.href.includes('leonardo.ai')) {
       console.log('Not on Leonardo.ai, skipping extraction');
-      return null;
+      return [];
     }
     
     console.log('Starting Leonardo.ai image extraction...');
@@ -304,7 +367,7 @@ function extractLeonardoImages() {
     const processedUrls = new Set();
     
     // Process each container
-    imageContainers.forEach(container => {
+    imageContainers.forEach((container, index) => {
       try {
         // Find image element
         const imageElement = container.querySelector('img') || container;
@@ -354,10 +417,13 @@ function extractLeonardoImages() {
           prompt,
           model,
           platform: 'leonardo',
+          platformName: 'Leonardo',
           createdAt,
-          sourceUrl: window.location.href,
+          sourceURL: window.location.href,
           extractedAt: new Date().toISOString(),
-          imageHash: btoa(imageUrl).substring(0, 24)
+          timestamp: Date.now(),
+          imageHash: btoa(imageUrl).substring(0, 24),
+          type: 'image'
         });
       } catch (err) {
         console.error('Error extracting Leonardo image:', err);
@@ -366,124 +432,10 @@ function extractLeonardoImages() {
     
     console.log(`Successfully extracted ${extractedImages.length} images from Leonardo.ai`);
     
-    if (extractedImages.length > 0) {
-      // Send images to background script
-      chrome.runtime.sendMessage({
-        action: 'storeExtractedImages',
-        images: extractedImages
-      });
-    }
-    
-    return extractedImages.length > 0;
+    return extractedImages;
   } catch (error) {
     console.error('Error extracting Leonardo images:', error);
-    return false;
-  }
-}
-
-// Extract Runway images with metadata
-function extractRunwayImages() {
-  console.log('Extracting Runway images');
-  
-  try {
-    // Check if we're on a Runway page
-    if (!window.location.href.includes('runwayml.com')) {
-      console.log('Not on Runway, skipping extraction');
-      return null;
-    }
-    
-    console.log('Starting Runway image extraction...');
-    
-    // Collection to store extracted images
-    const extractedImages = [];
-    
-    // Find all image/video items
-    const mediaContainers = [
-      ...document.querySelectorAll('.media-card, .project-item, .generation-item'),
-      ...document.querySelectorAll('.asset-card, .asset-tile'),
-      ...document.querySelectorAll('.video-asset, .image-asset')
-    ];
-    
-    console.log(`Found ${mediaContainers.length} potential Runway media items`);
-    
-    // Track processed URLs
-    const processedUrls = new Set();
-    
-    // Process each container
-    mediaContainers.forEach(container => {
-      try {
-        // Find image/video element
-        const imageElement = container.querySelector('img') || container.querySelector('video');
-        let mediaUrl = null;
-        
-        if (imageElement) {
-          if (imageElement.tagName === 'IMG') {
-            mediaUrl = imageElement.src;
-          } else if (imageElement.tagName === 'VIDEO') {
-            // Get poster or first frame as image
-            mediaUrl = imageElement.poster || imageElement.src;
-          }
-        } else {
-          // Try background image
-          const style = window.getComputedStyle(container);
-          const bgImage = style.backgroundImage;
-          if (bgImage && bgImage !== 'none') {
-            mediaUrl = bgImage.replace(/^url\(['"](.+)['"]\)$/, '$1');
-          }
-        }
-        
-        // Skip if no URL or already processed
-        if (!mediaUrl || processedUrls.has(mediaUrl)) return;
-        processedUrls.add(mediaUrl);
-        
-        // Extract prompt
-        let promptElement = container.querySelector('.prompt, .caption, .description');
-        let prompt = null;
-        
-        if (promptElement) {
-          prompt = promptElement.textContent.trim();
-        } else {
-          prompt = imageElement?.alt || container.title;
-        }
-        
-        // Extract model/tool info
-        let modelElement = container.querySelector('.model, .tool-name');
-        let model = modelElement?.textContent.trim() || 'Runway';
-        
-        // Generate ID
-        const id = `runway-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-        
-        extractedImages.push({
-          id,
-          url: mediaUrl,
-          prompt,
-          model,
-          platform: 'runway',
-          createdAt: new Date().toISOString(),
-          sourceUrl: window.location.href,
-          extractedAt: new Date().toISOString(),
-          imageHash: btoa(mediaUrl).substring(0, 24),
-          isVideo: imageElement?.tagName === 'VIDEO'
-        });
-      } catch (err) {
-        console.error('Error extracting Runway media:', err);
-      }
-    });
-    
-    console.log(`Successfully extracted ${extractedImages.length} media items from Runway`);
-    
-    if (extractedImages.length > 0) {
-      // Send images to background script
-      chrome.runtime.sendMessage({
-        action: 'storeExtractedImages',
-        images: extractedImages
-      });
-    }
-    
-    return extractedImages.length > 0;
-  } catch (error) {
-    console.error('Error extracting Runway media:', error);
-    return false;
+    return [];
   }
 }
 
@@ -509,8 +461,10 @@ function extractAllImages() {
         
         return {
           src: img.src,
+          url: img.src,
           alt: img.alt || '',
           title: img.title || '',
+          prompt: img.alt || img.title || document.title,
           width: img.width,
           height: img.height,
           naturalWidth: img.naturalWidth,
@@ -518,7 +472,12 @@ function extractAllImages() {
           visible: rect.top < window.innerHeight && rect.bottom > 0,
           domain: window.location.hostname,
           path: window.location.pathname,
-          pageTitle: document.title
+          pageTitle: document.title,
+          platform: window.location.hostname.split('.')[0],
+          platformName: window.location.hostname.split('.')[0].charAt(0).toUpperCase() + window.location.hostname.split('.')[0].slice(1),
+          sourceURL: window.location.href,
+          timestamp: Date.now(),
+          type: 'image'
         };
       })
       .filter(Boolean); // Remove nulls
@@ -529,35 +488,6 @@ function extractAllImages() {
     console.error('Error extracting images:', error);
     return [];
   }
-}
-
-// Simulate infinite scroll to load more content
-function simulateInfiniteScroll() {
-  return new Promise((resolve) => {
-    const originalScrollHeight = document.body.scrollHeight;
-    let scrollAttempts = 0;
-    const maxScrollAttempts = 5;
-    
-    const scrollInterval = setInterval(() => {
-      // Scroll down incrementally
-      window.scrollTo(0, document.body.scrollHeight);
-      
-      // Check if more content has loaded
-      setTimeout(() => {
-        const newScrollHeight = document.body.scrollHeight;
-        scrollAttempts++;
-        
-        if (
-          newScrollHeight > originalScrollHeight || 
-          scrollAttempts >= maxScrollAttempts
-        ) {
-          clearInterval(scrollInterval);
-          console.log(`Scroll simulation completed after ${scrollAttempts} attempts`);
-          resolve(newScrollHeight > originalScrollHeight);
-        }
-      }, 500);
-    }, 1000);
-  });
 }
 
 // Initialize with automatic sync for Midjourney pages
@@ -574,96 +504,6 @@ function simulateInfiniteScroll() {
   const platform = detectPlatform();
   if (platform) {
     console.log(`Detected platform: ${platform.name} (${platform.id})`);
-    
-    // Check if on Midjourney app user page
-    if (platform.id === 'midjourney' && window.location.href.includes('midjourney.com/app/')) {
-      console.log('On Midjourney user gallery page, setting up automatic extraction');
-      
-      // Initial extraction after page loads
-      window.addEventListener('load', async () => {
-        // Show extraction in progress notification
-        const notificationEl = document.createElement('div');
-        notificationEl.classList.add('main-gallery-notification');
-        notificationEl.innerHTML = `
-          <div class="notification-icon">
-            <div class="spinner"></div>
-          </div>
-          <div class="notification-content">
-            <h3>MainGallery</h3>
-            <p>Syncing your Midjourney images...</p>
-          </div>
-        `;
-        document.body.appendChild(notificationEl);
-        
-        // Wait for content to load
-        setTimeout(async () => {
-          await simulateInfiniteScroll();
-          const result = extractMidjourneyImages();
-          
-          // Update notification
-          if (result && result.length > 0) {
-            notificationEl.innerHTML = `
-              <div class="notification-icon success">✓</div>
-              <div class="notification-content">
-                <h3>MainGallery</h3>
-                <p>Found ${result.length} images!</p>
-              </div>
-            `;
-            
-            // Remove notification after a few seconds
-            setTimeout(() => {
-              notificationEl.classList.add('fade-out');
-              setTimeout(() => notificationEl.remove(), 500);
-            }, 3000);
-          } else {
-            notificationEl.remove();
-          }
-        }, 2000);
-      });
-      
-      // Set up MutationObserver to detect new content
-      const targetNode = document.querySelector('.gallery, main, #root, #app') || document.body;
-      
-      // Configure the observer
-      const observerConfig = {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['src', 'srcset', 'data-src', 'data-job-id']
-      };
-      
-      // Create an observer instance
-      const observer = new MutationObserver((mutations) => {
-        // Only extract if relevant mutations found
-        const shouldExtract = mutations.some(mutation => {
-          // New nodes added
-          if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-            return true;
-          }
-          
-          // Relevant attribute changes
-          if (mutation.type === 'attributes') {
-            const target = mutation.target;
-            return (
-              target.tagName === 'IMG' || 
-              target.classList?.contains('gallery-item') ||
-              target.hasAttribute?.('data-job-id')
-            );
-          }
-          
-          return false;
-        });
-        
-        if (shouldExtract) {
-          console.log('New Midjourney content detected, extracting images');
-          setTimeout(extractMidjourneyImages, 500);
-        }
-      });
-      
-      // Start observing
-      observer.observe(targetNode, observerConfig);
-      console.log('MutationObserver set up to detect new Midjourney content');
-    }
   }
 })();
 
@@ -751,6 +591,19 @@ style.textContent = `
     opacity: 0;
   }
 }
+
+#mg-scroll-indicator {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-family: sans-serif;
+  z-index: 99999;
+  transition: opacity 0.3s;
+}
 `;
 document.head.appendChild(style);
 
@@ -759,47 +612,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Content script received message:', message.action);
   
   switch (message.action) {
-    case 'extractMidjourneyImages':
-      // Extract Midjourney images
-      const result = extractMidjourneyImages();
-      sendResponse({ success: !!result, images: result });
-      break;
-      
-    case 'extractLeonardoImages':
-      // Extract Leonardo.ai images
-      const leonardoResult = extractLeonardoImages();
-      sendResponse({ success: !!leonardoResult });
-      break;
-      
-    case 'extractRunwayImages':
-      // Extract Runway images
-      const runwayResult = extractRunwayImages();
-      sendResponse({ success: !!runwayResult });
-      break;
-      
     case 'extractPlatformImages':
-      // Auto-detect platform and extract images
-      const platform = detectPlatform();
-      if (!platform) {
-        sendResponse({ success: false, error: 'Platform not detected' });
-        return;
-      }
-      
-      // Based on platform ID, call appropriate extraction function
-      let platformResult = false;
-      if (platform.id === 'midjourney') {
-        platformResult = extractMidjourneyImages();
-      } else if (platform.id === 'leonardo') {
-        platformResult = extractLeonardoImages();
-      } else if (platform.id === 'runway') {
-        platformResult = extractRunwayImages();
-      }
-      
-      sendResponse({ 
-        success: !!platformResult, 
-        platform: platform.name,
-        count: platformResult ? platformResult.length : 0,
-        images: platformResult
+      // First perform auto-scroll to load lazy content
+      simulateInfiniteScroll().then(() => {
+        console.log('Auto-scroll completed, now extracting images');
+        
+        // Auto-detect platform or use provided platformId
+        const platform = detectPlatform();
+        const platformId = message.platformId || (platform ? platform.id : null);
+        
+        // Based on platform ID, call appropriate extraction function
+        let extractedImages = [];
+        
+        if (platformId === 'midjourney') {
+          extractedImages = extractMidjourneyImages();
+        } else if (platformId === 'leonardo') {
+          extractedImages = extractLeonardoImages();
+        } else {
+          // Fallback to generic extraction
+          extractedImages = extractAllImages();
+        }
+        
+        sendResponse({ 
+          success: true, 
+          images: extractedImages,
+          platform: platformId || 'generic',
+          count: extractedImages.length
+        });
       });
       break;
       
@@ -849,6 +688,8 @@ window.addEventListener('message', (event) => {
   // Check if this is our message type
   if (event.data.type === 'MAIN_GALLERY_START_EXTRACTION') {
     console.log('Manual extraction requested from UI');
-    extractMidjourneyImages();
+    simulateInfiniteScroll().then(() => {
+      extractMidjourneyImages();
+    });
   }
 });
