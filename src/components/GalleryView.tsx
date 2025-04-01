@@ -96,9 +96,10 @@ type FilterOption = 'all' | 'midjourney' | 'dalle' | 'stable-diffusion' | 'runwa
 
 interface GalleryViewProps {
   images?: GalleryImage[];
+  isNewSync?: boolean;
 }
 
-const GalleryView = ({ images: externalImages }: GalleryViewProps) => {
+const GalleryView = ({ images: externalImages, isNewSync = false }: GalleryViewProps) => {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
