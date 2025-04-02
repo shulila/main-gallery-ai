@@ -104,7 +104,7 @@ function setupBridge() {
         if (pendingSyncStr) {
           try {
             const pendingImages = JSON.parse(pendingSyncStr);
-            console.log('Found pending sync images in session storage:', pendingImages.length);
+            console.log(`Found ${pendingImages.length} pending images in session storage`);
             
             if (Array.isArray(pendingImages) && pendingImages.length > 0) {
               // Forward the images to the web app
@@ -113,6 +113,8 @@ function setupBridge() {
                 images: pendingImages,
                 source: 'extension_bridge'
               }, '*');
+              
+              console.log('Forwarded pending images from session storage to web app');
             }
             
             // Clear the pending sync data
@@ -129,6 +131,11 @@ function setupBridge() {
     // Handle messages received from the web app
     if (event.data && event.data.type === 'GALLERY_IMAGES_RECEIVED') {
       console.log('Web app confirmed receipt of gallery images:', event.data.count);
+    }
+    
+    // Add debugging for all received messages from web app
+    if (event.data && event.data.type) {
+      console.log(`Bridge received message of type ${event.data.type} from web app:`, event.data);
     }
   });
   
@@ -161,6 +168,13 @@ function setupBridge() {
   } catch (err) {
     console.error('Error in domain fallback check:', err);
   }
+  
+  // Add new debug information about environment and platform
+  console.log('MainGallery.AI bridge environment info:', {
+    location: window.location.href,
+    userAgent: navigator.userAgent,
+    timestamp: new Date().toISOString()
+  });
   
   console.log('MainGallery.AI bridge setup complete');
 }
