@@ -162,3 +162,11 @@ export function getCorrectDomainUrl(url) {
     return null;
   }
 }
+
+/**
+ * Get the gallery URL
+ * @returns {string} URL for the gallery page
+ */
+export function getGalleryUrl() {
+  return `https://${getProductionDomain()}/gallery`;
+}
