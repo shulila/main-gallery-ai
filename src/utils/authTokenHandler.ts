@@ -6,11 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
  * @returns Base URL for authentication
  */
 export const getAuthBaseUrl = (): string => {
-  // Support both the preview domain and the production domain
-  const isPreviewDomain = window.location.hostname.includes('preview-main-gallery-ai');
-  return isPreviewDomain 
-    ? 'https://preview-main-gallery-ai.lovable.app' 
-    : 'https://main-gallery-hub.lovable.app';
+  // Always use the production domain
+  return 'https://main-gallery-hub.lovable.app';
 };
 
 /**
@@ -42,6 +39,17 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
     }
     
     console.log('Auth callback detected, attempting to handle token');
+
+    // Check for incorrect domain and redirect if needed
+    if (window.location.hostname.includes('preview-main-gallery-ai')) {
+      console.warn('Detected auth callback on preview domain - redirecting to production domain');
+      const correctedURL = window.location.href.replace(
+        'preview-main-gallery-ai.lovable.app',
+        'main-gallery-hub.lovable.app'
+      );
+      window.location.href = correctedURL;
+      return true;
+    }
     
     // Extract from hash first (most common with OAuth providers)
     if (hash && hash.includes('access_token')) {
@@ -85,7 +93,7 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
         // If in Chrome extension context, also store in chrome.storage
         if (typeof window !== 'undefined' && window.chrome && window.chrome.storage) {
           try {
-            window.chrome.storage.sync?.set({
+            window.chrome.storage?.sync.set({
               'main_gallery_auth_token': tokenData,
               'main_gallery_user_email': email || (data?.user?.email || 'User')
             }, () => {
@@ -159,6 +167,17 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
       return false;
     }
     
+    // Check for incorrect domain and redirect if needed
+    if (url.includes('preview-main-gallery-ai.lovable.app')) {
+      console.warn('Detected token on preview domain - redirecting to production domain');
+      const correctedURL = url.replace(
+        'preview-main-gallery-ai.lovable.app',
+        'main-gallery-hub.lovable.app'
+      );
+      window.location.href = correctedURL;
+      return true;
+    }
+    
     // Try to get hash fragment
     const hashPart = url.split('#')[1];
     
@@ -196,7 +215,7 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
     // If in Chrome extension context, also store in chrome.storage
     if (typeof window !== 'undefined' && window.chrome && window.chrome.storage) {
       try {
-        window.chrome.storage.sync?.set({
+        window.chrome.storage?.sync.set({
           'main_gallery_auth_token': tokenData,
           'main_gallery_user_email': email
         }, () => {

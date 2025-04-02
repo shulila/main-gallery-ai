@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -14,6 +15,22 @@ export default function AuthCallback() {
   useEffect(() => {
     console.log('AuthCallback component mounted');
     console.log('Current URL:', window.location.href);
+    
+    // Check for incorrect domain first and redirect if needed
+    const currentURL = window.location.href;
+    if (
+      currentURL.includes("preview-main-gallery-ai.lovable.app/auth/callback") &&
+      (currentURL.includes("#access_token=") || currentURL.includes("?access_token="))
+    ) {
+      console.warn("Detected auth callback on incorrect domain, redirecting to production domain");
+      const correctedURL = currentURL.replace(
+        "preview-main-gallery-ai.lovable.app",
+        "main-gallery-hub.lovable.app"
+      );
+      console.log("Redirecting to:", correctedURL);
+      window.location.href = correctedURL;
+      return;
+    }
     
     // Function to complete authentication
     const completeAuth = async () => {

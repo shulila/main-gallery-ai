@@ -6,8 +6,8 @@
  * @returns {string} The current environment (production, staging, development)
  */
 export function getEnvironment() {
-  // For now, we're always using the preview domain for testing
-  return 'preview';
+  // Always use production environment
+  return 'production';
 }
 
 /**
@@ -15,8 +15,8 @@ export function getEnvironment() {
  * @returns {string} The auth URL
  */
 export function getAuthUrl() {
-  // Use preview domain for all auth flows
-  return 'https://preview-main-gallery-ai.lovable.app/auth';
+  // Use production domain for all auth flows
+  return 'https://main-gallery-hub.lovable.app/auth';
 }
 
 /**
@@ -24,8 +24,8 @@ export function getAuthUrl() {
  * @returns {string} The gallery URL
  */
 export function getGalleryUrl() {
-  // Use preview domain for all galleries
-  return 'https://preview-main-gallery-ai.lovable.app/gallery';
+  // Use production domain for all galleries
+  return 'https://main-gallery-hub.lovable.app/gallery';
 }
 
 /**
@@ -33,8 +33,8 @@ export function getGalleryUrl() {
  * @returns {string} The auth callback URL
  */
 export function getAuthCallbackUrl() {
-  // Use preview domain for all auth callbacks
-  return 'https://preview-main-gallery-ai.lovable.app/auth/callback';
+  // Use production domain for all auth callbacks
+  return 'https://main-gallery-hub.lovable.app/auth/callback';
 }
 
 /**

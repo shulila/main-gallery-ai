@@ -6,19 +6,19 @@ const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.goo
 
 // Get the production auth callback URL - NEVER use localhost
 const getProductionRedirectUrl = () => {
-  // Use the preview domain that has Google login button
-  return 'https://preview-main-gallery-ai.lovable.app/auth/callback';
+  // Use the production domain
+  return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
-// Get the auth URL - using the preview domain that has Google login
+// Get the auth URL - using the production domain
 const getAuthUrl = () => {
-  return 'https://preview-main-gallery-ai.lovable.app/auth';
+  return 'https://main-gallery-hub.lovable.app/auth';
 };
 
 // Get the gallery URL
 const getGalleryUrl = () => {
-  return 'https://preview-main-gallery-ai.lovable.app/gallery';
-};
+  return 'https://main-gallery-hub.lovable.app/gallery';
+}; 
 
 // Supported platforms for extension activation
 const SUPPORTED_PLATFORMS = [
@@ -55,7 +55,7 @@ export function setupAuthCallbackListener() {
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       // Only process completed loads with our auth callback URL
       if (changeInfo.status === 'complete' && tab.url && 
-          (tab.url.includes('preview-main-gallery-ai.lovable.app/auth/callback') || 
+          (tab.url.includes('main-gallery-hub.lovable.app/auth/callback') || 
            tab.url.includes('/auth?access_token='))) {
         
         console.log('Auth callback detected:', tab.url);
@@ -140,7 +140,7 @@ export function setupAuthCallbackListener() {
 
 // Open auth page
 export function openAuthPage(tabId = null, options = {}) {
-  // Use the preview domain that has Google login button
+  // Use the production domain that has Google login button
   const authUrl = getAuthUrl();
   
   // Add any query parameters

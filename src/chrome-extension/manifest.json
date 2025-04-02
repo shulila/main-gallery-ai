@@ -35,7 +35,6 @@
     "https://*.playgroundai.com/*",
     "https://creator.nightcafe.studio/*",
     "https://discord.com/channels/*midjourney*",
-    "https://preview-main-gallery-ai.lovable.app/*",
     "https://main-gallery-hub.lovable.app/*"
   ],
   "background": {
@@ -62,7 +61,6 @@
     },
     {
       "matches": [
-        "https://preview-main-gallery-ai.lovable.app/*",
         "https://main-gallery-hub.lovable.app/*"
       ],
       "js": ["bridge.js"],

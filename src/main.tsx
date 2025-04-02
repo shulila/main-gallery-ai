@@ -16,6 +16,22 @@ const handleEarlyAuthToken = async () => {
   if (isAuthCallback) {
     console.log('Auth callback detected, attempting early token handling');
     
+    // Check for incorrect domain first
+    const currentURL = window.location.href;
+    if (
+      currentURL.includes("preview-main-gallery-ai.lovable.app/auth/callback") &&
+      (currentURL.includes("#access_token=") || currentURL.includes("?access_token="))
+    ) {
+      console.warn("Detected auth callback on incorrect domain, redirecting to production domain");
+      const correctedURL = currentURL.replace(
+        "preview-main-gallery-ai.lovable.app",
+        "main-gallery-hub.lovable.app"
+      );
+      console.log("Redirecting to:", correctedURL);
+      window.location.href = correctedURL;
+      return;
+    }
+    
     // Try hash extraction first (faster)
     const handled = handleOAuthTokenFromHash(window.location.href);
     if (handled) {

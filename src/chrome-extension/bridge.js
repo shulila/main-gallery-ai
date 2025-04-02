@@ -1,4 +1,3 @@
-
 console.log('MainGallery.AI bridge script loaded');
 
 // This script acts as a bridge between the web app and the extension content script
@@ -133,6 +132,27 @@ function setupBridge() {
     }, '*');
     console.log('MainGallery.AI bridge notified page it is ready');
   }, 500);
+  
+  // Add domain fallback for auth callbacks with tokens
+  try {
+    const currentURL = window.location.href;
+    
+    // If accidentally on preview domain with token, redirect to production domain
+    if (
+      currentURL.includes("preview-main-gallery-ai.lovable.app/auth/callback") &&
+      (currentURL.includes("#access_token=") || currentURL.includes("?access_token="))
+    ) {
+      console.warn("Detected incorrect domain for auth callback, redirecting to production domain");
+      const correctedURL = currentURL.replace(
+        "preview-main-gallery-ai.lovable.app",
+        "main-gallery-hub.lovable.app"
+      );
+      console.log("Redirecting to:", correctedURL);
+      window.location.href = correctedURL;
+    }
+  } catch (err) {
+    console.error('Error in domain fallback check:', err);
+  }
   
   console.log('MainGallery.AI bridge setup complete');
 }
