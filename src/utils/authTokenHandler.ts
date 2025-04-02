@@ -63,9 +63,9 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
         }
         
         // If in Chrome extension context, also store in chrome.storage
-        if (typeof window !== 'undefined' && 'chrome' in window && chrome.storage) {
+        if (typeof window !== 'undefined' && window.chrome && window.chrome.storage) {
           try {
-            chrome.storage.sync.set({
+            window.chrome.storage.sync?.set({
               'main_gallery_auth_token': tokenData,
               'main_gallery_user_email': email || (data?.user?.email || 'User')
             }, () => {
@@ -174,9 +174,9 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
     localStorage.setItem('main_gallery_user_email', email);
     
     // If in Chrome extension context, also store in chrome.storage
-    if (typeof window !== 'undefined' && 'chrome' in window && chrome.storage) {
+    if (typeof window !== 'undefined' && window.chrome && window.chrome.storage) {
       try {
-        chrome.storage.sync.set({
+        window.chrome.storage.sync?.set({
           'main_gallery_auth_token': tokenData,
           'main_gallery_user_email': email
         }, () => {
