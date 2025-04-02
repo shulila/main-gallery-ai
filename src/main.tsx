@@ -3,19 +3,32 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App.tsx';
 import './index.css';
-import { handleOAuthRedirect } from './utils/authTokenHandler';
+import { handleOAuthRedirect, handleOAuthTokenFromHash } from './utils/authTokenHandler';
 
 // Special handling for auth callbacks early in the app initialization
 const handleEarlyAuthToken = async () => {
   // Check for auth callback paths with hash fragments
-  if ((window.location.pathname === '/auth/callback' || 
-       window.location.pathname.startsWith('/auth')) && 
-      window.location.hash && 
-      window.location.hash.includes('access_token')) {
+  const isAuthCallback = window.location.pathname === '/auth/callback' || 
+                        window.location.pathname.includes('/callback') ||
+                        window.location.hash.includes('access_token') || 
+                        window.location.search.includes('access_token');
+                        
+  if (isAuthCallback) {
+    console.log('Auth callback detected, attempting early token handling');
     
-    console.log('Auth callback detected with token fragment, attempting early token handling');
+    // Try hash extraction first (faster)
+    const handled = handleOAuthTokenFromHash(window.location.href);
+    if (handled) {
+      console.log('Successfully handled token via direct hash extraction');
+      return;
+    }
+    
+    // Try Supabase method otherwise
     try {
-      await handleOAuthRedirect();
+      const success = await handleOAuthRedirect();
+      if (success) {
+        console.log('Successfully handled OAuth redirect');
+      }
     } catch (err) {
       console.error('Error in early auth token handling:', err);
     }
@@ -41,18 +54,26 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Special handling for auth callbacks
       if (window.location.pathname.includes('/auth/callback') || 
-          (window.location.hash && window.location.hash.includes('access_token'))) {
-        console.log('Auth callback detected, attempting to handle token');
+          window.location.pathname.includes('/callback') ||
+          window.location.hash.includes('access_token') || 
+          window.location.search.includes('access_token')) {
         
-        // Try to handle OAuth token if present (fail silently if not)
+        console.log('Auth callback detected in main.tsx DOMContentLoaded');
+        
+        // First try direct hash extraction
+        const handled = handleOAuthTokenFromHash(window.location.href);
+        if (handled) {
+          console.log('Successfully handled token via direct hash extraction in main.tsx');
+          return;
+        }
+        
+        // Then try the Supabase method
         handleOAuthRedirect().then(success => {
           if (success) {
-            console.log('Successfully handled auth token in main.tsx mount');
-            // Token was handled, will redirect in the AuthCallback component
+            console.log('Successfully handled auth token in main.tsx DOMContentLoaded');
           }
         }).catch(err => {
           console.error('Error handling auth token in main.tsx:', err);
-          // Continue rendering the app, the AuthCallback component will handle redirect
         });
       }
     }

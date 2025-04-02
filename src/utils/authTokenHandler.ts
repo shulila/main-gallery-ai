@@ -11,6 +11,18 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
     const hash = window.location.hash;
     const search = window.location.search;
     
+    // Check if this is an auth callback
+    const isCallback = window.location.pathname === '/auth/callback' || 
+                      window.location.pathname.includes('/callback') ||
+                      hash.includes('access_token') || 
+                      search.includes('access_token');
+    
+    if (!isCallback) {
+      return false;
+    }
+    
+    console.log('Auth callback detected, attempting to handle token');
+    
     // Extract from hash first (most common with OAuth providers)
     if (hash && hash.includes('access_token')) {
       console.log('Found token in hash fragment');
@@ -51,9 +63,9 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
         }
         
         // If in Chrome extension context, also store in chrome.storage
-        if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
+        if (typeof window !== 'undefined' && 'chrome' in window && chrome.storage) {
           try {
-            window.chrome.storage.sync.set({
+            chrome.storage.sync.set({
               'main_gallery_auth_token': tokenData,
               'main_gallery_user_email': email || (data?.user?.email || 'User')
             }, () => {
@@ -65,6 +77,12 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
         }
         
         console.log('Successfully set up session from OAuth redirect');
+        
+        // Redirect to gallery after successful auth
+        setTimeout(() => {
+          window.location.href = '/gallery';
+        }, 500);
+        
         return true;
       }
     }
@@ -90,6 +108,12 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
         }
         
         console.log('Successfully set up session from URL query params');
+        
+        // Redirect to gallery after successful auth
+        setTimeout(() => {
+          window.location.href = '/gallery';
+        }, 500);
+        
         return true;
       }
     }
@@ -109,6 +133,12 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
 export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
   try {
     const url = callbackUrl || window.location.href;
+    
+    // Check if this is an auth callback
+    if (!url.includes('callback') && !url.includes('access_token')) {
+      return false;
+    }
+    
     // Try to get hash fragment
     const hashPart = url.split('#')[1];
     
@@ -144,9 +174,9 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
     localStorage.setItem('main_gallery_user_email', email);
     
     // If in Chrome extension context, also store in chrome.storage
-    if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
+    if (typeof window !== 'undefined' && 'chrome' in window && chrome.storage) {
       try {
-        window.chrome.storage.sync.set({
+        chrome.storage.sync.set({
           'main_gallery_auth_token': tokenData,
           'main_gallery_user_email': email
         }, () => {
@@ -155,6 +185,27 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
       } catch (err) {
         console.error('Error syncing to chrome.storage from hash handler:', err);
       }
+    }
+    
+    // Also try to set Supabase session
+    try {
+      supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      }).then(({ data, error }) => {
+        if (error) {
+          console.error('Error setting Supabase session in handleOAuthTokenFromHash:', error);
+        } else {
+          console.log('Successfully set Supabase session in handleOAuthTokenFromHash');
+          
+          // Redirect to gallery after successful auth
+          setTimeout(() => {
+            window.location.href = '/gallery';
+          }, 500);
+        }
+      });
+    } catch (err) {
+      console.error('Error calling Supabase setSession in handleOAuthTokenFromHash:', err);
     }
     
     return true;

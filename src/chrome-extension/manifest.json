@@ -44,16 +44,19 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.midjourney.com/*",
-        "https://*.leonardo.ai/*",
-        "https://app.leonardo.ai/*",
+        "https://*.midjourney.com/app/*",
+        "https://*.midjourney.com/create/*",
+        "https://*.midjourney.com/archive/*",
+        "https://*.midjourney.com/organize/*",
+        "https://*.leonardo.ai/workspace/*",
+        "https://app.leonardo.ai/workspace/*",
         "https://openai.com/dall-e/*", 
-        "https://dreamstudio.ai/*",
-        "https://*.stability.ai/*",
-        "https://*.runwayml.com/*",
-        "https://*.pika.art/*",
-        "https://*.playgroundai.com/*",
-        "https://creator.nightcafe.studio/*",
+        "https://dreamstudio.ai/generate/*",
+        "https://*.stability.ai/generate/*",
+        "https://*.runwayml.com/generate/*",
+        "https://*.pika.art/create/*",
+        "https://*.playgroundai.com/create/*",
+        "https://creator.nightcafe.studio/create/*",
         "https://discord.com/channels/*midjourney*"
       ],
       "js": ["content.js"],
