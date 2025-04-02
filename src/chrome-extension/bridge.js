@@ -1,15 +1,21 @@
 
-console.log('MainGallery.AI bridge script loaded');
+/**
+ * MainGallery.AI bridge script
+ * Acts as a bridge between the web app and the extension content script
+ */
 
-// This script acts as a bridge between the web app and the extension content script
-// It runs in the context of the web app and can forward messages
+import { logger } from './utils/logger.js';
+import { handleError } from './utils/errorHandler.js';
+import { getProductionDomain, getPreviewDomain, getCorrectDomainUrl } from './utils/urlUtils.js';
+
+logger.log('MainGallery.AI bridge script loaded');
 
 // Handle messages from extension to web app
 function setupBridge() {
   // Listen for runtime messages from the extension
   try {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      console.log('Bridge received message from extension:', message);
+      logger.log('Bridge received message from extension:', message);
       
       // Pass the message to the web application
       if (message.type === 'GALLERY_IMAGES') {
@@ -24,7 +30,7 @@ function setupBridge() {
           timestamp: Date.now()
         }, '*');
         
-        console.log('Forwarded gallery images to web app:', message.images?.length || 0);
+        logger.log('Forwarded gallery images to web app:', message.images?.length || 0);
       } else {
         sendResponse({ success: true });
       }
@@ -41,13 +47,13 @@ function setupBridge() {
         path: window.location.pathname,
         timestamp: Date.now()
       }).catch(err => {
-        console.log('Could not notify background about bridge connection:', err);
+        logger.log('Could not notify background about bridge connection:', err);
       });
     } catch (err) {
-      console.log('Error notifying background about bridge:', err);
+      logger.log('Error notifying background about bridge:', err);
     }
   } catch (err) {
-    console.error('Error setting up message bridge:', err);
+    handleError('setupMessageBridge', err);
   }
   
   // Listen for messages from web app to extension
@@ -57,24 +63,24 @@ function setupBridge() {
     
     // Forward web app messages to extension
     if (event.data && event.data.type === 'WEB_APP_TO_EXTENSION') {
-      console.log('Bridge forwarding message from web app to extension:', event.data);
+      logger.log('Bridge forwarding message from web app to extension:', event.data);
       
       try {
         chrome.runtime.sendMessage(event.data)
           .then(response => {
-            console.log('Extension responded to forwarded message:', response);
+            logger.log('Extension responded to forwarded message:', response);
           })
           .catch(err => {
-            console.error('Error forwarding message to extension:', err);
+            handleError('forwardToExtension', err);
           });
       } catch (err) {
-        console.error('Failed to forward message to extension:', err);
+        handleError('messageForwarding', err);
       }
     }
     
     // Handle ready for sync messages
     if (event.data && event.data.type === 'GALLERY_PAGE_READY') {
-      console.log('Gallery page is ready for sync, checking for pending images');
+      logger.log('Gallery page is ready for sync, checking for pending images');
       
       // Check URL for sync flag
       const urlParams = new URLSearchParams(window.location.search);
@@ -87,14 +93,14 @@ function setupBridge() {
             action: 'galleryReady',
             url: window.location.href
           }).catch(err => {
-            console.error('Error notifying extension gallery is ready:', err);
+            handleError('notifyGalleryReady', err);
           });
           
           // Clean up the URL by removing the sync parameter
           const cleanUrl = window.location.pathname;
           window.history.replaceState({}, document.title, cleanUrl);
         } catch (err) {
-          console.error('Error sending galleryReady message:', err);
+          handleError('galleryReadyMessage', err);
         }
       }
       
@@ -104,7 +110,7 @@ function setupBridge() {
         if (pendingSyncStr) {
           try {
             const pendingImages = JSON.parse(pendingSyncStr);
-            console.log(`Found ${pendingImages.length} pending images in session storage`);
+            logger.log(`Found ${pendingImages.length} pending images in session storage`);
             
             if (Array.isArray(pendingImages) && pendingImages.length > 0) {
               // Forward the images to the web app
@@ -114,30 +120,44 @@ function setupBridge() {
                 source: 'extension_bridge'
               }, '*');
               
-              console.log('Forwarded pending images from session storage to web app');
+              logger.log('Forwarded pending images from session storage to web app');
             }
             
             // Clear the pending sync data
             sessionStorage.removeItem('maingallery_sync_images');
           } catch (e) {
-            console.error('Error processing pending sync images:', e);
+            handleError('processPendingSync', e);
           }
         }
       } catch (err) {
-        console.error('Error checking for pending sync images:', err);
+        handleError('checkPendingSync', err);
       }
     }
     
     // Handle messages received from the web app
     if (event.data && event.data.type === 'GALLERY_IMAGES_RECEIVED') {
-      console.log('Web app confirmed receipt of gallery images:', event.data.count);
+      logger.log('Web app confirmed receipt of gallery images:', event.data.count);
     }
     
     // Add debugging for all received messages from web app
     if (event.data && event.data.type) {
-      console.log(`Bridge received message of type ${event.data.type} from web app:`, event.data);
+      logger.debug(`Bridge received message of type ${event.data.type} from web app:`, event.data);
     }
   });
+  
+  // Add domain fallback for auth callbacks with tokens
+  try {
+    const currentURL = window.location.href;
+    const correctedURL = getCorrectDomainUrl(currentURL);
+    
+    if (correctedURL) {
+      logger.warn("Detected incorrect domain for auth callback, redirecting to production domain");
+      logger.log("Redirecting to:", correctedURL);
+      window.location.href = correctedURL;
+    }
+  } catch (err) {
+    handleError('domainFallbackCheck', err);
+  }
   
   // Notify the page that the bridge is active
   setTimeout(() => {
@@ -145,38 +165,17 @@ function setupBridge() {
       type: 'EXTENSION_BRIDGE_READY',
       timestamp: Date.now()
     }, '*');
-    console.log('MainGallery.AI bridge notified page it is ready');
+    logger.log('MainGallery.AI bridge notified page it is ready');
   }, 500);
   
-  // Add domain fallback for auth callbacks with tokens
-  try {
-    const currentURL = window.location.href;
-    
-    // If accidentally on preview domain with token, redirect to production domain
-    if (
-      currentURL.includes("preview-main-gallery-ai.lovable.app/auth/callback") &&
-      (currentURL.includes("#access_token=") || currentURL.includes("?access_token="))
-    ) {
-      console.warn("Detected incorrect domain for auth callback, redirecting to production domain");
-      const correctedURL = currentURL.replace(
-        "preview-main-gallery-ai.lovable.app",
-        "main-gallery-hub.lovable.app"
-      );
-      console.log("Redirecting to:", correctedURL);
-      window.location.href = correctedURL;
-    }
-  } catch (err) {
-    console.error('Error in domain fallback check:', err);
-  }
-  
   // Add new debug information about environment and platform
-  console.log('MainGallery.AI bridge environment info:', {
+  logger.log('MainGallery.AI bridge environment info:', {
     location: window.location.href,
     userAgent: navigator.userAgent,
     timestamp: new Date().toISOString()
   });
   
-  console.log('MainGallery.AI bridge setup complete');
+  logger.log('MainGallery.AI bridge setup complete');
 }
 
 // Set up the bridge when the DOM is fully loaded
