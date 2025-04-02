@@ -91,6 +91,37 @@ function createNotification(id, title, message) {
 // Set up the auth callback listener immediately
 setupAuthCallbackListener();
 
+// Helper function to safely send messages with retry
+function safeSendMessage(tabId, message, callback, maxRetries = 3) {
+  let retryCount = 0;
+  
+  function attemptSend() {
+    try {
+      chrome.tabs.sendMessage(tabId, message, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Error sending message:', chrome.runtime.lastError);
+          
+          if (retryCount < maxRetries) {
+            console.log(`Retry attempt ${retryCount + 1}/${maxRetries}...`);
+            retryCount++;
+            setTimeout(attemptSend, 500 * retryCount); // Exponential backoff
+          } else {
+            console.error('Max retries reached, message could not be delivered');
+            if (callback) callback({ success: false, error: chrome.runtime.lastError.message });
+          }
+        } else {
+          if (callback) callback(response || { success: true });
+        }
+      });
+    } catch (err) {
+      console.error('Exception sending message:', err);
+      if (callback) callback({ success: false, error: err.message });
+    }
+  }
+  
+  attemptSend();
+}
+
 // Handle action/icon clicks
 chrome.action.onClicked.addListener(async (tab) => {
   console.log('Extension icon clicked on tab:', tab?.url);
@@ -139,46 +170,14 @@ chrome.action.onClicked.addListener(async (tab) => {
   
   console.log('User is logged in and on a supported tab, starting auto-scan');
   
-  // Send message to content script to start auto-scanning
-  try {
-    chrome.tabs.sendMessage(tab.id, { 
+  // Send message to content script with retry mechanism
+  safeSendMessage(
+    tab.id, 
+    { 
       action: 'startAutoScan',
       options: { scrollDelay: 500, scrollStep: 800 }
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error starting auto-scan:', chrome.runtime.lastError);
-        
-        // Try to inject content script directly if messaging fails
-        chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['content.js']
-        }).then(() => {
-          // Retry message after injection
-          setTimeout(() => {
-            chrome.tabs.sendMessage(tab.id, { 
-              action: 'startAutoScan',
-              options: { scrollDelay: 500, scrollStep: 800 }
-            }).catch(err => {
-              console.error('Error in second attempt to start auto-scan:', err);
-              createNotification(
-                'maingallery_error', 
-                'Scan Error', 
-                'Could not scan the current page. Please refresh and try again.'
-              );
-            });
-          }, 500);
-        }).catch(err => {
-          console.error('Error injecting content script:', err);
-          createNotification(
-            'maingallery_error', 
-            'Scan Error', 
-            'Could not scan the current page. Please refresh and try again.'
-          );
-        });
-        
-        return;
-      }
-      
+    },
+    (response) => {
       if (response && response.success) {
         console.log('Auto-scan initiated on page');
         
@@ -188,27 +187,53 @@ chrome.action.onClicked.addListener(async (tab) => {
           'MainGallery is scanning the page for AI images. Please keep the tab open.'
         );
       } else {
-        console.log('Auto-scan could not be started:', response);
+        console.log('Auto-scan could not be started, injecting content script:', response);
         
-        createNotification(
-          'maingallery_error', 
-          'Scan Error', 
-          'Could not scan this page. Please refresh and try again.'
-        );
+        // Try to inject content script directly
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        }).then(() => {
+          // Retry message after injection with a delay
+          setTimeout(() => {
+            safeSendMessage(tab.id, { 
+              action: 'startAutoScan',
+              options: { scrollDelay: 500, scrollStep: 800 }
+            }, (retryResponse) => {
+              if (retryResponse && retryResponse.success) {
+                console.log('Auto-scan initiated after content script injection');
+                
+                createNotification(
+                  'maingallery_scan_started', 
+                  'Scanning Started', 
+                  'MainGallery is scanning the page for AI images. Please keep the tab open.'
+                );
+              } else {
+                console.error('Error in second attempt to start auto-scan:', retryResponse);
+                
+                createNotification(
+                  'maingallery_error', 
+                  'Scan Error', 
+                  'Could not scan the current page. Please refresh and try again.'
+                );
+              }
+            });
+          }, 1000);
+        }).catch(err => {
+          console.error('Error injecting content script:', err);
+          
+          createNotification(
+            'maingallery_error', 
+            'Scan Error', 
+            'Could not scan the current page. Please refresh and try again.'
+          );
+        });
       }
-    });
-  } catch (err) {
-    console.error('Error sending startAutoScan message:', err);
-    
-    createNotification(
-      'maingallery_error', 
-      'Error Scanning Page', 
-      'Could not scan the current page. Please try again.'
-    );
-  }
+    }
+  );
 });
 
-// Handle messages from content scripts
+// Handle messages from content scripts with improved error handling
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received in background script:', message);
   
@@ -246,6 +271,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
       sendResponse({ success: true });
     }
+    else if (message.action === 'galleryReady') {
+      console.log('Gallery is ready to receive images:', message);
+      sendResponse({ success: true });
+    }
+    else if (message.action === 'bridgeConnected') {
+      console.log('Bridge connected on:', message.host, message.path);
+      sendResponse({ success: true });
+    }
+    else {
+      // Default response for unhandled messages
+      sendResponse({ success: true, action: 'default' });
+    }
   } catch (err) {
     console.error('Error handling message:', err);
     sendResponse({ success: false, error: err.message });
@@ -254,7 +291,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep message channel open for async response
 });
 
-// Implement image syncing
+// Implement image syncing with improved error handling
 async function syncImagesToGallery(images) {
   if (!images || images.length === 0) {
     console.log('No images to sync');
@@ -269,40 +306,51 @@ async function syncImagesToGallery(images) {
       synced_at: Date.now()
     }));
     
-    // Always prefer the web app over the popup for syncing
-    // First check if gallery tab is already open
-    chrome.tabs.query({ url: `${getGalleryUrl()}*` }, (tabs) => {
+    // Check if gallery tab is already open
+    const galleryTabQuery = { url: `${getGalleryUrl()}*` };
+    
+    // Using promise-based approach to better handle errors
+    try {
+      const tabs = await chrome.tabs.query(galleryTabQuery);
+      
       if (tabs.length > 0) {
-        // If gallery is open, send message through bridge
+        // If gallery is open, try to send messages through bridge
+        console.log('Gallery tab found, sending images via bridge');
+        
         try {
-          console.log('Gallery tab found, sending images via bridge');
-          chrome.tabs.sendMessage(tabs[0].id, {
-            type: 'GALLERY_IMAGES',
-            images: enrichedImages
-          }, (response) => {
-            if (chrome.runtime.lastError) {
-              console.error('Error sending to gallery tab:', chrome.runtime.lastError);
-              // Store images and open gallery
-              openGalleryWithImages(enrichedImages);
-            } else {
-              console.log('Successfully sent images to gallery tab:', response);
-              // Focus the gallery tab
-              chrome.tabs.update(tabs[0].id, { active: true });
+          // First try sending message to the tab
+          safeSendMessage(
+            tabs[0].id, 
+            { type: 'GALLERY_IMAGES', images: enrichedImages }, 
+            (response) => {
+              if (response && response.success) {
+                console.log('Successfully sent images to gallery tab:', response);
+                // Focus the gallery tab
+                chrome.tabs.update(tabs[0].id, { active: true });
+              } else {
+                console.error('Error sending to gallery tab:', response?.error || 'Unknown error');
+                // Fallback to opening a new gallery tab
+                openGalleryWithImages(enrichedImages);
+              }
             }
-          });
+          );
         } catch (err) {
           console.error('Error sending to gallery tab:', err);
-          
-          // Store images and open gallery
+          // Fallback to opening a new gallery tab
           openGalleryWithImages(enrichedImages);
         }
       } else {
         // Open gallery in a new tab with images
         openGalleryWithImages(enrichedImages);
       }
-    });
-    
-    return true;
+      
+      return true;
+    } catch (err) {
+      console.error('Error querying gallery tabs:', err);
+      // Fallback: just open a new gallery tab
+      openGalleryWithImages(enrichedImages);
+      return true;
+    }
   } catch (err) {
     console.error('Error syncing images to gallery:', err);
     return false;
@@ -312,48 +360,65 @@ async function syncImagesToGallery(images) {
 // Open gallery with images to sync
 function openGalleryWithImages(images) {
   // Create gallery tab with sync flag
-  chrome.tabs.create({ url: `${getGalleryUrl()}?sync=true` });
-  
-  // Set up listener for when gallery tab is ready
-  chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, tab) {
-    if (changeInfo.status === 'complete' && 
-        tab.url && tab.url.includes(getGalleryUrl())) {
-      
-      // Wait a bit to ensure the page is fully loaded and bridge script is injected
-      setTimeout(() => {
-        try {
-          chrome.tabs.sendMessage(tabId, {
-            type: 'GALLERY_IMAGES',
-            images: images
-          }, (response) => {
-            if (chrome.runtime.lastError) {
-              console.error('Error sending images to new tab:', chrome.runtime.lastError);
-              
-              // Store images in session storage as fallback
-              chrome.scripting.executeScript({
-                target: { tabId: tabId },
-                func: (imagesJson) => {
-                  try {
-                    window.sessionStorage.setItem('maingallery_sync_images', imagesJson);
-                    console.log('Stored images in session storage for gallery to pick up');
-                  } catch (e) {
-                    console.error('Error storing images in session storage:', e);
-                  }
-                },
-                args: [JSON.stringify(images)]
-              }).catch(err => {
-                console.error('Error executing session storage script:', err);
-              });
-            } else {
-              console.log('Successfully sent images to new gallery tab:', response);
-            }
-          });
-        } catch (err) {
-          console.error('Error sending images to new tab:', err);
-        }
-      }, 1500); // Increased delay to ensure page and bridge are ready
-      
-      chrome.tabs.onUpdated.removeListener(listener);
+  chrome.tabs.create({ url: `${getGalleryUrl()}?sync=true&from=extension` }, (tab) => {
+    if (!tab) {
+      console.error('Failed to create gallery tab');
+      return;
     }
+
+    console.log('Opened gallery tab with sync flag, tab ID:', tab.id);
+    
+    // Set up listener for when gallery tab is ready
+    chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, updatedTab) {
+      if (tabId === tab.id && changeInfo.status === 'complete' && 
+          updatedTab.url && updatedTab.url.includes(getGalleryUrl())) {
+        
+        console.log('Gallery tab fully loaded, waiting to ensure bridge is ready');
+        
+        // Wait a bit to ensure the page is fully loaded and bridge script is injected
+        setTimeout(() => {
+          try {
+            safeSendMessage(
+              tabId,
+              { type: 'GALLERY_IMAGES', images: images },
+              (response) => {
+                if (response && response.success) {
+                  console.log('Successfully sent images to new gallery tab');
+                } else {
+                  console.error('Error sending images to new tab:', response?.error || 'Unknown error');
+                  
+                  // Store images in session storage as fallback
+                  chrome.scripting.executeScript({
+                    target: { tabId: tabId },
+                    func: (imagesJson) => {
+                      try {
+                        window.sessionStorage.setItem('maingallery_sync_images', imagesJson);
+                        console.log('Stored images in session storage for gallery to pick up');
+                        
+                        // Notify the page
+                        window.postMessage({
+                          type: 'GALLERY_SYNC_STORAGE',
+                          count: JSON.parse(imagesJson).length,
+                          timestamp: Date.now()
+                        }, '*');
+                      } catch (e) {
+                        console.error('Error storing images in session storage:', e);
+                      }
+                    },
+                    args: [JSON.stringify(images)]
+                  }).catch(err => {
+                    console.error('Error executing session storage script:', err);
+                  });
+                }
+              }
+            );
+          } catch (err) {
+            console.error('Error sending images to new tab:', err);
+          }
+        }, 2000); // Increased delay to ensure page and bridge are ready
+        
+        chrome.tabs.onUpdated.removeListener(listener);
+      }
+    });
   });
 }

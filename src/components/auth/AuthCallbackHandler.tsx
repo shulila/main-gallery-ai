@@ -1,3 +1,4 @@
+
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -20,7 +21,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
     console.log('AuthCallbackHandler initialized');
     console.log('Current URL:', window.location.href);
     
-    // Check for incorrect domain first and redirect if needed
+    // Critical fix: Check for incorrect domain first and redirect if needed
     const currentURL = window.location.href;
     if (
       currentURL.includes("preview-main-gallery-ai.lovable.app/auth/callback") &&
@@ -35,10 +36,12 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
       window.location.href = correctedURL;
       return;
     }
-    
+
     // Function to complete authentication
     const completeAuth = async () => {
       try {
+        console.log('Starting OAuth callback processing with URL:', window.location.href);
+        
         // Try direct hash token extraction first (fastest method)
         const hashHandled = handleOAuthTokenFromHash();
         
@@ -100,8 +103,8 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             } else if (fromExtension) {
               // If from extension, we'll let the extension handle the redirect
               console.log('Login from extension completed, waiting for extension to handle redirect');
-              // Extension listener will close this tab and open gallery
               
+              // Extension listener will close this tab and open gallery
               // But still redirect after a timeout as fallback
               setTimeout(() => {
                 window.location.href = getGalleryUrl();

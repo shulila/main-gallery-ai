@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -411,12 +412,6 @@ const Auth = ({
           </Tabs>
         )}
       </CardContent>
-      
-      <CardFooter className="flex justify-center">
-        <p className="text-sm text-muted-foreground">
-          By continuing, you agree to our Terms of Service and Privacy Policy
-        </p>
-      </CardFooter>
     </Card>
   );
 };

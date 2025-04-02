@@ -1,3 +1,4 @@
+
 console.log('MainGallery.AI bridge script loaded');
 
 // This script acts as a bridge between the web app and the extension content script
@@ -23,10 +24,13 @@ function setupBridge() {
           timestamp: Date.now()
         }, '*');
         
-        console.log('Forwarded gallery images to web app:', message.images?.length);
+        console.log('Forwarded gallery images to web app:', message.images?.length || 0);
       } else {
         sendResponse({ success: true });
       }
+      
+      // Always return true to indicate async response handling
+      return true;
     });
     
     // Let the background script know the bridge is active
@@ -56,9 +60,13 @@ function setupBridge() {
       console.log('Bridge forwarding message from web app to extension:', event.data);
       
       try {
-        chrome.runtime.sendMessage(event.data).catch(err => {
-          console.error('Error forwarding message to extension:', err);
-        });
+        chrome.runtime.sendMessage(event.data)
+          .then(response => {
+            console.log('Extension responded to forwarded message:', response);
+          })
+          .catch(err => {
+            console.error('Error forwarding message to extension:', err);
+          });
       } catch (err) {
         console.error('Failed to forward message to extension:', err);
       }
