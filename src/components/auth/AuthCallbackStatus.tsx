@@ -23,6 +23,7 @@ export const AuthCallbackStatus = ({ status, error }: AuthCallbackStatusProps) =
               <li>Refreshing the page</li>
               <li>Clearing your browser cookies and cache</li>
               <li>Using a different browser</li>
+              <li>Checking if you're using the correct domain (main-gallery-hub.lovable.app)</li>
               <li>Contacting support if the issue persists</li>
             </ul>
           </div>
@@ -46,9 +47,25 @@ export const AuthCallbackStatus = ({ status, error }: AuthCallbackStatusProps) =
           <h3 className="font-bold mb-2">Debug Information:</h3>
           <p><strong>Current URL:</strong> {window.location.href}</p>
           <p><strong>Path:</strong> {window.location.pathname}</p>
-          <p><strong>Hash:</strong> {window.location.hash ? '(contains hash)' : '(no hash)'}</p>
+          <p><strong>Hash:</strong> {window.location.hash ? window.location.hash : '(no hash)'}</p>
           <p><strong>Status:</strong> {status}</p>
           {error && <p><strong>Error:</strong> {error}</p>}
+        </div>
+      )}
+      
+      {/* Always provide debug information for production since we're troubleshooting */}
+      {process.env.NODE_ENV !== 'development' && (
+        <div className="mt-8 p-2 border rounded bg-gray-50 max-w-lg text-left text-xs opacity-70 hover:opacity-100 transition-opacity">
+          <details>
+            <summary className="cursor-pointer">View Debug Info</summary>
+            <div className="mt-2 space-y-1">
+              <p><strong>Domain:</strong> {window.location.hostname}</p>
+              <p><strong>Path:</strong> {window.location.pathname}</p>
+              <p><strong>Hash:</strong> {window.location.hash ? '(contains token)' : '(no hash)'}</p>
+              <p><strong>Status:</strong> {status}</p>
+              {error && <p><strong>Error:</strong> {error}</p>}
+            </div>
+          </details>
         </div>
       )}
     </div>

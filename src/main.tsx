@@ -19,7 +19,7 @@ const handleEarlyAuthToken = async () => {
     // Check for incorrect domain first
     const currentURL = window.location.href;
     if (
-      currentURL.includes("preview-main-gallery-ai.lovable.app/auth/callback") &&
+      currentURL.includes("preview-main-gallery-ai.lovable.app") &&
       (currentURL.includes("#access_token=") || currentURL.includes("?access_token="))
     ) {
       console.warn("Detected auth callback on incorrect domain, redirecting to production domain");
@@ -36,6 +36,12 @@ const handleEarlyAuthToken = async () => {
     const handled = handleOAuthTokenFromHash(window.location.href);
     if (handled) {
       console.log('Successfully handled token via direct hash extraction');
+      
+      // Redirect to gallery after successful auth
+      setTimeout(() => {
+        window.location.href = '/gallery';
+      }, 1000);
+      
       return;
     }
     
@@ -44,6 +50,11 @@ const handleEarlyAuthToken = async () => {
       const success = await handleOAuthRedirect();
       if (success) {
         console.log('Successfully handled OAuth redirect');
+        
+        // Redirect to gallery after successful auth
+        setTimeout(() => {
+          window.location.href = '/gallery';
+        }, 1000);
       }
     } catch (err) {
       console.error('Error in early auth token handling:', err);
@@ -80,6 +91,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const handled = handleOAuthTokenFromHash(window.location.href);
         if (handled) {
           console.log('Successfully handled token via direct hash extraction in main.tsx');
+          
+          // Redirect to gallery
+          setTimeout(() => {
+            window.location.href = '/gallery';
+          }, 1000);
+          
           return;
         }
         
@@ -87,6 +104,11 @@ document.addEventListener('DOMContentLoaded', () => {
         handleOAuthRedirect().then(success => {
           if (success) {
             console.log('Successfully handled auth token in main.tsx DOMContentLoaded');
+            
+            // Redirect to gallery
+            setTimeout(() => {
+              window.location.href = '/gallery';
+            }, 1000);
           }
         }).catch(err => {
           console.error('Error handling auth token in main.tsx:', err);

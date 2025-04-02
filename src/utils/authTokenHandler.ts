@@ -35,13 +35,15 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
                       search.includes('access_token');
     
     if (!isCallback) {
+      console.log('Not an auth callback, skipping token handling');
       return false;
     }
     
     console.log('Auth callback detected, attempting to handle token');
 
     // Check for incorrect domain and redirect if needed
-    if (window.location.hostname.includes('preview-main-gallery-ai')) {
+    const currentHostname = window.location.hostname;
+    if (currentHostname.includes('preview-main-gallery-ai')) {
       console.warn('Detected auth callback on preview domain - redirecting to production domain');
       const correctedURL = window.location.href.replace(
         'preview-main-gallery-ai.lovable.app',
@@ -49,6 +51,15 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
       );
       window.location.href = correctedURL;
       return true;
+    }
+    
+    // Check for development domain and adapt behavior
+    const isDev = currentHostname === 'localhost' || 
+                 currentHostname.includes('127.0.0.1') ||
+                 currentHostname.includes('lovableproject.com');
+    
+    if (isDev) {
+      console.log('Detected development environment:', currentHostname);
     }
     
     // Extract from hash first (most common with OAuth providers)
@@ -85,6 +96,7 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
         };
         
         // Also store in localStorage for web app use
+        localStorage.setItem('access_token', accessToken);
         localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
         if (email) {
           localStorage.setItem('main_gallery_user_email', email);
@@ -106,10 +118,12 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
         
         console.log('Successfully set up session from OAuth redirect');
         
-        // Redirect to gallery after successful auth
-        setTimeout(() => {
-          window.location.href = getGalleryUrl();
-        }, 500);
+        // Redirect to gallery after successful auth if not in development
+        if (!isDev) {
+          setTimeout(() => {
+            window.location.href = getGalleryUrl();
+          }, 500);
+        }
         
         return true;
       }
@@ -120,12 +134,13 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
       const params = new URLSearchParams(search);
       const accessToken = params.get('access_token');
       const refreshToken = params.get('refresh_token') || '';
+      const email = params.get('email');
       
       if (accessToken) {
         console.log('Setting session with token from search params');
         
         // Update Supabase session
-        const { error } = await supabase.auth.setSession({
+        const { data, error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken
         });
@@ -135,17 +150,38 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
           return false;
         }
         
+        // Calculate token expiration (24 hours from now)
+        const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+          
+        // Store token info and user email for extension usage
+        const tokenData = {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          timestamp: Date.now(),
+          expires_at: expiresAt
+        };
+        
+        // Store in localStorage
+        localStorage.setItem('access_token', accessToken);
+        localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
+        if (email) {
+          localStorage.setItem('main_gallery_user_email', email);
+        }
+        
         console.log('Successfully set up session from URL query params');
         
-        // Redirect to gallery after successful auth
-        setTimeout(() => {
-          window.location.href = getGalleryUrl();
-        }, 500);
+        // Redirect to gallery after successful auth if not in development
+        if (!isDev) {
+          setTimeout(() => {
+            window.location.href = getGalleryUrl();
+          }, 500);
+        }
         
         return true;
       }
     }
     
+    console.log('No token found in URL hash or search params');
     return false;
   } catch (err) {
     console.error('Error handling OAuth redirect:', err);
@@ -164,8 +200,13 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
     
     // Check if this is an auth callback
     if (!url.includes('callback') && !url.includes('access_token')) {
+      console.log('Not an auth callback URL, skipping token extraction');
       return false;
     }
+    
+    // Log the URL we're processing (with token partially hidden for security)
+    const logUrl = url.replace(/access_token=([^&]+)/, 'access_token=****');
+    console.log('Processing auth callback URL:', logUrl);
     
     // Check for incorrect domain and redirect if needed
     if (url.includes('preview-main-gallery-ai.lovable.app')) {
@@ -178,13 +219,41 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
       return true;
     }
     
-    // Try to get hash fragment
-    const hashPart = url.split('#')[1];
+    // Check for development domain and adapt behavior
+    const isDev = url.includes('localhost') || 
+                 url.includes('127.0.0.1') ||
+                 url.includes('lovableproject.com');
     
-    if (!hashPart) {
+    if (isDev) {
+      console.log('Detected development environment');
+    }
+    
+    // Try to get hash fragment
+    let hashPart = '';
+    if (url.includes('#')) {
+      hashPart = url.split('#')[1];
+    }
+    
+    // No hash found, check if token is in query string
+    if (!hashPart || !hashPart.includes('access_token')) {
+      if (url.includes('?access_token=')) {
+        // Token is in query params
+        const queryString = url.split('?')[1];
+        const params = new URLSearchParams(queryString);
+        const accessToken = params.get('access_token');
+        
+        if (accessToken) {
+          console.log('Found access token in URL query parameters');
+          processAccessToken(accessToken, params.get('refresh_token') || '', params.get('email') || 'User', isDev);
+          return true;
+        }
+      }
+      
+      console.log('No access token found in URL hash or query');
       return false;
     }
     
+    // Process the hash fragment
     const params = new URLSearchParams(hashPart);
     const accessToken = params.get('access_token');
     const refreshToken = params.get('refresh_token') || '';
@@ -196,7 +265,17 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
     }
     
     console.log('Found access token in URL hash');
+    return processAccessToken(accessToken, refreshToken, email, isDev);
     
+  } catch (err) {
+    console.error('Error handling OAuth token from hash:', err);
+    return false;
+  }
+};
+
+// Helper function to process an access token
+function processAccessToken(accessToken: string, refreshToken: string, email: string, isDev: boolean): boolean {
+  try {
     // Calculate expiration (24 hours)
     const expiresAt = Date.now() + (24 * 60 * 60 * 1000);
     
@@ -209,6 +288,7 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
     };
     
     // Store in localStorage
+    localStorage.setItem('access_token', accessToken);
     localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
     localStorage.setItem('main_gallery_user_email', email);
     
@@ -237,10 +317,12 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
         } else {
           console.log('Successfully set Supabase session in handleOAuthTokenFromHash');
           
-          // Redirect to gallery after successful auth
-          setTimeout(() => {
-            window.location.href = getGalleryUrl();
-          }, 500);
+          // Redirect to gallery after successful auth if not in development
+          if (!isDev) {
+            setTimeout(() => {
+              window.location.href = getGalleryUrl();
+            }, 500);
+          }
         }
       });
     } catch (err) {
@@ -249,10 +331,10 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
     
     return true;
   } catch (err) {
-    console.error('Error handling OAuth token from hash:', err);
+    console.error('Error processing access token:', err);
     return false;
   }
-};
+}
 
 /**
  * Handle OAuth token in the production environment with multiple fallbacks

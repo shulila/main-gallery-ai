@@ -25,6 +25,7 @@ function checkSupportedURL(url) {
     // Supported domains
     const supportedDomains = [
       'midjourney.com',
+      'www.midjourney.com',
       'openai.com',
       'leonardo.ai',
       'app.leonardo.ai',
@@ -97,21 +98,66 @@ function safeSendMessage(tabId, message, callback, maxRetries = 3) {
   
   function attemptSend() {
     try {
-      chrome.tabs.sendMessage(tabId, message, (response) => {
+      // Check if tab exists first
+      chrome.tabs.get(tabId, (tab) => {
         if (chrome.runtime.lastError) {
-          console.error('Error sending message:', chrome.runtime.lastError);
-          
-          if (retryCount < maxRetries) {
-            console.log(`Retry attempt ${retryCount + 1}/${maxRetries}...`);
-            retryCount++;
-            setTimeout(attemptSend, 500 * retryCount); // Exponential backoff
-          } else {
-            console.error('Max retries reached, message could not be delivered');
-            if (callback) callback({ success: false, error: chrome.runtime.lastError.message });
-          }
-        } else {
-          if (callback) callback(response || { success: true });
+          console.error('Tab does not exist:', chrome.runtime.lastError);
+          if (callback) callback({ success: false, error: 'Tab does not exist' });
+          return;
         }
+        
+        // Tab exists, now try to send message
+        chrome.tabs.sendMessage(tabId, message, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('Error sending message:', chrome.runtime.lastError);
+            
+            if (retryCount < maxRetries) {
+              console.log(`Retry attempt ${retryCount + 1}/${maxRetries}...`);
+              retryCount++;
+              setTimeout(attemptSend, 500 * retryCount); // Exponential backoff
+            } else {
+              console.error('Max retries reached, message could not be delivered');
+              
+              // If this is a scan request and failed, try to inject content script again
+              if (message.action === 'startAutoScan' && retryCount >= maxRetries) {
+                console.log('Trying to inject content script before final attempt');
+                
+                try {
+                  chrome.scripting.executeScript({
+                    target: { tabId: tabId },
+                    files: ['content.js']
+                  }).then(() => {
+                    console.log('Content script injected, waiting before final attempt');
+                    setTimeout(() => {
+                      chrome.tabs.sendMessage(tabId, message, (finalResponse) => {
+                        if (chrome.runtime.lastError) {
+                          console.error('Final attempt failed:', chrome.runtime.lastError);
+                          if (callback) callback({ 
+                            success: false, 
+                            error: chrome.runtime.lastError.message,
+                            injectionAttempted: true
+                          });
+                        } else {
+                          if (callback) callback(finalResponse || { success: true });
+                        }
+                      });
+                    }, 1000);
+                  }).catch(err => {
+                    console.error('Error injecting content script:', err);
+                    if (callback) callback({ success: false, error: 'Content script injection failed' });
+                  });
+                } catch (err) {
+                  console.error('Error in injection logic:', err);
+                  if (callback) callback({ success: false, error: err.message });
+                }
+              } else {
+                if (callback) callback({ success: false, error: chrome.runtime.lastError.message });
+              }
+            }
+          } else {
+            if (callback) callback(response || { success: true });
+          }
+        });
       });
     } catch (err) {
       console.error('Exception sending message:', err);
@@ -120,6 +166,66 @@ function safeSendMessage(tabId, message, callback, maxRetries = 3) {
   }
   
   attemptSend();
+}
+
+// Ping a tab to check if content script is ready
+function pingTab(tabId, callback) {
+  try {
+    chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.log('Content script not ready:', chrome.runtime.lastError);
+        if (callback) callback(false);
+      } else {
+        console.log('Content script is ready:', response);
+        if (callback) callback(true);
+      }
+    });
+  } catch (err) {
+    console.error('Error pinging tab:', err);
+    if (callback) callback(false);
+  }
+}
+
+// Function to ensure content script is loaded
+function ensureContentScriptLoaded(tab, callback) {
+  if (!tab || !tab.id) {
+    console.error('Invalid tab');
+    if (callback) callback(false);
+    return;
+  }
+  
+  // First try pinging to see if content script is already loaded
+  pingTab(tab.id, (isReady) => {
+    if (isReady) {
+      if (callback) callback(true);
+      return;
+    }
+    
+    // Content script not loaded, inject it
+    console.log('Content script not ready, injecting...');
+    
+    try {
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
+      }).then(() => {
+        console.log('Content script injected, waiting for initialization');
+        
+        // Give it time to initialize
+        setTimeout(() => {
+          pingTab(tab.id, (isNowReady) => {
+            if (callback) callback(isNowReady);
+          });
+        }, 1000);
+      }).catch(err => {
+        console.error('Error injecting content script:', err);
+        if (callback) callback(false);
+      });
+    } catch (err) {
+      console.error('Exception injecting script:', err);
+      if (callback) callback(false);
+    }
+  });
 }
 
 // Handle action/icon clicks
@@ -170,67 +276,48 @@ chrome.action.onClicked.addListener(async (tab) => {
   
   console.log('User is logged in and on a supported tab, starting auto-scan');
   
-  // Send message to content script with retry mechanism
-  safeSendMessage(
-    tab.id, 
-    { 
-      action: 'startAutoScan',
-      options: { scrollDelay: 500, scrollStep: 800 }
-    },
-    (response) => {
-      if (response && response.success) {
-        console.log('Auto-scan initiated on page');
-        
-        createNotification(
-          'maingallery_scan_started', 
-          'Scanning Started', 
-          'MainGallery is scanning the page for AI images. Please keep the tab open.'
-        );
-      } else {
-        console.log('Auto-scan could not be started, injecting content script:', response);
-        
-        // Try to inject content script directly
-        chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['content.js']
-        }).then(() => {
-          // Retry message after injection with a delay
-          setTimeout(() => {
-            safeSendMessage(tab.id, { 
-              action: 'startAutoScan',
-              options: { scrollDelay: 500, scrollStep: 800 }
-            }, (retryResponse) => {
-              if (retryResponse && retryResponse.success) {
-                console.log('Auto-scan initiated after content script injection');
-                
-                createNotification(
-                  'maingallery_scan_started', 
-                  'Scanning Started', 
-                  'MainGallery is scanning the page for AI images. Please keep the tab open.'
-                );
-              } else {
-                console.error('Error in second attempt to start auto-scan:', retryResponse);
-                
-                createNotification(
-                  'maingallery_error', 
-                  'Scan Error', 
-                  'Could not scan the current page. Please refresh and try again.'
-                );
-              }
-            });
-          }, 1000);
-        }).catch(err => {
-          console.error('Error injecting content script:', err);
+  // Ensure content script is loaded
+  ensureContentScriptLoaded(tab, (isReady) => {
+    if (!isReady) {
+      console.error('Content script could not be loaded');
+      createNotification(
+        'maingallery_error', 
+        'Scan Error', 
+        'Could not initialize scanner. Please refresh the page and try again.'
+      );
+      return;
+    }
+    
+    // Content script is ready, send scan message
+    safeSendMessage(
+      tab.id, 
+      { 
+        action: 'startAutoScan',
+        options: { scrollDelay: 500, scrollStep: 800 }
+      },
+      (response) => {
+        if (response && response.success) {
+          console.log('Auto-scan initiated on page');
           
+          createNotification(
+            'maingallery_scan_started', 
+            'Scanning Started', 
+            'MainGallery is scanning the page for AI images. Please keep the tab open.'
+          );
+        } else {
+          console.log('Auto-scan could not be started, will retry:', response);
+          
+          // Already tried in safeSendMessage's auto-retry but failed
+          // Show error to user
           createNotification(
             'maingallery_error', 
             'Scan Error', 
             'Could not scan the current page. Please refresh and try again.'
           );
-        });
+        }
       }
-    }
-  );
+    );
+  });
 });
 
 // Handle messages from content scripts with improved error handling
@@ -238,7 +325,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received in background script:', message);
   
   try {
-    if (message.action === 'log') {
+    if (message.action === 'CONTENT_SCRIPT_READY') {
+      console.log('Content script ready on:', message.location);
+      sendResponse({ success: true });
+    }
+    else if (message.action === 'log') {
       console.log('FROM CONTENT SCRIPT:', message.data);
       sendResponse({ success: true });
     } 

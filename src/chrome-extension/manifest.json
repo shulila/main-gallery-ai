@@ -45,6 +45,8 @@
     {
       "matches": [
         "https://*.midjourney.com/*",
+        "https://www.midjourney.com/*", 
+        "https://midjourney.com/*",
         "https://*.leonardo.ai/*",
         "https://app.leonardo.ai/*",
         "https://openai.com/dall-e/*", 

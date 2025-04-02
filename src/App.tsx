@@ -33,23 +33,21 @@ function App() {
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/auth" element={<AuthPage />} />
+        
+        {/* Critical: Ensure all auth callback paths are properly routed */}
         <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/auth/callback/*" element={<AuthCallback />} />
+        <Route path="/_callback" element={<AuthCallback />} />
+        <Route path="/_callback/*" element={<AuthCallback />} />
+        <Route path="/callback" element={<AuthCallback />} />
+        <Route path="/callback/*" element={<AuthCallback />} />
+        
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/platforms" element={<Platforms />} />
         <Route path="/start" element={<Start />} />
         <Route path="/detail/:id" element={<Detail />} />
         <Route path="/features/:id" element={<FeatureDetail />} />
-        
-        {/* Special wildcard route to handle auth callback with hash fragments */}
-        <Route path="/auth/callback/*" element={<AuthCallback />} />
-        
-        {/* Special fallback for auth callback with fragment */}
-        <Route path="/_callback/*" element={<AuthCallback />} />
-        
-        {/* Added catchall routes for common OAuth callback paths */}
-        <Route path="/callback" element={<AuthCallback />} />
-        <Route path="/callback/*" element={<AuthCallback />} />
         
         {/* Catch all unknown routes */}
         <Route path="*" element={<NotFound />} />

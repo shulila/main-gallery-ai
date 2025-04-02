@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -9,6 +8,16 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 // Get the correct production URL for auth redirects - NEVER use localhost
 const getProductionAuthRedirectUrl = () => {
+  if (typeof window !== 'undefined') {
+    // Use the current hostname for development/preview environments
+    if (window.location.hostname.includes('lovableproject.com') || 
+        window.location.hostname === 'localhost' || 
+        window.location.hostname.includes('127.0.0.1')) {
+      return `${window.location.origin}/auth/callback`;
+    }
+  }
+  
+  // Always fallback to production URL for all other environments
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 

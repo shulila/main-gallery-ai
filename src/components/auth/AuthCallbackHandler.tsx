@@ -23,7 +23,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
     // Critical fix: Check for incorrect domain first and redirect if needed
     const currentURL = window.location.href;
     if (
-      currentURL.includes("preview-main-gallery-ai.lovable.app/auth/callback") &&
+      currentURL.includes("preview-main-gallery-ai.lovable.app") &&
       (currentURL.includes("#access_token=") || currentURL.includes("?access_token="))
     ) {
       console.warn("Detected auth callback on incorrect domain, redirecting to production domain");
@@ -40,6 +40,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
     const completeAuth = async () => {
       try {
         console.log('Starting OAuth callback processing with URL:', window.location.href);
+        setStatus('Processing login...');
         
         // Try direct hash token extraction first (fastest method)
         const hashHandled = handleOAuthTokenFromHash();

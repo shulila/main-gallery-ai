@@ -6,6 +6,7 @@ function isSupportedSite() {
   // List of supported AI platforms
   const SUPPORTED_DOMAINS = [
     'midjourney.com',
+    'www.midjourney.com',
     'leonardo.ai',
     'app.leonardo.ai',
     'openai.com',
@@ -25,6 +26,18 @@ function isSupportedSite() {
     window.location.hostname.includes(domain));
 }
 
+// Message the background script when content script loads
+function notifyBackgroundScriptReady() {
+  try {
+    chrome.runtime.sendMessage({ 
+      action: 'CONTENT_SCRIPT_READY',
+      location: window.location.href
+    });
+  } catch (err) {
+    console.error('Error notifying background script:', err);
+  }
+}
+
 // Inject the content script into the page
 function injectScript() {
   try {
@@ -41,14 +54,7 @@ function injectScript() {
       console.log('MainGallery.AI injection script ready');
       
       // Notify background script that content script is ready
-      try {
-        chrome.runtime.sendMessage({
-          action: 'log',
-          data: 'Content script and injection ready on ' + window.location.href
-        }).catch(err => console.error('Error notifying background:', err));
-      } catch (err) {
-        console.error('Error sending ready message:', err);
-      }
+      notifyBackgroundScriptReady();
     });
   } catch (err) {
     console.error('Error injecting script:', err);
@@ -194,28 +200,55 @@ function extractImagesFromPage() {
   
   if (isMidjourney) {
     console.log('Detected Midjourney site, using specialized selectors');
-    // Try multiple selectors to catch different Midjourney UI versions
-    const gridSelectors = [
-      '.grid-card img', // Common grid layout
-      '.imageContainer img', // Alternative container
-      '.image-grid-content img', // Another alternative
-      '.showcase-grid img', // Showcase view
-      '.gallery img', // Gallery view
-      '[data-grid="true"] img', // Data attribute grid
-      '.gridItemContainer img', // Grid item containers
-      // Recent/specific Midjourney UI selectors
+    
+    // Latest Midjourney-specific selectors (2025 April update)
+    // These selectors target the specific containers and image elements in Midjourney's UI
+    const midjourneySelectors = [
+      // Most specific selectors for generated images
+      'img[src*="/generated/"]',
+      'img[src*="cdn.midjourney.com"]',
+      'img[src*="discord.com/channels"][src*="midjourney"]',
+      
+      // Common MJ grid layouts
+      '.grid-card img', 
+      '.imageContainer img', 
+      '.image-grid-content img',
+      '.showcase-grid img',
+      '.gallery img',
+      '[data-grid="true"] img',
+      '.gridItemContainer img',
+      
+      // Feed item layouts
       '.feed-item img',
       '.card-img-top',
       '.mj-image',
-      '.mj-result'
+      '.mj-result',
+      
+      // Job result containers
+      '.job-card img',
+      '.job-grid img',
+      '.result-image img',
+      '.result img',
+      
+      // New layouts (2025)
+      '.midjourney-image-container img',
+      '.midjourney-gallery-item img',
+      '.image-result-container img',
+      '.showcase-image img',
+      '.mjgrid-item img',
+      '[data-testid="image-result"] img'
     ];
     
     // Try each selector
-    gridSelectors.forEach(selector => {
-      const found = document.querySelectorAll(selector);
-      if (found && found.length > 0) {
-        console.log(`Found ${found.length} images using selector: ${selector}`);
-        midjourneyGridImages = [...midjourneyGridImages, ...Array.from(found)];
+    midjourneySelectors.forEach(selector => {
+      try {
+        const found = document.querySelectorAll(selector);
+        if (found && found.length > 0) {
+          console.log(`Found ${found.length} images using selector: ${selector}`);
+          midjourneyGridImages = [...midjourneyGridImages, ...Array.from(found)];
+        }
+      } catch (err) {
+        console.error(`Error querying selector ${selector}:`, err);
       }
     });
     
@@ -225,6 +258,32 @@ function extractImagesFromPage() {
     // If specialized selectors didn't work, log it but continue with regular extraction
     if (midjourneyGridImages.length === 0) {
       console.warn('No Midjourney grid images found with specialized selectors, falling back to generic detection');
+      
+      // When specialized selectors fail, try a broader approach to find images
+      // For very recently changed Midjourney layouts, these may catch images
+      try {
+        const allImagesWithSrc = document.querySelectorAll('img[src]:not([src^="data:"])');
+        console.log(`Found ${allImagesWithSrc.length} total images with src attributes`);
+        
+        // Filter for likely Midjourney images based on common URL patterns
+        const likelyMjImages = Array.from(allImagesWithSrc).filter(img => {
+          const src = img.src.toLowerCase();
+          const isLargeEnough = (img.width > 200 || img.height > 200);
+          const hasGoodSource = (
+            src.includes('cdn') || 
+            src.includes('storage') || 
+            src.includes('media') ||
+            src.includes('image') ||
+            src.includes('assets')
+          );
+          return isLargeEnough && hasGoodSource;
+        });
+        
+        console.log(`Found ${likelyMjImages.length} likely Midjourney images by URL pattern`);
+        midjourneyGridImages = [...midjourneyGridImages, ...likelyMjImages];
+      } catch (err) {
+        console.error('Error in fallback Midjourney image detection:', err);
+      }
     }
   }
   
@@ -233,6 +292,22 @@ function extractImagesFromPage() {
     midjourneyGridImages : imgElements;
   
   console.log(`Processing ${allImages.length} images (${isMidjourney ? 'Midjourney specialized' : 'standard'} selection)`);
+  
+  // Debug: log some sample images for troubleshooting
+  if (allImages.length > 0) {
+    console.log('Sample image details:');
+    const sampleSize = Math.min(3, allImages.length);
+    for (let i = 0; i < sampleSize; i++) {
+      const img = allImages[i];
+      console.log(`Sample ${i+1}:`, {
+        src: img.src ? img.src.substring(0, 50) + '...' : 'no src',
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height,
+        classes: img.className,
+        alt: img.alt || 'no alt'
+      });
+    }
+  }
   
   allImages.forEach((img) => {
     processedCount++;
@@ -245,19 +320,19 @@ function extractImagesFromPage() {
     const classes = img.className || '';
     
     if (processedCount % 20 === 0 || processedCount <= 5) {
-      console.log(`Examining image ${processedCount}/${allImages.length}: ${src.substring(0, 50)}...`);
+      console.log(`Examining image ${processedCount}/${allImages.length}: ${src ? src.substring(0, 50) + '...' : 'no src'}`);
       console.log(`  - Size: ${imgWidth}x${imgHeight}, Alt: "${alt.substring(0, 30)}...", Class: ${classes}`);
     }
     
     // Skip if already extracted, no src, too small, or data URL
-    if (extractedUrls.has(src)) {
-      skippedCount++;
-      if (skippedCount % 20 === 0) console.log(`Skipped ${skippedCount} duplicate images so far`);
+    if (!src) {
+      console.log(`Skipping image with no src`);
       return;
     }
     
-    if (!src) {
-      console.log(`Skipping image with no src`);
+    if (extractedUrls.has(src)) {
+      skippedCount++;
+      if (skippedCount % 20 === 0) console.log(`Skipped ${skippedCount} duplicate images so far`);
       return;
     }
     
@@ -452,20 +527,90 @@ function showToast(message, type = 'info') {
   return toast;
 }
 
+// Send ready message to background script
+function sendReadyMessage() {
+  try {
+    chrome.runtime.sendMessage({
+      action: 'CONTENT_SCRIPT_READY',
+      location: window.location.href
+    });
+  } catch (err) {
+    console.error('Error sending ready message:', err);
+  }
+}
+
 // Check if we're on a supported site and inject script
 if (isSupportedSite()) {
   console.log('MainGallery.AI running on supported site:', window.location.hostname);
   injectScript();
   setupMutationObserver();
+  sendReadyMessage();
+  
+  // Additional setup specifically for Midjourney
+  if (window.location.hostname.includes('midjourney')) {
+    console.log('Detected Midjourney site, setting up specialized handling');
+    
+    // Set up enhanced mutation observer for Midjourney's dynamic content
+    const midjourneyObserver = new MutationObserver((mutations) => {
+      let shouldScan = false;
+      
+      mutations.forEach(mutation => {
+        // Look for added nodes that might be images or containers
+        if (mutation.addedNodes.length > 0) {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeName === 'IMG') {
+              shouldScan = true;
+              break;
+            }
+            
+            // Check if the node contains images
+            if (node.querySelectorAll) {
+              const images = node.querySelectorAll('img');
+              if (images.length > 0) {
+                shouldScan = true;
+                break;
+              }
+            }
+          }
+        }
+      });
+      
+      if (shouldScan) {
+        console.log('Midjourney observer detected new images, logging details');
+        // Just log this detection - actual scanning happens on user action
+        
+        // Count visible images for debug purposes
+        const visibleImages = document.querySelectorAll('img[src]:not([src^="data:"])');
+        console.log(`Midjourney has ${visibleImages.length} visible images on page now`);
+      }
+    });
+    
+    // Observe Midjourney DOM for changes
+    midjourneyObserver.observe(document.body, {
+      childList: true, 
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['src']
+    });
+    
+    console.log('Midjourney specialized observer set up');
+  }
 } else {
   console.log('MainGallery.AI not running on unsupported site:', window.location.hostname);
 }
 
 // Listen for messages from the extension
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Content script received message:', request);
   
   try {
+    // Always respond to ping requests to establish connection
+    if (request.action === 'ping' || request.action === 'PING') {
+      console.log('Received ping, responding with pong');
+      sendResponse({ success: true, action: 'pong', from: 'content_script' });
+      return true;
+    }
+    
     if (request.action === 'extractImages') {
       if (!isSupportedSite()) {
         sendResponse({ images: [], success: false, reason: 'unsupported_site' });
@@ -492,29 +637,33 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       // Start the auto-scan process
       try {
         // Auto-scroll to the bottom of the page
-        await autoScrollToBottom(800, 500);
-        console.log('Auto-scroll complete, extracting images');
-        
-        // After scrolling, extract all images
-        const result = extractImages();
-        const images = result.images || [];
-        console.log(`Found ${images.length} images after scrolling`);
-        
-        // Show success toast
-        if (images.length > 0) {
-          showToast(`Found ${images.length} images, sending to gallery`, 'success');
-        } else {
-          showToast('No images found on this page', 'info');
-        }
-        
-        // Send the results back to background script
-        chrome.runtime.sendMessage({
-          action: 'scanComplete',
-          images: images,
-          success: images.length > 0
+        autoScrollToBottom(800, 500).then(() => {
+          console.log('Auto-scroll complete, extracting images');
+          
+          // After scrolling, extract all images
+          const result = extractImages();
+          const images = result.images || [];
+          console.log(`Found ${images.length} images after scrolling`);
+          
+          // Show success toast
+          if (images.length > 0) {
+            showToast(`Found ${images.length} images, sending to gallery`, 'success');
+          } else {
+            showToast('No images found on this page', 'info');
+          }
+          
+          // Send the results back to background script
+          chrome.runtime.sendMessage({
+            action: 'scanComplete',
+            images: images,
+            success: images.length > 0
+          }).catch(err => {
+            console.error('Error sending scan results to background:', err);
+            showToast('Error syncing images to gallery', 'error');
+          });
         }).catch(err => {
-          console.error('Error sending scan results to background:', err);
-          showToast('Error syncing images to gallery', 'error');
+          console.error('Auto-scroll error:', err);
+          showToast('Error during page scanning', 'error');
         });
       } catch (err) {
         console.error('Error in auto-scanning process:', err);
@@ -549,3 +698,6 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   return true; // Keep channel open for async response
 });
 
+// Send initial ready message for monitoring
+console.log('MainGallery.AI content script fully loaded and initialized');
+notifyBackgroundScriptReady();
