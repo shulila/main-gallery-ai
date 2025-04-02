@@ -177,6 +177,9 @@ function constructGoogleOAuthUrl(redirectUrl) {
     prompt: 'consent'
   });
   
+  // REMOVED access_type=offline parameter as it can cause issues with OAuth flows
+  // that require an implicit token grant
+  
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
