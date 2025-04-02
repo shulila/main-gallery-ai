@@ -2,6 +2,26 @@
 import { supabase } from '@/integrations/supabase/client';
 
 /**
+ * Get the production URL for auth redirects
+ * @returns Base URL for authentication
+ */
+export const getAuthBaseUrl = (): string => {
+  // Support both the preview domain and the production domain
+  const isPreviewDomain = window.location.hostname.includes('preview-main-gallery-ai');
+  return isPreviewDomain 
+    ? 'https://preview-main-gallery-ai.lovable.app' 
+    : 'https://main-gallery-hub.lovable.app';
+};
+
+/**
+ * Get the gallery URL
+ * @returns URL for the gallery page
+ */
+export const getGalleryUrl = (): string => {
+  return `${getAuthBaseUrl()}/gallery`;
+};
+
+/**
  * Handles OAuth redirect by extracting token from URL hash and setting up session
  * @returns A promise that resolves when token handling is complete
  */
@@ -80,7 +100,7 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
         
         // Redirect to gallery after successful auth
         setTimeout(() => {
-          window.location.href = '/gallery';
+          window.location.href = getGalleryUrl();
         }, 500);
         
         return true;
@@ -111,7 +131,7 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
         
         // Redirect to gallery after successful auth
         setTimeout(() => {
-          window.location.href = '/gallery';
+          window.location.href = getGalleryUrl();
         }, 500);
         
         return true;
@@ -200,7 +220,7 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
           
           // Redirect to gallery after successful auth
           setTimeout(() => {
-            window.location.href = '/gallery';
+            window.location.href = getGalleryUrl();
           }, 500);
         }
       });

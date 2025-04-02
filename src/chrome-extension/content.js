@@ -17,6 +17,7 @@ function isSupportedSite() {
     'pika.art',
     'playgroundai.com',
     'creator.nightcafe.studio',
+    'discord.com'
   ];
 
   // Check if the current domain matches any of the supported domains
@@ -59,23 +60,18 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Auto-scroll function
+// Auto-scroll function - improved to ensure complete scrolling
 async function autoScrollToBottom(scrollStep = 800, scrollDelay = 500) {
   try {
     console.log('Starting auto-scroll to bottom');
+    
+    // Show scrolling toast
+    showToast('Scanning page for AI images...', 'info');
+    
     let lastScrollTop = -1;
     let currentScrollTop = 0;
     let scrollAttempts = 0;
-    const maxScrollAttempts = 30; // Prevent infinite scrolling
-    
-    // Show scrolling toast if possible
-    try {
-      if (window.__MAINGALLERY__ && typeof window.__MAINGALLERY__.showScrollingToast === 'function') {
-        window.__MAINGALLERY__.showScrollingToast();
-      }
-    } catch (e) {
-      console.error('Error showing scroll toast:', e);
-    }
+    const maxScrollAttempts = 50; // Increase max attempts to ensure we get everything
     
     // Scroll until we reach the bottom or max attempts
     while (lastScrollTop !== currentScrollTop && scrollAttempts < maxScrollAttempts) {
@@ -85,62 +81,61 @@ async function autoScrollToBottom(scrollStep = 800, scrollDelay = 500) {
       currentScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
       scrollAttempts++;
       
-      // Update progress if possible
-      try {
-        if (window.__MAINGALLERY__ && typeof window.__MAINGALLERY__.updateScrollingProgress === 'function') {
-          window.__MAINGALLERY__.updateScrollingProgress(Math.min((scrollAttempts / maxScrollAttempts) * 100, 99));
-        }
-      } catch (e) {
-        console.error('Error updating scroll progress:', e);
+      console.log(`Scroll attempt ${scrollAttempts}/${maxScrollAttempts}, position: ${currentScrollTop}`);
+      
+      // Wait longer every 10 scrolls to allow images to load
+      if (scrollAttempts % 10 === 0) {
+        console.log('Extended wait to allow images to load');
+        await delay(1500); // Longer delay every 10 scrolls
       }
-    }
-    
-    // Complete the progress indicator
-    try {
-      if (window.__MAINGALLERY__ && typeof window.__MAINGALLERY__.updateScrollingProgress === 'function') {
-        window.__MAINGALLERY__.updateScrollingProgress(100);
-      }
-    } catch (e) {
-      console.error('Error completing scroll progress:', e);
     }
     
     // Scroll back to top
+    console.log('Scrolling back to top');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    await delay(500);
     
     console.log(`Auto-scrolling complete after ${scrollAttempts} attempts.`);
+    showToast('Scan complete, extracting images...', 'success');
     return true;
   } catch (err) {
     console.error('Error during auto-scroll:', err);
+    showToast('Error while scanning page', 'error');
     return false;
   }
 }
 
 // Extract images from page
 function extractImages() {
-  return new Promise((resolve, reject) => {
-    try {
-      if (!window.__MAINGALLERY__) {
-        console.error('Main Gallery extraction utilities not available');
-        resolve({ images: extractImagesFromPage(), success: true });
-        return;
-      }
-      
+  try {
+    // Try to use the injection method first if available
+    if (window.__MAINGALLERY__ && typeof window.__MAINGALLERY__.extractAIImages === 'function') {
       const result = window.__MAINGALLERY__.extractAIImages();
-      resolve({ 
+      console.log('Used injection script to extract images:', result.images?.length || 0);
+      return { 
         images: result.images || [], 
         success: result.images && result.images.length > 0 
-      });
-    } catch (err) {
-      console.error('Error extracting images:', err);
-      // Fallback to direct DOM extraction
-      resolve({ images: extractImagesFromPage(), success: true });
+      };
     }
-  });
+    
+    // Fallback to direct DOM extraction
+    return { 
+      images: extractImagesFromPage(), 
+      success: true 
+    };
+  } catch (err) {
+    console.error('Error extracting images:', err);
+    // Fallback to direct DOM extraction
+    return { 
+      images: extractImagesFromPage(), 
+      success: true 
+    };
+  }
 }
 
-// Extract images directly from DOM as fallback
+// Extract images directly from DOM
 function extractImagesFromPage() {
-  console.log('Using fallback image extraction method');
+  console.log('Using direct DOM extraction method');
   const images = [];
   const extractedUrls = new Set();
 
@@ -168,20 +163,34 @@ function extractImagesFromPage() {
       platform = 'pika';
     } else if (window.location.hostname.includes('runway')) {
       platform = 'runway';
+    } else if (window.location.hostname.includes('discord')) {
+      platform = 'discord';
     }
     
     // Get prompt from alt text or nearby elements
     let prompt = img.alt || img.title || '';
     if (!prompt && img.parentElement) {
+      // Try to find prompt in parent elements
       const promptElement = img.parentElement.querySelector('.prompt, [data-prompt], .caption, .description');
       if (promptElement) {
         prompt = promptElement.textContent || '';
       }
+      
+      // Special handling for Midjourney
+      if (platform === 'midjourney') {
+        // Look for nearby prompt text
+        const nearbyText = img.closest('[role="button"]')?.parentElement?.textContent || '';
+        if (nearbyText && !prompt) {
+          prompt = nearbyText;
+        }
+      }
     }
     
-    // Create image object
+    // Create image object with unique ID
+    const uniqueId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     images.push({
-      id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: uniqueId,
       url: src,
       prompt: prompt.trim(),
       platform: platform,
@@ -193,7 +202,7 @@ function extractImagesFromPage() {
     extractedUrls.add(src);
   });
 
-  console.log(`Extracted ${images.length} images using fallback method`);
+  console.log(`Extracted ${images.length} images using direct DOM method`);
   return images;
 }
 
@@ -209,19 +218,28 @@ function showToast(message, type = 'info') {
   toast.style.borderRadius = '4px';
   toast.style.fontSize = '14px';
   toast.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+  toast.style.display = 'flex';
+  toast.style.alignItems = 'center';
+  toast.style.gap = '8px';
   
-  // Set colors based on type
+  // Add icon
+  const icon = document.createElement('span');
+  
   if (type === 'error') {
     toast.style.background = '#f44336';
     toast.style.color = 'white';
+    icon.innerHTML = '❌';
   } else if (type === 'success') {
     toast.style.background = '#4caf50';
     toast.style.color = 'white';
+    icon.innerHTML = '✓';
   } else {
     toast.style.background = '#2196f3';
     toast.style.color = 'white';
+    icon.innerHTML = 'ℹ️';
   }
   
+  toast.prepend(icon);
   document.body.appendChild(toast);
   
   // Animate in
@@ -247,10 +265,10 @@ function showToast(message, type = 'info') {
 
 // Check if we're on a supported site and inject script
 if (isSupportedSite()) {
-  console.log('MainGallery.AI running on supported site');
+  console.log('MainGallery.AI running on supported site:', window.location.hostname);
   injectScript();
 } else {
-  console.log('MainGallery.AI not running on unsupported site');
+  console.log('MainGallery.AI not running on unsupported site:', window.location.hostname);
 }
 
 // Listen for messages from the extension
@@ -264,53 +282,31 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         return true;
       }
       
-      extractImages()
-        .then(result => {
-          sendResponse(result);
-        })
-        .catch(err => {
-          console.error('Error in extractImages:', err);
-          sendResponse({ images: [], success: false, error: err.message });
-        });
-      
-      return true; // Indicates async response
+      const result = extractImages();
+      sendResponse(result);
+      return true;
     } 
     else if (request.action === 'startAutoScan') {
       console.log('Starting auto-scanning with scrolling');
       
-      // Immediately send response that scan started (important to avoid connection errors)
-      sendResponse({ success: true, status: 'scan_started' });
-      
       if (!isSupportedSite()) {
         console.log('Not a supported site, not scanning');
         showToast('This site is not supported for image scanning', 'error');
-        
-        // Notify background about the unsupported site
-        try {
-          chrome.runtime.sendMessage({
-            action: 'scanComplete',
-            success: false,
-            reason: 'unsupported_site',
-            images: []
-          });
-        } catch (err) {
-          console.error('Error sending unsupported site message:', err);
-        }
-        
+        sendResponse({ success: false, reason: 'unsupported_site' });
         return true;
       }
       
+      // Immediately send response that scan started (important to avoid connection errors)
+      sendResponse({ success: true, status: 'scan_started' });
+      
       // Start the auto-scan process
       try {
-        // Display start toast
-        showToast('Starting image scan, please wait...', 'info');
-        
         // Auto-scroll to the bottom of the page
         await autoScrollToBottom(800, 500);
         console.log('Auto-scroll complete, extracting images');
         
         // After scrolling, extract all images
-        const result = await extractImages();
+        const result = extractImages();
         const images = result.images || [];
         console.log(`Found ${images.length} images after scrolling`);
         
@@ -347,13 +343,13 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         }
       }
       
-      return true; // We already sent the response
+      return true; // we've already sent the response
     }
     else if (request.action === 'showUnsupportedTabToast') {
       const message = request.message || "Please switch to a supported AI platform (Midjourney, DALL·E, etc) to use MainGallery.AI";
       showToast(message, 'error');
       sendResponse({ success: true });
-      return false;
+      return true;
     }
   } catch (err) {
     console.error('Error handling message in content script:', err);

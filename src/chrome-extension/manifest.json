@@ -35,6 +35,7 @@
     "https://*.playgroundai.com/*",
     "https://creator.nightcafe.studio/*",
     "https://discord.com/channels/*midjourney*",
+    "https://preview-main-gallery-ai.lovable.app/*",
     "https://main-gallery-hub.lovable.app/*"
   ],
   "background": {
@@ -44,19 +45,16 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.midjourney.com/app/*",
-        "https://*.midjourney.com/create/*",
-        "https://*.midjourney.com/archive/*",
-        "https://*.midjourney.com/organize/*",
-        "https://*.leonardo.ai/workspace/*",
-        "https://app.leonardo.ai/workspace/*",
+        "https://*.midjourney.com/*",
+        "https://*.leonardo.ai/*",
+        "https://app.leonardo.ai/*",
         "https://openai.com/dall-e/*", 
-        "https://dreamstudio.ai/generate/*",
-        "https://*.stability.ai/generate/*",
-        "https://*.runwayml.com/generate/*",
-        "https://*.pika.art/create/*",
-        "https://*.playgroundai.com/create/*",
-        "https://creator.nightcafe.studio/create/*",
+        "https://dreamstudio.ai/*",
+        "https://*.stability.ai/*",
+        "https://*.runwayml.com/*",
+        "https://*.pika.art/*",
+        "https://*.playgroundai.com/*",
+        "https://creator.nightcafe.studio/*",
         "https://discord.com/channels/*midjourney*"
       ],
       "js": ["content.js"],
@@ -64,6 +62,7 @@
     },
     {
       "matches": [
+        "https://preview-main-gallery-ai.lovable.app/*",
         "https://main-gallery-hub.lovable.app/*"
       ],
       "js": ["bridge.js"],

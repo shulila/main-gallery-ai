@@ -2,49 +2,15 @@
 // MainGallery background script
 console.log('MainGallery.AI: background script initialized');
 
-// Utility to validate if token is valid from chrome.storage
-async function isLoggedIn() {
-  return new Promise((resolve) => {
-    try {
-      chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
-        const token = result.main_gallery_auth_token;
-        if (token && token.access_token) {
-          const isExpired = token.expires_at && Date.now() > token.expires_at;
-          if (!isExpired) {
-            return resolve(true);
-          }
-          chrome.storage.sync.remove(['main_gallery_auth_token'], () => resolve(false));
-        } else {
-          resolve(false);
-        }
-      });
-    } catch (err) {
-      console.error('Error in isLoggedIn:', err);
-      resolve(false);
-    }
-  });
-}
+// Import auth utilities
+import { 
+  isLoggedIn, 
+  openAuthPage, 
+  setupAuthCallbackListener, 
+  getGalleryUrl 
+} from './utils/auth.js';
 
-// Open auth page with proper query parameters
-function openAuthPage(tabId = null, options = {}) {
-  const authUrl = new URL('https://main-gallery-hub.lovable.app/auth');
-  
-  // Add query parameters
-  Object.entries(options).forEach(([key, value]) => {
-    authUrl.searchParams.append(key, value);
-  });
-
-  // Open URL in existing tab or create new tab
-  if (tabId) {
-    chrome.tabs.update(tabId, { url: authUrl.toString() });
-  } else {
-    chrome.tabs.create({ url: authUrl.toString() });
-  }
-  
-  console.log('Opened auth URL:', authUrl.toString());
-}
-
-// Check if URL is from a supported AI platform
+// Helper function to check if URL is from a supported AI platform
 function checkSupportedURL(url) {
   if (!url) return false;
   
@@ -81,7 +47,7 @@ function checkSupportedURL(url) {
       '/dall-e'
     ];
     
-    // Check domain and path match
+    // Check domain match
     const isDomainSupported = supportedDomains.some(domain => 
       urlObj.hostname === domain || urlObj.hostname.endsWith(`.${domain}`)
     );
@@ -93,6 +59,11 @@ function checkSupportedURL(url) {
     
     // Special case for OpenAI
     if (urlObj.hostname.includes('openai.com') && urlObj.pathname.includes('/dall-e')) {
+      return true;
+    }
+    
+    // Special case for Midjourney - accept any URL on midjourney.com
+    if (urlObj.hostname.includes('midjourney.com')) {
       return true;
     }
     
@@ -117,12 +88,15 @@ function createNotification(id, title, message) {
   }
 }
 
-// Action handler for extension icon clicks
+// Set up the auth callback listener immediately
+setupAuthCallbackListener();
+
+// Handle action/icon clicks
 chrome.action.onClicked.addListener(async (tab) => {
-  console.log('Extension icon clicked on tab:', tab.url);
+  console.log('Extension icon clicked on tab:', tab?.url);
   
   if (!tab || !tab.url || !tab.id) {
-    console.log('Invalid tab or missing URL/ID');
+    console.error('Invalid tab or missing URL/ID');
     return;
   }
   
@@ -140,7 +114,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     
     if (loggedIn) {
       // Redirect to gallery if logged in
-      chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery' });
+      chrome.tabs.create({ url: getGalleryUrl() });
     } else {
       // Redirect to auth page if not logged in
       openAuthPage(null, { redirect: 'gallery', from: 'extension' });
@@ -295,11 +269,13 @@ async function syncImagesToGallery(images) {
       synced_at: Date.now()
     }));
     
-    // Send to web app or store for later
-    chrome.tabs.query({ url: 'https://main-gallery-hub.lovable.app/gallery*' }, (tabs) => {
+    // Always prefer the web app over the popup for syncing
+    // First check if gallery tab is already open
+    chrome.tabs.query({ url: `${getGalleryUrl()}*` }, (tabs) => {
       if (tabs.length > 0) {
-        // If gallery is open, send message
+        // If gallery is open, send message through bridge
         try {
+          console.log('Gallery tab found, sending images via bridge');
           chrome.tabs.sendMessage(tabs[0].id, {
             type: 'GALLERY_IMAGES',
             images: enrichedImages
@@ -310,6 +286,8 @@ async function syncImagesToGallery(images) {
               openGalleryWithImages(enrichedImages);
             } else {
               console.log('Successfully sent images to gallery tab:', response);
+              // Focus the gallery tab
+              chrome.tabs.update(tabs[0].id, { active: true });
             }
           });
         } catch (err) {
@@ -331,27 +309,48 @@ async function syncImagesToGallery(images) {
   }
 }
 
+// Open gallery with images to sync
 function openGalleryWithImages(images) {
   // Create gallery tab with sync flag
-  chrome.tabs.create({ url: 'https://main-gallery-hub.lovable.app/gallery?sync=true' });
+  chrome.tabs.create({ url: `${getGalleryUrl()}?sync=true` });
   
   // Set up listener for when gallery tab is ready
   chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, tab) {
     if (changeInfo.status === 'complete' && 
-        tab.url && tab.url.includes('main-gallery-hub.lovable.app/gallery')) {
+        tab.url && tab.url.includes(getGalleryUrl())) {
       
       // Wait a bit to ensure the page is fully loaded and bridge script is injected
       setTimeout(() => {
-        chrome.tabs.sendMessage(tabId, {
-          type: 'GALLERY_IMAGES',
-          images: images
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            console.error('Error sending images to new tab:', chrome.runtime.lastError);
-          } else {
-            console.log('Successfully sent images to new gallery tab:', response);
-          }
-        });
+        try {
+          chrome.tabs.sendMessage(tabId, {
+            type: 'GALLERY_IMAGES',
+            images: images
+          }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.error('Error sending images to new tab:', chrome.runtime.lastError);
+              
+              // Store images in session storage as fallback
+              chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                func: (imagesJson) => {
+                  try {
+                    window.sessionStorage.setItem('maingallery_sync_images', imagesJson);
+                    console.log('Stored images in session storage for gallery to pick up');
+                  } catch (e) {
+                    console.error('Error storing images in session storage:', e);
+                  }
+                },
+                args: [JSON.stringify(images)]
+              }).catch(err => {
+                console.error('Error executing session storage script:', err);
+              });
+            } else {
+              console.log('Successfully sent images to new gallery tab:', response);
+            }
+          });
+        } catch (err) {
+          console.error('Error sending images to new tab:', err);
+        }
       }, 1500); // Increased delay to ensure page and bridge are ready
       
       chrome.tabs.onUpdated.removeListener(listener);
