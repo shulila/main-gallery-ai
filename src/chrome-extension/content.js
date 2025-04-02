@@ -105,11 +105,46 @@ async function autoScrollToBottom(scrollStep = 800, scrollDelay = 500) {
   }
 }
 
+// Set up mutation observer to detect dynamically loaded images
+let mutationObserver = null;
+function setupMutationObserver() {
+  if (mutationObserver) {
+    mutationObserver.disconnect();
+  }
+  
+  console.log('Setting up mutation observer for dynamically loaded content');
+  mutationObserver = new MutationObserver((mutations) => {
+    const hasNewImages = mutations.some(mutation => {
+      return Array.from(mutation.addedNodes).some(node => {
+        if (node.nodeName === 'IMG') return true;
+        if (node.querySelectorAll) {
+          return node.querySelectorAll('img').length > 0;
+        }
+        return false;
+      });
+    });
+    
+    if (hasNewImages) {
+      console.log('Mutation observer detected new images loaded');
+    }
+  });
+  
+  mutationObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: false,
+    characterData: false
+  });
+}
+
 // Extract images from page
 function extractImages() {
   try {
+    console.log('Starting image extraction...');
+    
     // Try to use the injection method first if available
     if (window.__MAINGALLERY__ && typeof window.__MAINGALLERY__.extractAIImages === 'function') {
+      console.log('Using injection script to extract images');
       const result = window.__MAINGALLERY__.extractAIImages();
       console.log('Used injection script to extract images:', result.images?.length || 0);
       return { 
@@ -119,35 +154,125 @@ function extractImages() {
     }
     
     // Fallback to direct DOM extraction
+    console.log('Falling back to direct DOM extraction method');
+    const extractedImages = extractImagesFromPage();
+    console.log(`Direct DOM extraction found ${extractedImages.length} images`);
+    
     return { 
-      images: extractImagesFromPage(), 
+      images: extractedImages, 
       success: true 
     };
   } catch (err) {
     console.error('Error extracting images:', err);
     // Fallback to direct DOM extraction
+    const extractedImages = extractImagesFromPage();
+    console.log(`Fallback extraction found ${extractedImages.length} images after error`);
     return { 
-      images: extractImagesFromPage(), 
+      images: extractedImages, 
       success: true 
     };
   }
 }
 
-// Extract images directly from DOM
+// Extract images directly from DOM with improved Midjourney support
 function extractImagesFromPage() {
   console.log('Using direct DOM extraction method');
   const images = [];
   const extractedUrls = new Set();
+  let processedCount = 0;
+  let skippedCount = 0;
+  let smallImageCount = 0;
+  let dataUrlCount = 0;
 
   // Get all image elements
   const imgElements = document.querySelectorAll('img');
+  console.log(`Found ${imgElements.length} total img elements on page`);
   
-  imgElements.forEach((img) => {
+  // Special handling for Midjourney
+  const isMidjourney = window.location.hostname.includes('midjourney');
+  let midjourneyGridImages = [];
+  
+  if (isMidjourney) {
+    console.log('Detected Midjourney site, using specialized selectors');
+    // Try multiple selectors to catch different Midjourney UI versions
+    const gridSelectors = [
+      '.grid-card img', // Common grid layout
+      '.imageContainer img', // Alternative container
+      '.image-grid-content img', // Another alternative
+      '.showcase-grid img', // Showcase view
+      '.gallery img', // Gallery view
+      '[data-grid="true"] img', // Data attribute grid
+      '.gridItemContainer img', // Grid item containers
+      // Recent/specific Midjourney UI selectors
+      '.feed-item img',
+      '.card-img-top',
+      '.mj-image',
+      '.mj-result'
+    ];
+    
+    // Try each selector
+    gridSelectors.forEach(selector => {
+      const found = document.querySelectorAll(selector);
+      if (found && found.length > 0) {
+        console.log(`Found ${found.length} images using selector: ${selector}`);
+        midjourneyGridImages = [...midjourneyGridImages, ...Array.from(found)];
+      }
+    });
+    
+    // Log specialized findings
+    console.log(`Found ${midjourneyGridImages.length} Midjourney grid images with specialized selectors`);
+    
+    // If specialized selectors didn't work, log it but continue with regular extraction
+    if (midjourneyGridImages.length === 0) {
+      console.warn('No Midjourney grid images found with specialized selectors, falling back to generic detection');
+    }
+  }
+  
+  // Combine specialized and regular images
+  const allImages = isMidjourney && midjourneyGridImages.length > 0 ? 
+    midjourneyGridImages : imgElements;
+  
+  console.log(`Processing ${allImages.length} images (${isMidjourney ? 'Midjourney specialized' : 'standard'} selection)`);
+  
+  allImages.forEach((img) => {
+    processedCount++;
+    
+    // Debug image properties
+    const imgWidth = img.naturalWidth || img.width;
+    const imgHeight = img.naturalHeight || img.height;
     const src = img.src;
+    const alt = img.alt || '';
+    const classes = img.className || '';
+    
+    if (processedCount % 20 === 0 || processedCount <= 5) {
+      console.log(`Examining image ${processedCount}/${allImages.length}: ${src.substring(0, 50)}...`);
+      console.log(`  - Size: ${imgWidth}x${imgHeight}, Alt: "${alt.substring(0, 30)}...", Class: ${classes}`);
+    }
     
     // Skip if already extracted, no src, too small, or data URL
-    if (extractedUrls.has(src) || !src || src.startsWith('data:') || 
-        (img.width < 200 && img.height < 200)) {
+    if (extractedUrls.has(src)) {
+      skippedCount++;
+      if (skippedCount % 20 === 0) console.log(`Skipped ${skippedCount} duplicate images so far`);
+      return;
+    }
+    
+    if (!src) {
+      console.log(`Skipping image with no src`);
+      return;
+    }
+    
+    if (src.startsWith('data:')) {
+      dataUrlCount++;
+      if (dataUrlCount % 20 === 0) console.log(`Skipped ${dataUrlCount} data: URL images so far`);
+      return;
+    }
+    
+    // Special handling for Midjourney - don't filter by size for Midjourney images
+    const minSize = isMidjourney ? 50 : 200; // Much smaller minimum for Midjourney
+    
+    if (imgWidth < minSize && imgHeight < minSize) {
+      smallImageCount++;
+      if (smallImageCount % 20 === 0) console.log(`Skipped ${smallImageCount} small images so far`);
       return;
     }
     
@@ -169,20 +294,75 @@ function extractImagesFromPage() {
     
     // Get prompt from alt text or nearby elements
     let prompt = img.alt || img.title || '';
-    if (!prompt && img.parentElement) {
-      // Try to find prompt in parent elements
+    
+    // Special handling for Midjourney
+    if (platform === 'midjourney') {
+      if (!prompt) {
+        // Look for prompt in various places
+        
+        // Try data-prompt attribute
+        if (img.dataset && img.dataset.prompt) {
+          prompt = img.dataset.prompt;
+        }
+        
+        // Try parent element's data-prompt
+        if (!prompt && img.parentElement && img.parentElement.dataset && img.parentElement.dataset.prompt) {
+          prompt = img.parentElement.dataset.prompt;
+        }
+        
+        // Try parent's parent element
+        if (!prompt && img.parentElement && img.parentElement.parentElement) {
+          const grandparent = img.parentElement.parentElement;
+          if (grandparent.dataset && grandparent.dataset.prompt) {
+            prompt = grandparent.dataset.prompt;
+          }
+        }
+        
+        // Try to find prompt text through closest selectors
+        if (!prompt) {
+          // Common Midjourney prompt containers
+          const promptSelectors = [
+            '.prompt-text',
+            '.image-prompt',
+            '.caption',
+            '.card-text',
+            '.job-text'
+          ];
+          
+          for (const selector of promptSelectors) {
+            // Try in parent or grandparent
+            if (img.parentElement) {
+              const promptElement = img.parentElement.querySelector(selector);
+              if (promptElement && promptElement.textContent) {
+                prompt = promptElement.textContent.trim();
+                break;
+              }
+              
+              // Try in grandparent
+              if (!prompt && img.parentElement.parentElement) {
+                const promptElement = img.parentElement.parentElement.querySelector(selector);
+                if (promptElement && promptElement.textContent) {
+                  prompt = promptElement.textContent.trim();
+                  break;
+                }
+              }
+            }
+          }
+        }
+        
+        // Look for nearby prompt text in button role elements (common in Midjourney UI)
+        if (!prompt) {
+          const nearbyText = img.closest('[role="button"]')?.parentElement?.textContent || '';
+          if (nearbyText) {
+            prompt = nearbyText;
+          }
+        }
+      }
+    } else if (!prompt && img.parentElement) {
+      // Try to find prompt in parent elements for other platforms
       const promptElement = img.parentElement.querySelector('.prompt, [data-prompt], .caption, .description');
       if (promptElement) {
         prompt = promptElement.textContent || '';
-      }
-      
-      // Special handling for Midjourney
-      if (platform === 'midjourney') {
-        // Look for nearby prompt text
-        const nearbyText = img.closest('[role="button"]')?.parentElement?.textContent || '';
-        if (nearbyText && !prompt) {
-          prompt = nearbyText;
-        }
       }
     }
     
@@ -196,13 +376,22 @@ function extractImagesFromPage() {
       platform: platform,
       sourceURL: window.location.href,
       timestamp: Date.now(),
-      type: 'image'
+      type: 'image',
+      width: imgWidth,
+      height: imgHeight
     });
     
     extractedUrls.add(src);
   });
 
-  console.log(`Extracted ${images.length} images using direct DOM method`);
+  console.log(`Image extraction summary:
+- Total processed: ${processedCount}
+- Extracted: ${images.length}
+- Skipped duplicates: ${skippedCount}
+- Skipped small images: ${smallImageCount}
+- Skipped data URLs: ${dataUrlCount}
+`);
+  
   return images;
 }
 
@@ -267,6 +456,7 @@ function showToast(message, type = 'info') {
 if (isSupportedSite()) {
   console.log('MainGallery.AI running on supported site:', window.location.hostname);
   injectScript();
+  setupMutationObserver();
 } else {
   console.log('MainGallery.AI not running on unsupported site:', window.location.hostname);
 }
@@ -358,3 +548,4 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   
   return true; // Keep channel open for async response
 });
+

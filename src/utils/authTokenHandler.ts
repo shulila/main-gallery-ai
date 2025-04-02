@@ -253,3 +253,66 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
     return false;
   }
 };
+
+/**
+ * Handle OAuth token in the production environment with multiple fallbacks
+ * This robust implementation ensures that auth always works across all domains
+ */
+export const handleProductionOAuthToken = (): boolean => {
+  try {
+    // Check current URL for override domain
+    const currentHostname = window.location.hostname;
+    const url = window.location.href;
+    
+    // Detect if we're on preview or production
+    const isProdDomain = currentHostname.includes('main-gallery-hub.lovable.app');
+    const isPreviewDomain = currentHostname.includes('preview-main-gallery-ai.lovable.app');
+    const isCallback = url.includes('/callback') || url.includes('access_token');
+    
+    // Log environment info
+    console.log('Token handler environment:', {
+      isProdDomain,
+      isPreviewDomain,
+      isCallback,
+      hostname: currentHostname,
+      pathname: window.location.pathname
+    });
+    
+    // Check for common redirection issues
+    if (isCallback) {
+      // If on preview domain with token, redirect to production domain
+      if (isPreviewDomain && 
+         (url.includes('#access_token=') || url.includes('?access_token='))) {
+        console.warn('Token found on preview domain, redirecting to production');
+        const correctedURL = url.replace(
+          'preview-main-gallery-ai.lovable.app',
+          'main-gallery-hub.lovable.app'
+        );
+        window.location.href = correctedURL;
+        return true;
+      }
+      
+      // Try to extract token from hash or query params
+      const hash = window.location.hash;
+      const search = window.location.search;
+      
+      // Extract from hash first (most common with OAuth providers)
+      if (hash && hash.includes('access_token=')) {
+        // Process token from hash
+        return handleOAuthTokenFromHash();
+      }
+      
+      // Fall back to query params
+      if (search && search.includes('access_token=')) {
+        // Let the standard handler deal with it
+        handleOAuthRedirect();
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (err) {
+    console.error('Error in production OAuth handler:', err);
+    return false;
+  }
+};

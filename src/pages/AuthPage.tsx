@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +29,6 @@ const AuthPage = () => {
   const [activeTab, setActiveTab] = useState(defaultTabParam);
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(showForgotPassword);
   
-  // Always log the query parameters for debugging
   useEffect(() => {
     console.log('AuthPage loaded with params:', {
       searchParams: Object.fromEntries(searchParams),
@@ -45,7 +43,6 @@ const AuthPage = () => {
     if (session) {
       console.log('User is already logged in, redirecting to:', redirectPath);
       
-      // Special handling for extension redirects
       if (fromExtension) {
         console.log('Logged in from extension, will redirect to gallery and notify extension');
         toast({
@@ -53,7 +50,6 @@ const AuthPage = () => {
           description: "You are now logged in",
         });
         
-        // Minimal delay before redirect
         setTimeout(() => {
           navigate('/gallery');
         }, 1000);
@@ -82,7 +78,6 @@ const AuthPage = () => {
     try {
       await signIn(email, password);
       
-      // The session effect will handle redirect
     } catch (error: any) {
       console.error('Login error:', error);
       toast({
@@ -131,7 +126,6 @@ const AuthPage = () => {
       console.log('Starting Google sign-in flow');
       await signInWithGoogle();
       
-      // The redirect will be handled by the AuthCallback component
     } catch (error) {
       console.error('Google sign-in error:', error);
       toast({

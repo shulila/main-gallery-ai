@@ -1,12 +1,14 @@
 
 {
   "rewrites": [
-    { "source": "/auth/callback", "destination": "/" },
-    { "source": "/auth/callback/:path*", "destination": "/" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
-  "routes": [
-    { "src": "/auth/callback", "dest": "/" },
-    { "src": "/auth/callback/(.*)", "dest": "/" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    }
   ]
 }

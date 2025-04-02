@@ -47,6 +47,10 @@ function App() {
         {/* Special fallback for auth callback with fragment */}
         <Route path="/_callback/*" element={<AuthCallback />} />
         
+        {/* Added catchall routes for common OAuth callback paths */}
+        <Route path="/callback" element={<AuthCallback />} />
+        <Route path="/callback/*" element={<AuthCallback />} />
+        
         {/* Catch all unknown routes */}
         <Route path="*" element={<NotFound />} />
       </Routes>

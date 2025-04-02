@@ -15,11 +15,40 @@ export const AuthCallbackStatus = ({ status, error }: AuthCallbackStatusProps) =
       <h1 className="text-2xl font-bold mb-4">{status}</h1>
       
       {error ? (
-        <p className="text-red-500 mb-4">{error}</p>
+        <div className="space-y-4">
+          <p className="text-red-500 mb-4">{error}</p>
+          <div className="text-sm text-gray-500 max-w-md mx-auto">
+            <p>If you continue to see this error, please try:</p>
+            <ul className="list-disc text-left ml-8 mt-2">
+              <li>Refreshing the page</li>
+              <li>Clearing your browser cookies and cache</li>
+              <li>Using a different browser</li>
+              <li>Contacting support if the issue persists</li>
+            </ul>
+          </div>
+          <a 
+            href="/auth" 
+            className="inline-block mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          >
+            Return to Login
+          </a>
+        </div>
       ) : (
         <div className="flex flex-col items-center">
           <Loader2 className="h-8 w-8 animate-spin mb-4" />
           <p className="text-gray-600">You will be redirected automatically...</p>
+        </div>
+      )}
+      
+      {/* Debug section to help with troubleshooting - only visible in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-8 p-4 border rounded bg-gray-50 max-w-lg text-left text-xs">
+          <h3 className="font-bold mb-2">Debug Information:</h3>
+          <p><strong>Current URL:</strong> {window.location.href}</p>
+          <p><strong>Path:</strong> {window.location.pathname}</p>
+          <p><strong>Hash:</strong> {window.location.hash ? '(contains hash)' : '(no hash)'}</p>
+          <p><strong>Status:</strong> {status}</p>
+          {error && <p><strong>Error:</strong> {error}</p>}
         </div>
       )}
     </div>
