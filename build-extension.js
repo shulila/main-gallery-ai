@@ -107,23 +107,11 @@ try {
   console.warn('Warning: Could not copy files to src/utils');
 }
 
-// Convert imports in files to use direct script inclusion (non-module format)
-console.log('Converting module imports to vanilla JS...');
-
-// Function to replace import statements with appropriate variable declarations
-function convertImportsToVanillaJS(filePath) {
-  if (!fs.existsSync(filePath)) return;
-  
-  let content = fs.readFileSync(filePath, 'utf8');
-  
-  // Remove import statements and add appropriate script tags in HTML if needed
-  content = content.replace(/import\s+\{([^}]+)\}\s+from\s+['"]\.\/([^'"]+)['"]/g, '// Import removed: $1 from ./$2');
-  content = content.replace(/import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/([^'"]+)['"]/g, '// Import removed: $1 from ../$2');
-  content = content.replace(/import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/utils\/([^'"]+)['"]/g, '// Import removed: $1 from ../utils/$2');
-  content = content.replace(/import\s+\{([^}]+)\}\s+from\s+['"]\.\/.\/utils\/([^'"]+)['"]/g, '// Import removed: $1 from ./utils/$2');
-  
-  fs.writeFileSync(filePath, content, 'utf8');
-}
+// Ensure _redirects file exists for SPA routing
+console.log('Creating _redirects file for SPA routing...');
+const redirectsContent = '/*    /index.html   200';
+fs.writeFileSync(path.join('public', '_redirects'), redirectsContent);
+console.log('_redirects file created successfully');
 
 // Update manifest.json to ensure proper configuration
 console.log('Updating manifest.json for proper configuration...');

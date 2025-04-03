@@ -13,6 +13,7 @@ import {
   setupAuthCallbackListener,
   openAuthWithProvider
 } from './utils/auth.js';
+import { isGalleryEmpty, setGalleryHasImages } from './utils/galleryUtils.js';
 
 logger.log('MainGallery.AI background script initialized');
 
@@ -47,6 +48,9 @@ async function syncImagesToGallery(images) {
       timestamp: img.timestamp || Date.now(),
       synced_at: Date.now()
     }));
+    
+    // Mark that we have images in the gallery
+    await setGalleryHasImages(true);
     
     // Check if gallery tab is already open
     const galleryTabQuery = { url: `${getGalleryUrl()}*` };
@@ -167,7 +171,7 @@ function openGalleryWithImages(images) {
   });
 }
 
-// Handle action/icon clicks - Fixed to properly redirect to login or gallery
+// Handle action/icon clicks - Updated to check gallery state
 chrome.action.onClicked.addListener(async (tab) => {
   logger.log('Extension icon clicked on tab:', tab?.url);
   
@@ -195,15 +199,26 @@ chrome.action.onClicked.addListener(async (tab) => {
   if (!supported) {
     logger.log('Tab URL not supported');
     
-    // Redirect to gallery since user is logged in
-    chrome.tabs.create({ url: getGalleryUrl() });
+    // Check if gallery is empty
+    const isEmpty = await isGalleryEmpty();
+    logger.log('Gallery is empty:', isEmpty);
     
-    // Show notification to inform user
-    createNotification(
-      'maingallery_unsupported_tab', 
-      'Unsupported Site', 
-      'Please switch to a supported AI platform like Midjourney or DALL-E to use MainGallery.'
-    );
+    if (isEmpty) {
+      // Case 1: Initial Login (Empty Gallery State)
+      // Redirect to the gallery page with empty state parameter
+      chrome.tabs.create({ url: `${getGalleryUrl()}?state=empty` });
+      
+      // Show notification to guide the user
+      createNotification(
+        'maingallery_empty_gallery', 
+        'Gallery is Empty', 
+        'Your gallery is empty. Switch to a supported AI platform to add images.'
+      );
+    } else {
+      // Case 2: Subsequent Logins (Populated Gallery State)
+      // Redirect to the regular gallery page
+      chrome.tabs.create({ url: getGalleryUrl() });
+    }
     
     return;
   }
@@ -282,6 +297,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Sync the images to gallery
       if (message.images && message.images.length > 0) {
         syncImagesToGallery(message.images);
+        
+        // Update gallery state to indicate we have images
+        setGalleryHasImages(true);
         
         // Show success notification
         createNotification(
