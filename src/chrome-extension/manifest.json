@@ -37,7 +37,8 @@
     "https://*.playgroundai.com/*",
     "https://creator.nightcafe.studio/*",
     "https://discord.com/channels/*midjourney*",
-    "https://main-gallery-hub.lovable.app/*"
+    "https://main-gallery-hub.lovable.app/*",
+    "https://preview-main-gallery-ai.lovable.app/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -65,7 +66,8 @@
     },
     {
       "matches": [
-        "https://main-gallery-hub.lovable.app/*"
+        "https://main-gallery-hub.lovable.app/*",
+        "https://preview-main-gallery-ai.lovable.app/*"
       ],
       "js": ["bridge.js"],
       "run_at": "document_end"
@@ -73,7 +75,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content-injection.js", "icons/*"],
+      "resources": ["content-injection.js", "icons/*", "utils/*"],
       "matches": ["<all_urls>"]
     }
   ]

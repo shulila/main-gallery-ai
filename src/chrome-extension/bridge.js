@@ -4,9 +4,61 @@
  * Acts as a bridge between the web app and the extension content script
  */
 
-import { logger } from './utils/logger.js';
-import { handleError } from './utils/errorHandler.js';
-import { getProductionDomain, getPreviewDomain, getCorrectDomainUrl } from './utils/urlUtils.js';
+// Using regular JavaScript variables instead of imports to avoid module issues
+let logger = { 
+  log: function(message, ...args) { console.log(`[MainGallery Bridge] ${message}`, ...args) },
+  warn: function(message, ...args) { console.warn(`[MainGallery Bridge] ${message}`, ...args) },
+  error: function(message, ...args) { console.error(`[MainGallery Bridge] ${message}`, ...args) },
+  debug: function(message, ...args) { console.debug(`[MainGallery Bridge] ${message}`, ...args) }
+};
+
+function handleError(source, error, options = {}) {
+  const errorMessage = error?.message || String(error);
+  logger.error(`Error in ${source}: ${errorMessage}`, error);
+  if (!options.silent) {
+    console.error(`MainGallery Error in ${source}:`, error);
+  }
+}
+
+// Domain helper functions
+function getProductionDomain() {
+  return 'main-gallery-hub.lovable.app';
+}
+
+function getPreviewDomain() {
+  return 'preview-main-gallery-ai.lovable.app';
+}
+
+function getCorrectDomainUrl(url) {
+  if (!url) return null;
+  
+  try {
+    const urlObj = new URL(url);
+    
+    // If already on correct domain, return null (no redirect needed)
+    if (urlObj.hostname === getProductionDomain() || 
+        urlObj.hostname === getPreviewDomain()) {
+      return null;
+    }
+    
+    // If contains auth token but on wrong domain, redirect to production
+    if ((urlObj.pathname.includes('/auth/callback') || 
+         urlObj.search.includes('access_token=') || 
+         urlObj.hash.includes('access_token=')) &&
+        urlObj.hostname !== getProductionDomain()) {
+      
+      // Construct redirect to production domain
+      const newUrl = new URL(url);
+      newUrl.hostname = getProductionDomain();
+      return newUrl.toString();
+    }
+    
+    return null;
+  } catch (err) {
+    handleError('getCorrectDomainUrl', err);
+    return null;
+  }
+}
 
 logger.log('MainGallery.AI bridge script loaded');
 
