@@ -1,3 +1,4 @@
+
 // Auth utilities for Chrome extension
 
 // Updated Google OAuth Client ID
@@ -46,7 +47,9 @@ const SUPPORTED_PLATFORMS = [
   'stability.ai',
   'runwayml.com',
   'pika.art',
-  'discord.com/channels'
+  'discord.com/channels',
+  'playgroundai.com',
+  'creator.nightcafe.studio'
 ];
 
 // Check if URL is supported for extension activation
@@ -166,6 +169,7 @@ export function openAuthPage(tabId = null, options = {}) {
   if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
   if (options.signup) searchParams.append('signup', options.signup);
   if (options.from) searchParams.append('from', options.from);
+  if (options.provider) searchParams.append('provider', options.provider);
   
   const queryString = searchParams.toString();
   const fullAuthUrl = queryString ? `${authUrl}?${queryString}` : authUrl;
@@ -193,9 +197,6 @@ function constructGoogleOAuthUrl(redirectUrl) {
     include_granted_scopes: 'true',
     prompt: 'consent'
   });
-  
-  // REMOVED access_type=offline parameter as it can cause issues with OAuth flows
-  // that require an implicit token grant
   
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }

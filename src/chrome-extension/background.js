@@ -72,7 +72,7 @@ async function syncImagesToGallery(images) {
             chrome.tabs.update(tabs[0].id, { active: true });
             return true;
           } else {
-            logger.error('Error sending to gallery tab:', response?.error || 'Unknown error');
+            logger.log('Error sending to gallery tab:', response?.error || 'Unknown error');
             // Fallback to opening a new gallery tab
             openGalleryWithImages(enrichedImages);
             return true;
@@ -167,7 +167,7 @@ function openGalleryWithImages(images) {
   });
 }
 
-// Handle action/icon clicks
+// Handle action/icon clicks - Fixed to properly redirect to login or gallery
 chrome.action.onClicked.addListener(async (tab) => {
   logger.log('Extension icon clicked on tab:', tab?.url);
   

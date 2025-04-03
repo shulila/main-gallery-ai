@@ -81,6 +81,11 @@ export function isSupportedPlatformUrl(url) {
       return true;
     }
     
+    // Special case for Discord with Midjourney bot
+    if (urlObj.hostname.includes('discord.com') && urlObj.pathname.includes('midjourney')) {
+      return true;
+    }
+    
     return isDomainSupported && isPathSupported;
   } catch (error) {
     handleError('isSupportedPlatformUrl', error, { silent: true });
