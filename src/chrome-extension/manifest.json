@@ -9,7 +9,8 @@
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    }
+    },
+    "default_popup": "popup.html"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -83,7 +84,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' https://apis.google.com; object-src 'self'"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
   "oauth2": {
     "client_id": "648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com",

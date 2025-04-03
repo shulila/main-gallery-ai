@@ -11,6 +11,7 @@ interface ExtensionRollupInput {
   background: string;
   content: string;
   bridge: string;
+  popup?: string;
 }
 
 interface WebAppRollupInput {
@@ -51,6 +52,7 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
             background: path.resolve(__dirname, "src/chrome-extension/background.js"),
             content: path.resolve(__dirname, "src/chrome-extension/content.js"),
             bridge: path.resolve(__dirname, "src/chrome-extension/bridge.js"),
+            popup: path.resolve(__dirname, "src/chrome-extension/popup.js")
           } as Record<string, string>, // Fix the type here
           output: {
             entryFileNames: "[name].js",
