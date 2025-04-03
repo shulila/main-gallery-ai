@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -331,22 +330,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         try {
           // Send message to extension background script to handle auth
-          window.chrome.runtime.sendMessage({ 
-            action: 'googleLogin'
-          }, (response) => {
-            if (window.chrome?.runtime.lastError) {
-              console.error('Error with extension auth:', window.chrome.runtime.lastError);
-              // Fall back to standard OAuth flow
-              window.location.href = constructGoogleOAuthUrl(redirectUrl);
-            } else if (response && response.success) {
-              console.log('Google login initiated through extension');
-              // Success will be handled via auth state change
-            } else {
-              console.error('Extension auth failed:', response?.error);
-              // Fall back to standard OAuth flow
-              window.location.href = constructGoogleOAuthUrl(redirectUrl);
+          window.chrome.runtime.sendMessage(
+            undefined, // extensionId parameter (undefined for own extension)
+            { action: 'googleLogin' }, // message parameter
+            (response) => { // callback parameter
+              if (window.chrome?.runtime.lastError) {
+                console.error('Error with extension auth:', window.chrome.runtime.lastError);
+                // Fall back to standard OAuth flow
+                window.location.href = constructGoogleOAuthUrl(redirectUrl);
+              } else if (response && response.success) {
+                console.log('Google login initiated through extension');
+                // Success will be handled via auth state change
+              } else {
+                console.error('Extension auth failed:', response?.error);
+                // Fall back to standard OAuth flow
+                window.location.href = constructGoogleOAuthUrl(redirectUrl);
+              }
             }
-          });
+          );
         } catch (err) {
           console.error('Error with extension-based auth:', err);
           // Fall back to standard OAuth flow
@@ -384,7 +385,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // First attempt to log out of Chrome extension if we're in that context
       if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.runtime) {
         try {
-          window.chrome.runtime.sendMessage({ action: 'logout' });
+          window.chrome.runtime.sendMessage(
+            undefined, // extensionId parameter (undefined for own extension)
+            { action: 'logout' } // message parameter
+          );
         } catch (err) {
           console.error('Error logging out from extension:', err);
         }

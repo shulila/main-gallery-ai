@@ -1,6 +1,7 @@
 
 import { defineConfig } from "vite";
-import type { ConfigEnv, UserConfig, RollupOptions, Plugin, PluginOption } from "vite";
+import type { ConfigEnv, UserConfig, Plugin, PluginOption } from "vite";
+import { rollup, RollupOptions } from "rollup"; // Import RollupOptions from rollup
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
@@ -50,13 +51,13 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
             background: path.resolve(__dirname, "src/chrome-extension/background.js"),
             content: path.resolve(__dirname, "src/chrome-extension/content.js"),
             bridge: path.resolve(__dirname, "src/chrome-extension/bridge.js"),
-          } as ExtensionRollupInput,
+          } as Record<string, string>, // Fix the type here
           output: {
             entryFileNames: "[name].js",
             chunkFileNames: "chunks/[name]-[hash].js",
             assetFileNames: "assets/[name]-[hash].[ext]",
           },
-        } as RollupOptions,
+        },
       },
     };
     
@@ -72,8 +73,8 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, "index.html"),
-        } as WebAppRollupInput,
-      } as RollupOptions,
+        } as Record<string, string>, // Fix the type here
+      },
     },
   };
   
