@@ -6,7 +6,18 @@ import { supabase } from '@/integrations/supabase/client';
  * @returns Base URL for authentication
  */
 export const getAuthBaseUrl = (): string => {
-  // Always use the production domain
+  // Check if in preview environment
+  if (typeof window !== 'undefined' && 
+      window.location && 
+      window.location.hostname) {
+    
+    // Check for preview domain
+    if (window.location.hostname.includes('preview-main-gallery-ai')) {
+      return 'https://preview-main-gallery-ai.lovable.app';
+    }
+  }
+  
+  // Default to production domain
   return 'https://main-gallery-hub.lovable.app';
 };
 

@@ -1,4 +1,3 @@
-
 /**
  * MainGallery.AI background script
  * Responsible for coordinating extension operations and communicating with tabs
@@ -185,17 +184,19 @@ chrome.action.onClicked.addListener(async (tab) => {
   const loggedIn = await isLoggedIn();
   logger.log('User logged in:', loggedIn);
   
-  // Handle unsupported site
+  // Always redirect to auth page if not logged in
+  if (!loggedIn) {
+    logger.log('User not logged in, redirecting to auth page');
+    openAuthPage(null, { redirect: 'gallery', from: 'extension' });
+    return;
+  }
+  
+  // Handle unsupported site when logged in
   if (!supported) {
     logger.log('Tab URL not supported');
     
-    if (loggedIn) {
-      // Redirect to gallery if logged in
-      chrome.tabs.create({ url: getGalleryUrl() });
-    } else {
-      // Redirect to auth page if not logged in
-      openAuthPage(null, { redirect: 'gallery', from: 'extension' });
-    }
+    // Redirect to gallery since user is logged in
+    chrome.tabs.create({ url: getGalleryUrl() });
     
     // Show notification to inform user
     createNotification(
@@ -207,13 +208,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     return;
   }
   
-  // Handle supported site
-  if (!loggedIn) {
-    logger.log('User not logged in, redirecting to auth page');
-    openAuthPage(null, { redirect: 'gallery', from: 'extension' });
-    return;
-  }
-  
+  // Handle supported site for logged-in user
   logger.log('User is logged in and on a supported tab, starting auto-scan');
   
   // Ensure content script is loaded
@@ -276,7 +271,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
     }
     else if (message.action === 'openGoogleAuth') {
-      // New handler specifically for Google auth button
+      // Handler specifically for Google auth button
       openAuthWithProvider('google');
       sendResponse({ success: true });
     }

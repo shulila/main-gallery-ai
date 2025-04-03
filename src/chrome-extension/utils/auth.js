@@ -1,4 +1,3 @@
-
 // Auth utilities for Chrome extension
 
 // Updated Google OAuth Client ID
@@ -10,15 +9,33 @@ const getProductionRedirectUrl = () => {
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
-// Get the auth URL - using the production domain
+// Get the auth URL with environment detection
 const getAuthUrl = () => {
+  // Check if in preview environment
+  if (typeof window !== 'undefined' && 
+      window.location && 
+      window.location.hostname && 
+      window.location.hostname.includes('preview')) {
+    return 'https://preview-main-gallery-ai.lovable.app/auth';
+  }
+  
+  // Default to production domain
   return 'https://main-gallery-hub.lovable.app/auth';
 };
 
-// Get the gallery URL
+// Get the gallery URL with environment detection
 const getGalleryUrl = () => {
+  // Check if in preview environment
+  if (typeof window !== 'undefined' && 
+      window.location && 
+      window.location.hostname && 
+      window.location.hostname.includes('preview')) {
+    return 'https://preview-main-gallery-ai.lovable.app/gallery';
+  }
+  
+  // Default to production domain
   return 'https://main-gallery-hub.lovable.app/gallery';
-}; 
+};
 
 // Supported platforms for extension activation
 const SUPPORTED_PLATFORMS = [
@@ -138,10 +155,10 @@ export function setupAuthCallbackListener() {
   }
 }
 
-// Open auth page
+// Open auth page with improved environment detection
 export function openAuthPage(tabId = null, options = {}) {
-  // Use the production domain that has Google login button
-  const authUrl = getAuthUrl();
+  // Determine the correct domain based on environment
+  let authUrl = getAuthUrl();
   
   // Add any query parameters
   const searchParams = new URLSearchParams();

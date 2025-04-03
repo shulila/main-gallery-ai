@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -265,6 +264,7 @@ const Auth = ({
               className="w-full flex items-center gap-2 font-normal mb-4"
               onClick={handleGoogleSignIn}
               disabled={oauthLoading}
+              id="google-login-btn"
             >
               <svg viewBox="0 0 24 24" width="16" height="16" className="text-gray-700">
                 <path
