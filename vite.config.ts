@@ -1,9 +1,20 @@
 
 import { defineConfig } from "vite";
-import type { ConfigEnv, UserConfig } from "vite";
+import type { ConfigEnv, UserConfig, RollupOptions, Plugin, PluginOption } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+
+// Define interface for specific input configurations
+interface ExtensionRollupInput {
+  background: string;
+  content: string;
+  bridge: string;
+}
+
+interface WebAppRollupInput {
+  main: string;
+}
 
 // https://vitejs.dev/config/
 export default defineConfig((configEnv: ConfigEnv): UserConfig => {
@@ -19,21 +30,17 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
       react(),
       mode === 'development' &&
       componentTagger(),
-    ].filter(Boolean),
+    ].filter(Boolean) as (Plugin | PluginOption)[],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
-    },
-    build: {
-      outDir: "dist",
-      emptyOutDir: true,
     }
   };
 
   // Extension-specific build configuration
   if (mode === 'extension') {
-    return {
+    const extensionConfig: UserConfig = {
       ...baseConfig,
       build: {
         outDir: "dist-extension",
@@ -43,27 +50,32 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
             background: path.resolve(__dirname, "src/chrome-extension/background.js"),
             content: path.resolve(__dirname, "src/chrome-extension/content.js"),
             bridge: path.resolve(__dirname, "src/chrome-extension/bridge.js"),
-          },
+          } as ExtensionRollupInput,
           output: {
             entryFileNames: "[name].js",
             chunkFileNames: "chunks/[name]-[hash].js",
             assetFileNames: "assets/[name]-[hash].[ext]",
           },
-        },
+        } as RollupOptions,
       },
     };
+    
+    return extensionConfig;
   } 
   
   // Default configuration for the web app
-  return {
+  const webAppConfig: UserConfig = {
     ...baseConfig,
     build: {
-      ...baseConfig.build,
+      outDir: "dist",
+      emptyOutDir: true,
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, "index.html"),
-        },
-      },
+        } as WebAppRollupInput,
+      } as RollupOptions,
     },
   };
+  
+  return webAppConfig;
 });

@@ -1,3 +1,4 @@
+
 /**
  * MainGallery.AI background script
  * Responsible for coordinating extension operations and communicating with tabs
@@ -11,7 +12,7 @@ import {
   isLoggedIn, 
   openAuthPage, 
   setupAuthCallbackListener,
-  openAuthWithProvider
+  signInWithGoogle
 } from './utils/auth.js';
 import { isGalleryEmpty, setGalleryHasImages } from './utils/galleryUtils.js';
 
@@ -285,10 +286,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       openAuthPage(null, message);
       sendResponse({ success: true });
     }
-    else if (message.action === 'openGoogleAuth') {
-      // Handler specifically for Google auth button
-      openAuthWithProvider('google');
-      sendResponse({ success: true });
+    else if (message.action === 'openGoogleAuth' || message.action === 'googleLogin') {
+      // Handle Google auth request from popup or content script
+      signInWithGoogle()
+        .then(result => {
+          logger.log('Google login result:', result);
+          sendResponse({ success: true, result });
+        })
+        .catch(error => {
+          logger.error('Google login error:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+      
+      return true; // Keep message channel open for async response
     }
     else if (message.action === 'scanComplete') {
       // Handle scan complete message from content script
@@ -317,6 +327,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       
       sendResponse({ success: true });
+    }
+    else if (message.action === 'openGallery') {
+      // Open the gallery in a new tab or focus existing tab
+      chrome.tabs.query({ url: `${getGalleryUrl()}*` }, (tabs) => {
+        if (tabs.length > 0) {
+          // Focus existing tab
+          chrome.tabs.update(tabs[0].id, { active: true }, () => {
+            // Also focus the window containing this tab
+            chrome.windows.update(tabs[0].windowId, { focused: true });
+          });
+        } else {
+          // Open new tab
+          chrome.tabs.create({ url: getGalleryUrl() });
+        }
+      });
+      sendResponse({ success: true });
+    }
+    else if (message.action === 'logout') {
+      // Handle logout request
+      logger.log('Processing logout request');
+      import('./utils/auth.js').then(({ logout }) => {
+        logout().then(() => {
+          logger.log('Logout successful');
+          sendResponse({ success: true });
+        }).catch(err => {
+          logger.error('Logout error:', err);
+          sendResponse({ success: false, error: err.message });
+        });
+      }).catch(err => {
+        logger.error('Failed to import auth module:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+      
+      return true; // Keep message channel open for async response
     }
     else if (message.action === 'galleryReady') {
       logger.log('Gallery is ready to receive images:', message);

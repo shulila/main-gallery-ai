@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -21,7 +22,7 @@ const getProductionAuthRedirectUrl = () => {
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
-// Updated Google OAuth Client ID
+// Updated Google OAuth Client ID - use the same one as the extension
 const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
 
 // Create a single Supabase client instance to be used throughout the app
@@ -324,14 +325,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('Starting Google login with redirect to:', redirectUrl);
       console.log('Using Google Client ID:', GOOGLE_CLIENT_ID);
       
-      // Use the improved OAuth URL construction
-      const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl);
-      
-      // Log the URL for debugging
-      console.log('Constructed OAuth URL:', googleOAuthUrl);
-      
-      // Navigate to Google OAuth URL
-      window.location.href = googleOAuthUrl;
+      // Try direct Google auth if available in Chrome extension context
+      if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.runtime) {
+        console.log('Chrome runtime detected, attempting to use extension auth flow');
+        
+        try {
+          // Send message to extension background script to handle auth
+          window.chrome.runtime.sendMessage({ 
+            action: 'googleLogin'
+          }, (response) => {
+            if (window.chrome?.runtime.lastError) {
+              console.error('Error with extension auth:', window.chrome.runtime.lastError);
+              // Fall back to standard OAuth flow
+              window.location.href = constructGoogleOAuthUrl(redirectUrl);
+            } else if (response && response.success) {
+              console.log('Google login initiated through extension');
+              // Success will be handled via auth state change
+            } else {
+              console.error('Extension auth failed:', response?.error);
+              // Fall back to standard OAuth flow
+              window.location.href = constructGoogleOAuthUrl(redirectUrl);
+            }
+          });
+        } catch (err) {
+          console.error('Error with extension-based auth:', err);
+          // Fall back to standard OAuth flow
+          window.location.href = constructGoogleOAuthUrl(redirectUrl);
+        }
+      } else {
+        // Standard web flow - use the improved OAuth URL construction
+        const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl);
+        
+        // Log the URL for debugging
+        console.log('Constructed OAuth URL:', googleOAuthUrl);
+        
+        // Navigate to Google OAuth URL
+        window.location.href = googleOAuthUrl;
+      }
       
       // No need for error handling here since we're navigating away
     } catch (error: any) {
@@ -350,6 +380,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       setIsLoading(true);
+      
+      // First attempt to log out of Chrome extension if we're in that context
+      if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.runtime) {
+        try {
+          window.chrome.runtime.sendMessage({ action: 'logout' });
+        } catch (err) {
+          console.error('Error logging out from extension:', err);
+        }
+      }
+      
+      // Then perform Supabase logout
       const { error } = await supabase.auth.signOut();
       
       if (error) {

@@ -1,3 +1,4 @@
+
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -257,24 +258,36 @@ function openAuthPage() {
   }
 }
 
-// Open auth with Google provider - make sure this goes to the same login page as email login
-function openAuthWithProvider(provider) {
+// Initiate Google login using chrome.identity API 
+function initiateGoogleLogin() {
   try {
     showState(states.authLoading);
-    console.log(`Opening ${provider} login...`);
-    showToast(`Opening ${provider} login...`, 'info');
+    console.log('Initiating Google login via chrome.identity API');
+    showToast('Starting Google login...', 'info');
     
-    // Direct to auth page with from=extension to ensure consistent flow
-    chrome.runtime.sendMessage({
-      action: 'openAuthPage',
-      from: 'extension'
+    chrome.runtime.sendMessage({ action: 'googleLogin' }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error initiating Google login:', chrome.runtime.lastError);
+        showToast('Google login failed. Please try again.', 'error');
+        showState(states.notLoggedIn);
+        return;
+      }
+      
+      if (response && response.success) {
+        console.log('Google login initiated successfully');
+        // Success will be handled via the auth callback
+        
+        // Close popup after a short delay to improve UX
+        setTimeout(() => window.close(), 300);
+      } else {
+        console.error('Google login failed:', response?.error || 'Unknown error');
+        showToast('Google login failed. Please try again.', 'error');
+        showState(states.notLoggedIn);
+      }
     });
-    
-    // Close popup after a short delay
-    setTimeout(() => window.close(), 300);
   } catch (error) {
-    console.error(`Error opening ${provider} auth:`, error);
-    showToast(`Could not open ${provider} login. Please try again.`, 'error');
+    console.error('Error initiating Google login:', error);
+    showToast('Google login failed. Please try again.', 'error');
     showState(states.notLoggedIn);
   }
 }
@@ -634,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (googleLoginBtn) {
     googleLoginBtn.addEventListener('click', () => {
       console.log('Google login button clicked');
-      openAuthWithProvider('google');
+      initiateGoogleLogin();
     });
     console.log('Google login button listener set up');
   }
