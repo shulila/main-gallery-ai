@@ -15,24 +15,35 @@ const OUTPUT_DIR = 'dist-extension';
 const SOURCE_DIR = 'src/chrome-extension';
 const ICONS_DIR = `${SOURCE_DIR}/icons`;
 
-// Ensure output directory exists
-console.log('Creating extension build directory...');
-if (fs.existsSync(OUTPUT_DIR)) {
-  fs.rmSync(OUTPUT_DIR, { recursive: true, force: true });
+// Step 1: Run Vite build with 'extension' mode
+console.log('Building extension with Vite...');
+try {
+  execSync('npx vite build --mode extension', { stdio: 'inherit' });
+  console.log('Vite build completed successfully');
+} catch (error) {
+  console.error('Error building extension with Vite:', error);
+  process.exit(1);
 }
-fs.mkdirSync(OUTPUT_DIR);
+
+// Step 2: Ensure output directory exists
+console.log('Creating extension build directory structure...');
+if (!fs.existsSync(OUTPUT_DIR)) {
+  fs.mkdirSync(OUTPUT_DIR);
+}
+
+// Create subdirectories if they don't exist
 fs.mkdirSync(`${OUTPUT_DIR}/icons`, { recursive: true });
 fs.mkdirSync(`${OUTPUT_DIR}/utils`, { recursive: true });
 fs.mkdirSync(`${OUTPUT_DIR}/src`, { recursive: true });
 fs.mkdirSync(`${OUTPUT_DIR}/src/utils`, { recursive: true });
 fs.mkdirSync(`${OUTPUT_DIR}/src/config`, { recursive: true });
 
-// Copy manifest
+// Step 3: Copy manifest
 console.log('Copying manifest.json...');
 const manifestPath = path.join(SOURCE_DIR, 'manifest.json');
 fs.copyFileSync(manifestPath, path.join(OUTPUT_DIR, 'manifest.json'));
 
-// Copy icons
+// Step 4: Copy icons
 console.log('Copying icons...');
 ['icon16.png', 'icon48.png', 'icon128.png'].forEach(iconFile => {
   try {
@@ -49,33 +60,7 @@ console.log('Copying icons...');
   }
 });
 
-// Copy background script
-console.log('Copying background.js...');
-fs.copyFileSync(
-  path.join(SOURCE_DIR, 'background.js'),
-  path.join(OUTPUT_DIR, 'background.js')
-);
-
-// Copy content scripts
-console.log('Copying content scripts...');
-fs.copyFileSync(
-  path.join(SOURCE_DIR, 'content.js'),
-  path.join(OUTPUT_DIR, 'content.js')
-);
-fs.copyFileSync(
-  path.join(SOURCE_DIR, 'bridge.js'),
-  path.join(OUTPUT_DIR, 'bridge.js')
-);
-try {
-  fs.copyFileSync(
-    path.join(SOURCE_DIR, 'content-injection.js'),
-    path.join(OUTPUT_DIR, 'content-injection.js')
-  );
-} catch (e) {
-  console.warn('Warning: content-injection.js not found, skipping');
-}
-
-// Copy utility files
+// Step 5: Copy utility files (that might not be bundled with Vite)
 console.log('Copying utility files...');
 const UTILS_SOURCE = path.join(SOURCE_DIR, 'utils');
 const UTILS_DEST = path.join(OUTPUT_DIR, 'utils');
@@ -107,13 +92,20 @@ try {
   console.warn('Warning: Could not copy files to src/utils');
 }
 
-// Ensure _redirects file exists for SPA routing
+// Step 6: Ensure _redirects file exists for SPA routing in both the extension and web app
 console.log('Creating _redirects file for SPA routing...');
 const redirectsContent = '/*    /index.html   200';
-fs.writeFileSync(path.join('public', '_redirects'), redirectsContent);
-console.log('_redirects file created successfully');
+const publicDir = 'public';
 
-// Update manifest.json to ensure proper configuration
+if (!fs.existsSync(publicDir)) {
+  fs.mkdirSync(publicDir);
+}
+
+fs.writeFileSync(path.join(publicDir, '_redirects'), redirectsContent);
+fs.writeFileSync(path.join(OUTPUT_DIR, '_redirects'), redirectsContent);
+console.log('_redirects files created successfully');
+
+// Step 7: Update manifest.json to ensure proper configuration
 console.log('Updating manifest.json for proper configuration...');
 let manifest;
 try {
@@ -125,7 +117,7 @@ try {
     "type": "module"
   };
   
-  // Update content scripts configuration if needed
+  // Update content scripts configuration
   manifest.content_scripts = [
     {
       "matches": [
@@ -168,6 +160,28 @@ try {
 } catch (e) {
   console.error('Error updating manifest.json:', e);
 }
+
+// Step 8: Update build-extension.sh script
+const buildShScript = `#!/bin/bash
+# MainGallery.AI Chrome Extension Build Script
+
+echo "Building MainGallery.AI Chrome Extension..."
+echo "Removing old build directory..."
+rm -rf dist-extension
+
+echo "Running build script..."
+node build-extension.js
+
+echo "Done! Your extension is now ready in the dist-extension folder."
+echo ""
+echo "To load the extension in Chrome:"
+echo "1. Go to chrome://extensions/"
+echo "2. Enable Developer mode (top right)"
+echo "3. Click 'Load unpacked' and select the dist-extension folder"
+`;
+
+fs.writeFileSync('build-extension.sh', buildShScript);
+fs.chmodSync('build-extension.sh', '755');  // Make it executable
 
 console.log('Build completed successfully!');
 console.log(`Extension files are ready in the '${OUTPUT_DIR}' directory`);
