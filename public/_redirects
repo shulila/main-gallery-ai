@@ -1,5 +1,5 @@
 
 # Netlify redirects file
-# Ensures all routes are handled by our single-page application
+# Ensures all routes are handled by our single-page application, including OAuth callback
 
 /*    /index.html    200

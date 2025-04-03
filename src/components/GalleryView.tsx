@@ -7,89 +7,6 @@ import { galleryDB } from '@/services/GalleryIndexedDB';
 import { useToast } from "@/hooks/use-toast";
 import { GalleryImage } from '@/types/gallery';
 
-const mockImages = [
-  {
-    id: '1',
-    title: 'Cosmic Dreamscape',
-    thumbnail: 'https://images.unsplash.com/photo-1638803040283-7a5ffd48dad5?q=80&w=400',
-    platform: 'Midjourney',
-    model: 'V6',
-    prompt: 'A cosmic landscape with nebulas and floating islands, vibrant colors, surreal atmosphere',
-    createdAt: '2023-12-01T12:30:00Z',
-    status: 'Public' as const,
-    aspectRatio: '1:1',
-    jobId: 'mj-123456789',
-    seed: '12345678'
-  },
-  {
-    id: '2',
-    title: 'Cyberpunk City',
-    thumbnail: 'https://images.unsplash.com/photo-1518486645465-5311f2b30d3e?q=80&w=400',
-    platform: 'DALL·E',
-    model: 'DALL·E 3',
-    prompt: 'Cyberpunk city at night with neon lights, flying cars, and tall skyscrapers',
-    createdAt: '2023-12-10T09:15:00Z',
-    status: 'Private' as const,
-    aspectRatio: '16:9',
-    jobId: 'dalle-987654321',
-    seed: '87654321'
-  },
-  {
-    id: '3',
-    title: 'Enchanted Forest',
-    thumbnail: 'https://images.unsplash.com/photo-1518020382113-a7e8fc38eac9?q=80&w=400',
-    platform: 'Stable Diffusion',
-    model: 'SDXL',
-    prompt: 'Magical forest with glowing plants and mystical creatures, fantasy art style',
-    createdAt: '2023-12-15T16:45:00Z',
-    status: 'Public' as const,
-    aspectRatio: '3:2',
-    jobId: 'sd-456789123',
-    seed: '45678912'
-  },
-  {
-    id: '4',
-    title: 'Abstract Motion',
-    thumbnail: 'https://images.unsplash.com/photo-1574169208507-84376144848b?q=80&w=400',
-    platform: 'Runway',
-    model: 'Gen-2',
-    prompt: 'Abstract flowing forms with dynamic movement, vibrant colors on black background',
-    createdAt: '2023-12-18T14:20:00Z',
-    status: 'Draft' as const,
-    aspectRatio: '1:1',
-    jobId: 'rw-234567891',
-    seed: '23456789',
-    duration: '4s'
-  },
-  {
-    id: '5',
-    title: 'Ocean Depths',
-    thumbnail: 'https://images.unsplash.com/photo-1551244072-5d12893278ab?q=80&w=400',
-    platform: 'Pika',
-    model: 'Pika 1.0',
-    prompt: 'Deep ocean scene with bioluminescent creatures and underwater structures',
-    createdAt: '2023-12-20T11:10:00Z',
-    status: 'Public' as const,
-    aspectRatio: '4:3',
-    jobId: 'pk-345678912',
-    seed: '34567891',
-    duration: '6s'
-  },
-  {
-    id: '6',
-    title: 'Futuristic Architecture',
-    thumbnail: 'https://images.unsplash.com/photo-1523296020750-38f7d00b34ac?q=80&w=400',
-    platform: 'Midjourney',
-    model: 'V6',
-    prompt: 'Futuristic architectural structure with organic forms, glass and steel materials',
-    createdAt: '2023-12-22T10:30:00Z',
-    status: 'Private' as const,
-    aspectRatio: '16:9',
-    jobId: 'mj-456789123',
-    seed: '45678912'
-  }
-];
-
 type ViewMode = 'grid' | 'columns';
 type SortOption = 'newest' | 'oldest' | 'platform';
 type FilterOption = 'all' | 'midjourney' | 'dalle' | 'stable-diffusion' | 'runway' | 'pika';
@@ -230,15 +147,10 @@ const GalleryView = ({ images: externalImages, isNewSync = false }: GalleryViewP
         
         if (dbImages.length > 0) {
           setImages(dbImages);
-        } else if (process.env.NODE_ENV !== 'production') {
-          console.log('No images found in DB, using mock data');
-          setImages(mockImages as unknown as GalleryImage[]);
         }
+        // Remove the mock data usage in production and when images exist
       } catch (error) {
         console.error('Error loading images from IndexedDB:', error);
-        if (process.env.NODE_ENV !== 'production') {
-          setImages(mockImages as unknown as GalleryImage[]);
-        }
       } finally {
         setIsLoading(false);
       }
@@ -372,6 +284,10 @@ const GalleryView = ({ images: externalImages, isNewSync = false }: GalleryViewP
     { id: 'oldest', name: 'Oldest First' },
     { id: 'platform', name: 'By Platform' }
   ];
+
+  if (images.length === 0 && !isLoading) {
+    return null; // Return null for empty gallery - the parent component will show the empty state
+  }
 
   return (
     <section className="py-8">
@@ -508,18 +424,6 @@ const GalleryView = ({ images: externalImages, isNewSync = false }: GalleryViewP
                 </div>
               </div>
             ))}
-          </div>
-        )}
-        
-        {images.length === 0 && !isLoading && (
-          <div className="text-center py-16">
-            <div className="mb-4 text-muted-foreground">
-              <ImageIcon className="h-16 w-16 mx-auto opacity-30" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">No images found</h3>
-            <p className="text-muted-foreground mb-6">
-              No images found yet – click the MainGallery extension to sync from a supported platform.
-            </p>
           </div>
         )}
       </div>

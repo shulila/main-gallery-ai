@@ -9,6 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { galleryDB } from '@/services/GalleryIndexedDB';
 import { GalleryImage } from '@/types/gallery';
 import { listenForGallerySyncMessages, syncImagesToGallery } from '@/utils/gallerySync';
+import { Button } from '@/components/ui/button';
+import { ImageIcon, ArrowRight } from 'lucide-react';
 
 const Gallery = () => {
   const { user, isLoading } = useAuth();
@@ -16,6 +18,7 @@ const Gallery = () => {
   const { toast } = useToast();
   const [syncedImages, setSyncedImages] = useState<GalleryImage[]>([]);
   const [isExtensionSync, setIsExtensionSync] = useState(false);
+  const [scanModeActive, setScanModeActive] = useState(false);
   
   // Handle extension messages and image syncing
   useEffect(() => {
@@ -126,6 +129,13 @@ const Gallery = () => {
       }
     }
     
+    // Check for scan mode from sessionStorage
+    const scanMode = sessionStorage.getItem('scanMode');
+    if (scanMode === 'active') {
+      setScanModeActive(true);
+      sessionStorage.removeItem('scanMode');
+    }
+    
     // Extension connection notification
     const fromExtension = urlParams.get('from') === 'extension';
     if (fromExtension) {
@@ -151,6 +161,22 @@ const Gallery = () => {
     window.scrollTo(0, 0);
   }, []);
 
+  const handleAddGalleryClick = () => {
+    // Change cursor to indicate "select supported tab" mode
+    document.body.style.cursor = 'crosshair';
+    
+    // Set scan mode in session storage
+    sessionStorage.setItem('scanMode', 'active');
+    setScanModeActive(true);
+    
+    // Show toast with instructions
+    toast({
+      title: "Switch to a Supported Tab",
+      description: "Please switch to a supported platform tab (e.g. Midjourney) to start scanning for images.",
+      duration: 5000,
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -163,11 +189,45 @@ const Gallery = () => {
     return null; // Will redirect via the useEffect
   }
 
+  // Empty state UI when no images are present
+  const EmptyGalleryState = () => (
+    <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+      <div className="mb-6 text-muted-foreground">
+        <ImageIcon className="h-20 w-20 mx-auto opacity-30" />
+      </div>
+      <h2 className="text-2xl font-bold mb-3">Your Gallery is Empty</h2>
+      <p className="text-muted-foreground max-w-md mb-8">
+        Start by adding AI-generated images from supported platforms like Midjourney, DALL-E, and more.
+      </p>
+      <Button 
+        size="lg" 
+        onClick={handleAddGalleryClick}
+        className="text-lg py-6 px-8"
+      >
+        Add to Gallery
+        <ArrowRight className="ml-2" />
+      </Button>
+      
+      {scanModeActive && (
+        <div className="mt-8 p-4 bg-muted/30 rounded-lg border border-border">
+          <p className="font-medium">Scan Mode Active</p>
+          <p className="text-sm text-muted-foreground">
+            Switch to a supported AI platform tab to automatically scan for images
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen">
       <Navbar />
       <main className="pt-24">
-        <GalleryView images={syncedImages} isNewSync={isExtensionSync} />
+        {syncedImages.length === 0 ? (
+          <EmptyGalleryState />
+        ) : (
+          <GalleryView images={syncedImages} isNewSync={isExtensionSync} />
+        )}
       </main>
       <Footer />
     </div>
