@@ -11,7 +11,8 @@ import { safeSendMessage, ensureContentScriptLoaded } from './utils/messaging.js
 import { 
   isLoggedIn, 
   openAuthPage, 
-  setupAuthCallbackListener
+  setupAuthCallbackListener,
+  openAuthWithProvider
 } from './utils/auth.js';
 
 logger.log('MainGallery.AI background script initialized');
@@ -273,7 +274,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     else if (message.action === 'openAuthPage') {
       openAuthPage(null, message);
       sendResponse({ success: true });
-    } 
+    }
+    else if (message.action === 'openGoogleAuth') {
+      // New handler specifically for Google auth button
+      openAuthWithProvider('google');
+      sendResponse({ success: true });
+    }
     else if (message.action === 'scanComplete') {
       // Handle scan complete message from content script
       logger.log('Scan completed with', message.images?.length || 0, 'images');
