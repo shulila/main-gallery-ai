@@ -1,12 +1,16 @@
 
 import { defineConfig } from "vite";
+import type { ConfigEnv, UserConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
-  const baseConfig = {
+export default defineConfig((configEnv: ConfigEnv): UserConfig => {
+  const { mode } = configEnv;
+  
+  // Base configuration shared between both modes
+  const baseConfig: UserConfig = {
     server: {
       host: "::",
       port: 8080,
@@ -27,7 +31,7 @@ export default defineConfig(({ mode }) => {
     }
   };
 
-  // Extend with extension-specific build configuration when mode is 'extension'
+  // Extension-specific build configuration
   if (mode === 'extension') {
     return {
       ...baseConfig,
@@ -48,18 +52,18 @@ export default defineConfig(({ mode }) => {
         },
       },
     };
-  } else {
-    // Default configuration for the web app
-    return {
-      ...baseConfig,
-      build: {
-        ...baseConfig.build,
-        rollupOptions: {
-          input: {
-            main: path.resolve(__dirname, "index.html"),
-          },
+  } 
+  
+  // Default configuration for the web app
+  return {
+    ...baseConfig,
+    build: {
+      ...baseConfig.build,
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, "index.html"),
         },
       },
-    };
-  }
+    },
+  };
 });
