@@ -20,8 +20,12 @@ const states = {
 };
 
 // Get elements safely with null checks
-const googleLoginBtn = document.getElementById('google-login-btn');
-const emailLoginBtn = document.getElementById('email-login-btn');
+const loginForm = document.getElementById('login-form');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const loginBtn = document.getElementById('login-btn');
+const forgotPasswordLink = document.getElementById('forgot-password-link');
+const signupLink = document.getElementById('signup-link');
 const logoutBtn = document.getElementById('logout-btn');
 const openGalleryBtn = document.getElementById('open-gallery-btn');
 const scanPageBtn = document.getElementById('scan-page-btn');
@@ -43,13 +47,17 @@ function safelyRemoveClass(element, className) {
 
 function hideAllStates() {
   Object.values(states).forEach(state => {
-    if (state) safelyAddClass(state, 'hidden');
+    if (state) {
+      state.style.display = 'none';
+    }
   });
 }
 
 function showState(state) {
   hideAllStates();
-  if (state) safelyRemoveClass(state, 'hidden');
+  if (state) {
+    state.style.display = 'block';
+  }
 }
 
 // Show toast notification
@@ -136,15 +144,48 @@ function openGallery() {
   }
 }
 
-// Open auth page with email login - make sure to use the same login page for all flows
-function openAuthPage() {
+// Handle email/password login
+function handleLogin(e) {
+  if (e) e.preventDefault();
+  
+  const email = emailInput ? emailInput.value.trim() : '';
+  const password = passwordInput ? passwordInput.value.trim() : '';
+  
+  if (!email || !password) {
+    showToast('Please enter both email and password', 'error');
+    return;
+  }
+  
+  if (states.loading) showState(states.loading);
+  console.log('Attempting login with email:', email);
+  
+  // Send login request to background script
+  chrome.runtime.sendMessage({
+    action: 'login',
+    email: email,
+    password: password
+  }, (response) => {
+    if (response && response.success) {
+      showToast('Login successful', 'success');
+      checkAuthAndRedirect(); // This will update UI based on new auth state
+    } else {
+      console.error('Login failed:', response?.error || 'Unknown error');
+      showToast(response?.error || 'Login failed. Please check your credentials.', 'error');
+      if (states.loginView) showState(states.loginView);
+    }
+  });
+}
+
+// Open auth page for signup or password reset
+function openAuthPage(options = {}) {
   try {
     if (states.loading) showState(states.loading);
-    console.log('Opening auth page with email/password login');
+    console.log('Opening auth page with options:', options);
     showToast('Opening login page...', 'info');
     
     chrome.runtime.sendMessage({ 
       action: 'openAuthPage',
+      ...options,
       from: 'extension'
     });
     
@@ -153,40 +194,6 @@ function openAuthPage() {
   } catch (error) {
     console.error('Error opening auth page:', error);
     showToast('Could not open login page. Please try again.', 'error');
-    if (states.loginView) showState(states.loginView);
-  }
-}
-
-// Initiate Google login using chrome.identity API 
-function initiateGoogleLogin() {
-  try {
-    if (states.loading) showState(states.loading);
-    console.log('Initiating Google login via chrome.identity API');
-    showToast('Starting Google login...', 'info');
-    
-    chrome.runtime.sendMessage({ action: 'googleLogin' }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error initiating Google login:', chrome.runtime.lastError);
-        showToast('Google login failed. Please try again.', 'error');
-        if (states.loginView) showState(states.loginView);
-        return;
-      }
-      
-      if (response && response.success) {
-        console.log('Google login initiated successfully');
-        // Success will be handled via the auth callback
-        
-        // Close popup after a short delay to improve UX
-        setTimeout(() => window.close(), 300);
-      } else {
-        console.error('Google login failed:', response?.error || 'Unknown error');
-        showToast('Google login failed. Please try again.', 'error');
-        if (states.loginView) showState(states.loginView);
-      }
-    });
-  } catch (error) {
-    console.error('Error initiating Google login:', error);
-    showToast('Google login failed. Please try again.', 'error');
     if (states.loginView) showState(states.loginView);
   }
 }
@@ -224,15 +231,27 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('Popup loaded, checking auth status');
   checkAuthAndRedirect();
   
-  // Set up event listeners for buttons - all with null checks
-  if (emailLoginBtn) {
-    emailLoginBtn.addEventListener('click', openAuthPage);
-    console.log('Email login button listener set up');
+  // Set up event listeners for form submission
+  if (loginForm) {
+    loginForm.addEventListener('submit', handleLogin);
+    console.log('Login form submission listener set up');
   }
   
-  if (googleLoginBtn) {
-    googleLoginBtn.addEventListener('click', initiateGoogleLogin);
-    console.log('Google login button listener set up');
+  // Set up event listeners for auth links
+  if (forgotPasswordLink) {
+    forgotPasswordLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openAuthPage({ forgotPassword: true });
+    });
+    console.log('Forgot password link listener set up');
+  }
+  
+  if (signupLink) {
+    signupLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openAuthPage({ signup: true });
+    });
+    console.log('Signup link listener set up');
   }
   
   if (logoutBtn) {

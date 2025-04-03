@@ -61,17 +61,22 @@ console.log('Copying popup files...');
 console.log('Copying icons...');
 ['icon16.png', 'icon48.png', 'icon128.png', 'google-icon.svg', 'facebook-icon.svg'].forEach(iconFile => {
   try {
-    fs.copyFileSync(
-      path.join(ICONS_DIR, iconFile), 
-      path.join(OUTPUT_DIR, 'icons', iconFile)
-    );
-    console.log(`Copied icon: ${iconFile}`);
-  } catch (e) {
-    console.warn(`Warning: Could not find icon ${iconFile}, will use a placeholder`);
-    // Create placeholder icon file if it doesn't exist
-    if (!fs.existsSync(path.join(OUTPUT_DIR, 'icons', iconFile))) {
-      fs.writeFileSync(path.join(OUTPUT_DIR, 'icons', iconFile), '');
+    const sourcePath = path.join(ICONS_DIR, iconFile);
+    const destPath = path.join(OUTPUT_DIR, 'icons', iconFile);
+    
+    if (fs.existsSync(sourcePath)) {
+      fs.copyFileSync(sourcePath, destPath);
+      console.log(`Copied icon: ${iconFile}`);
+    } else {
+      console.warn(`Warning: Icon file not found: ${iconFile}`);
+      // Create placeholder file if it's a required icon
+      if (['icon16.png', 'icon48.png', 'icon128.png'].includes(iconFile)) {
+        console.log(`Creating empty placeholder for required icon: ${iconFile}`);
+        fs.writeFileSync(destPath, '');
+      }
     }
+  } catch (e) {
+    console.warn(`Warning: Error copying icon ${iconFile}: ${e.message}`);
   }
 });
 

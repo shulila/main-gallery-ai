@@ -12,7 +12,7 @@ import {
   isLoggedIn, 
   openAuthPage, 
   setupAuthCallbackListener,
-  signInWithGoogle
+  handleEmailPasswordLogin
 } from './utils/auth.js';
 import { isGalleryEmpty, setGalleryHasImages } from './utils/galleryUtils.js';
 
@@ -282,23 +282,59 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       logger.log('FROM CONTENT SCRIPT:', message.data);
       sendResponse({ success: true });
     } 
-    else if (message.action === 'openAuthPage') {
-      openAuthPage(null, message);
-      sendResponse({ success: true });
-    }
-    else if (message.action === 'openGoogleAuth' || message.action === 'googleLogin') {
-      // Handle Google auth request from popup or content script
-      signInWithGoogle()
+    else if (message.action === 'login') {
+      // Handle standard email/password login
+      const { email, password } = message;
+      logger.log('Processing login request for email:', email);
+      
+      if (!email || !password) {
+        logger.error('Missing email or password for login');
+        sendResponse({ success: false, error: 'Email and password are required' });
+        return true;
+      }
+      
+      // Use the auth utility to handle login
+      handleEmailPasswordLogin(email, password)
         .then(result => {
-          logger.log('Google login result:', result);
+          logger.log('Login successful for:', email);
           sendResponse({ success: true, result });
         })
         .catch(error => {
-          logger.error('Google login error:', error);
-          sendResponse({ success: false, error: error.message });
+          logger.error('Login failed:', error);
+          sendResponse({ success: false, error: error.message || 'Login failed' });
         });
       
-      return true; // Keep message channel open for async response
+      return true; // Keep channel open for async response
+    }
+    else if (message.action === 'isLoggedIn') {
+      // Check if user is logged in
+      isLoggedIn()
+        .then(loggedIn => {
+          sendResponse({ loggedIn });
+        })
+        .catch(err => {
+          logger.error('Error checking login status:', err);
+          sendResponse({ loggedIn: false, error: err.message });
+        });
+      
+      return true; // Keep channel open for async response
+    }
+    else if (message.action === 'getUserEmail') {
+      // Get the logged-in user's email
+      import('./utils/auth.js').then(({ getUserEmail }) => {
+        getUserEmail().then(email => {
+          sendResponse({ email });
+        });
+      }).catch(err => {
+        logger.error('Error importing auth module for getUserEmail:', err);
+        sendResponse({ email: null, error: err.message });
+      });
+      
+      return true; // Keep channel open for async response
+    }
+    else if (message.action === 'openAuthPage') {
+      openAuthPage(null, message);
+      sendResponse({ success: true });
     }
     else if (message.action === 'scanComplete') {
       // Handle scan complete message from content script
@@ -358,6 +394,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }).catch(err => {
         logger.error('Failed to import auth module:', err);
         sendResponse({ success: false, error: err.message });
+      });
+      
+      return true; // Keep message channel open for async response
+    }
+    else if (message.action === 'startAutoScan') {
+      // Forward scan request to the active tab
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (!tabs || !tabs[0] || !tabs[0].id) {
+          logger.error('No active tab found for scanning');
+          sendResponse({ success: false, error: 'No active tab found' });
+          return;
+        }
+        
+        // Ensure content script is loaded on the active tab
+        ensureContentScriptLoaded(tabs[0])
+          .then(isReady => {
+            if (isReady) {
+              // Forward the auto-scan request to content script
+              safeSendMessage(tabs[0].id, message)
+                .then(response => {
+                  sendResponse(response);
+                })
+                .catch(err => {
+                  handleError('startAutoScanForward', err);
+                  sendResponse({ success: false, error: err.message });
+                });
+            } else {
+              logger.error('Could not load content script for scanning');
+              sendResponse({ success: false, error: 'Could not initialize scanner' });
+            }
+          });
       });
       
       return true; // Keep message channel open for async response

@@ -1,9 +1,6 @@
 
 // Auth utilities for Chrome extension
 
-// Updated Google OAuth Client ID
-const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
-
 // Get the production auth callback URL - NEVER use localhost
 const getProductionRedirectUrl = () => {
   // Use the production domain
@@ -38,6 +35,20 @@ const getGalleryUrl = () => {
   return 'https://main-gallery-hub.lovable.app/gallery';
 };
 
+// API endpoint for authentication
+const getApiUrl = () => {
+  // Check if in preview environment
+  if (typeof window !== 'undefined' && 
+      window.location && 
+      window.location.hostname && 
+      window.location.hostname.includes('preview')) {
+    return 'https://preview-main-gallery-ai.lovable.app/api';
+  }
+  
+  // Default to production domain
+  return 'https://main-gallery-hub.lovable.app/api';
+};
+
 // Supported platforms for extension activation
 const SUPPORTED_PLATFORMS = [
   'midjourney.com',
@@ -66,107 +77,61 @@ function isSupportedPlatform(url) {
   }
 }
 
-// Handle Google OAuth with chrome.identity API
-export async function handleGoogleLogin() {
+// Handle standard email/password login
+async function handleEmailPasswordLogin(email, password) {
   try {
-    console.log('Initiating Google login with chrome.identity');
+    console.log('Attempting to log in with email and password');
     
-    // Define the auth parameters
-    const authParams = {
-      interactive: true,
-      scopes: [
-        'https://www.googleapis.com/auth/userinfo.email',
-        'https://www.googleapis.com/auth/userinfo.profile',
-        'openid'
-      ]
+    // Make API call to the backend for authentication
+    const response = await fetch(`${getApiUrl()}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Login failed with status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.access_token) {
+      throw new Error('No authentication token received');
+    }
+    
+    // Store token info and user email for extension usage
+    const tokenData = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token || '',
+      email: email,
+      timestamp: Date.now(),
+      expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours expiry
     };
     
-    // Request authentication token
-    return new Promise((resolve, reject) => {
-      chrome.identity.getAuthToken(authParams, async (token) => {
-        if (chrome.runtime.lastError) {
-          console.error('Google auth error:', chrome.runtime.lastError);
-          reject(chrome.runtime.lastError);
-          return;
-        }
-        
-        if (!token) {
-          console.error('No token returned from Google auth');
-          reject(new Error('No token returned from Google auth'));
-          return;
-        }
-        
-        console.log('Got Google auth token, fetching user profile');
-        
-        try {
-          // Fetch user profile with the token
-          const response = await fetch(
-            'https://www.googleapis.com/oauth2/v2/userinfo',
-            {
-              headers: {
-                Authorization: `Bearer ${token}`
-              }
-            }
-          );
-          
-          if (!response.ok) {
-            throw new Error(`Google API error: ${response.status}`);
-          }
-          
-          const userData = await response.json();
-          console.log('Google user data:', userData);
-          
-          // Store auth data with expiration (24 hours)
-          const tokenData = {
-            access_token: token,
-            refresh_token: '',
-            email: userData.email,
-            timestamp: Date.now(),
-            expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
-          };
-          
-          // Store token and user info in chrome storage
-          chrome.storage.sync.set({
-            'main_gallery_auth_token': tokenData,
-            'main_gallery_user_email': userData.email
-          }, () => {
-            console.log('Auth data stored in chrome storage');
-          });
-          
-          // Show success notification
-          try {
-            chrome.notifications.create('auth_success', {
-              type: 'basic',
-              iconUrl: 'icons/icon128.png',
-              title: 'Login Successful',
-              message: 'You are now logged in to MainGallery'
-            });
-          } catch (err) {
-            console.error('Error showing auth success notification:', err);
-          }
-          
-          // Open the gallery after successful login
-          chrome.tabs.create({ url: getGalleryUrl() });
-          
-          resolve({
-            success: true,
-            user: userData,
-            token: token
-          });
-        } catch (error) {
-          console.error('Error fetching Google user data:', error);
-          reject(error);
-        }
-      });
+    // Store in Chrome storage
+    chrome.storage.sync.set({
+      'main_gallery_auth_token': tokenData,
+      'main_gallery_user_email': email
+    }, () => {
+      console.log('Auth token and user info stored in extension storage');
     });
+    
+    return {
+      success: true,
+      user: { email },
+      token: data.access_token
+    };
   } catch (error) {
-    console.error('Error in handleGoogleLogin:', error);
+    console.error('Email/password login error:', error);
     throw error;
   }
 }
 
 // Set up a listener for auth callback
-export function setupAuthCallbackListener() {
+function setupAuthCallbackListener() {
   try {
     console.log('Setting up auth callback listener');
     
@@ -210,7 +175,7 @@ export function setupAuthCallbackListener() {
           }, () => {
             console.log('Auth token and user info stored in extension storage with expiration');
             
-            // Show success notification to let user know auth worked
+            // Show success notification
             try {
               chrome.notifications.create('auth_success', {
                 type: 'basic',
@@ -258,7 +223,7 @@ export function setupAuthCallbackListener() {
 }
 
 // Open auth page with improved environment detection
-export function openAuthPage(tabId = null, options = {}) {
+function openAuthPage(tabId = null, options = {}) {
   // Determine the correct domain based on environment
   let authUrl = getAuthUrl();
   
@@ -266,7 +231,7 @@ export function openAuthPage(tabId = null, options = {}) {
   const searchParams = new URLSearchParams();
   if (options.redirect) searchParams.append('redirect', options.redirect);
   if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
-  if (options.signup) searchParams.append('signup', options.signup);
+  if (options.signup) searchParams.append('signup', 'true');
   if (options.from) searchParams.append('from', options.from);
   if (options.provider) searchParams.append('provider', options.provider);
   
@@ -286,53 +251,8 @@ export function openAuthPage(tabId = null, options = {}) {
   console.log('Opened auth URL:', fullAuthUrl);
 }
 
-// Improved Google OAuth URL construction using URLSearchParams
-function constructGoogleOAuthUrl(redirectUrl) {
-  const params = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: redirectUrl,
-    response_type: 'token',
-    scope: 'profile email openid',
-    include_granted_scopes: 'true',
-    prompt: 'consent'
-  });
-  
-  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-}
-
-// Handle OAuth sign-in with provider using chrome.identity when possible
-export async function signInWithGoogle() {
-  try {
-    console.log('Starting Google sign-in process');
-    
-    // First try with chrome.identity if available
-    if (chrome.identity && chrome.identity.getAuthToken) {
-      console.log('Using chrome.identity for Google login');
-      return handleGoogleLogin();
-    } 
-    // Fallback to redirect flow
-    else {
-      console.log('chrome.identity not available, falling back to redirect flow');
-      const redirectUrl = getProductionRedirectUrl();
-      console.log('Using redirect URL:', redirectUrl);
-      
-      // Create Google OAuth URL
-      const googleOAuthUrl = constructGoogleOAuthUrl(redirectUrl);
-      
-      // Open the OAuth URL in a new tab
-      console.log('Opening Google OAuth URL:', googleOAuthUrl);
-      chrome.tabs.create({ url: googleOAuthUrl });
-      
-      return Promise.resolve({ success: true, method: 'redirect' });
-    }
-  } catch (error) {
-    console.error('Error during Google sign-in:', error);
-    return Promise.reject(error);
-  }
-}
-
 // Improved isLoggedIn to check expiration
-export function isLoggedIn() {
+function isLoggedIn() {
   return new Promise((resolve) => {
     try {
       // Check for token in chrome.storage.sync with expiration validation
@@ -373,7 +293,7 @@ export function isLoggedIn() {
 }
 
 // Get user email if available
-export function getUserEmail() {
+function getUserEmail() {
   return new Promise((resolve) => {
     chrome.storage.sync.get(['main_gallery_user_email'], (result) => {
       resolve(result.main_gallery_user_email || null);
@@ -382,29 +302,12 @@ export function getUserEmail() {
 }
 
 // Log out from all platforms
-export function logout() {
+function logout() {
   try {
     // Clear extension storage
     return new Promise((resolve) => {
       chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
         console.log('Successfully logged out from extension storage');
-        
-        // If using chrome.identity, also revoke the Google token
-        if (chrome.identity && chrome.identity.getAuthToken) {
-          chrome.identity.getAuthToken({ interactive: false }, (token) => {
-            if (token) {
-              chrome.identity.removeCachedAuthToken({ token }, () => {
-                console.log('Google auth token removed from cache');
-              });
-              
-              // Also revoke access
-              fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`)
-                .then(response => console.log('Token revoked:', response.ok))
-                .catch(err => console.error('Error revoking token:', err));
-            }
-          });
-        }
-        
         resolve(true);
       });
     });
@@ -414,5 +317,16 @@ export function logout() {
   }
 }
 
-// Export the isSupportedPlatform function and URLs
-export { isSupportedPlatform, getAuthUrl, getGalleryUrl, getProductionRedirectUrl };
+// Export functions
+export { 
+  handleEmailPasswordLogin, 
+  setupAuthCallbackListener, 
+  openAuthPage, 
+  isLoggedIn, 
+  getUserEmail, 
+  logout, 
+  isSupportedPlatform, 
+  getAuthUrl, 
+  getGalleryUrl, 
+  getProductionRedirectUrl 
+};

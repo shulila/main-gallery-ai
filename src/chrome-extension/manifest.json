@@ -3,95 +3,45 @@
   "manifest_version": 3,
   "name": "MainGallery.AI",
   "version": "1.0.0",
-  "description": "Unified AI image gallery for Midjourney, DALL·E, Leonardo and more",
-  "action": {
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    },
-    "default_popup": "popup.html"
-  },
-  "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  },
+  "description": "Unified AI image gallery for multiple AI art platforms",
   "permissions": [
     "storage",
     "tabs",
     "scripting",
     "activeTab",
-    "notifications",
-    "identity"
+    "identity",
+    "notifications"
   ],
   "host_permissions": [
-    "https://*.midjourney.com/*",
-    "https://www.midjourney.com/*", 
-    "https://midjourney.com/*",
-    "https://*.leonardo.ai/*",
-    "https://app.leonardo.ai/*",
-    "https://openai.com/dall-e/*", 
-    "https://dreamstudio.ai/*",
-    "https://*.stability.ai/*",
-    "https://*.runwayml.com/*",
-    "https://*.pika.art/*",
-    "https://*.playgroundai.com/*",
-    "https://creator.nightcafe.studio/*",
-    "https://discord.com/channels/*midjourney*",
     "https://main-gallery-hub.lovable.app/*",
-    "https://preview-main-gallery-ai.lovable.app/*",
-    "https://accounts.google.com/*",
-    "https://www.googleapis.com/*"
+    "https://*.lovable.app/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://*.midjourney.com/*",
-        "https://www.midjourney.com/*", 
-        "https://midjourney.com/*",
-        "https://*.leonardo.ai/*",
-        "https://app.leonardo.ai/*",
-        "https://openai.com/dall-e/*", 
-        "https://dreamstudio.ai/*",
-        "https://*.stability.ai/*",
-        "https://*.runwayml.com/*",
-        "https://*.pika.art/*",
-        "https://*.playgroundai.com/*",
-        "https://creator.nightcafe.studio/*",
-        "https://discord.com/channels/*midjourney*"
-      ],
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://main-gallery-hub.lovable.app/*",
-        "https://preview-main-gallery-ai.lovable.app/*"
-      ],
-      "js": ["bridge.js"],
-      "run_at": "document_end"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content-injection.js", "icons/*", "utils/*", "src/utils/*"],
+      "resources": ["icons/*", "bridge.js"],
       "matches": ["<all_urls>"]
     }
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  },
-  "oauth2": {
-    "client_id": "648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com",
-    "scopes": [
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile",
-      "openid"
-    ]
-  }
+  ]
 }

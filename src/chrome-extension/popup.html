@@ -22,17 +22,28 @@
       
       <div id="login-view" class="view" style="display: none;">
         <p>Sign in to start collecting your AI images</p>
-        <button id="email-login-btn" class="auth-btn">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="4" width="20" height="16" rx="2" />
-            <path d="M22 7l-8.97 5.7a1.94 1.94 0 01-2.06 0L2 7" />
-          </svg>
-          Sign in with Email
-        </button>
-        <button id="google-login-btn" class="auth-btn">
-          <img src="icons/google-icon.svg" alt="Google Icon">
-          Sign in with Google
-        </button>
+        <form id="login-form" class="login-form">
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="you@example.com" required>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="••••••••" required>
+          </div>
+          <button type="submit" id="login-btn" class="auth-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+              <polyline points="10 17 15 12 10 7"></polyline>
+              <line x1="15" y1="12" x2="3" y2="12"></line>
+            </svg>
+            Sign in
+          </button>
+        </form>
+        <div class="auth-links">
+          <a href="#" id="forgot-password-link">Forgot password?</a>
+          <a href="#" id="signup-link">Create account</a>
+        </div>
       </div>
       
       <div id="main-view" class="view" style="display: none;">
