@@ -127,7 +127,30 @@ if (fs.existsSync(contentInjectionSource)) {
   console.log('Copied content-injection.js');
 }
 
-// Step 8: Ensure _redirects file exists for SPA routing in both the extension and web app
+// Step 8: Ensure core JS files exist
+['background.js', 'content.js', 'bridge.js'].forEach(file => {
+  const sourcePath = path.join(SOURCE_DIR, file);
+  const destPath = path.join(OUTPUT_DIR, file);
+  
+  try {
+    if (fs.existsSync(sourcePath)) {
+      fs.copyFileSync(sourcePath, destPath);
+      console.log(`Copied ${file}`);
+    } else {
+      // Check if it's in the output from Vite build
+      const viteBuildPath = path.join(OUTPUT_DIR, file);
+      if (!fs.existsSync(viteBuildPath)) {
+        console.error(`Warning: Could not find ${file} in source or build output`);
+      } else {
+        console.log(`${file} already exists in build output`);
+      }
+    }
+  } catch (e) {
+    console.warn(`Warning: Could not copy ${file}: ${e.message}`);
+  }
+});
+
+// Step 9: Ensure _redirects file exists for SPA routing in both the extension and web app
 console.log('Creating _redirects file for SPA routing...');
 const redirectsContent = '/*    /index.html   200';
 const publicDir = 'public';

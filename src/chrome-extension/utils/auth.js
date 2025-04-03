@@ -301,7 +301,7 @@ function constructGoogleOAuthUrl(redirectUrl) {
 }
 
 // Handle OAuth sign-in with provider using chrome.identity when possible
-export function signInWithGoogle() {
+export async function signInWithGoogle() {
   try {
     console.log('Starting Google sign-in process');
     
@@ -415,4 +415,4 @@ export function logout() {
 }
 
 // Export the isSupportedPlatform function and URLs
-export { isSupportedPlatform, getAuthUrl, getGalleryUrl, getProductionRedirectUrl, signInWithGoogle };
+export { isSupportedPlatform, getAuthUrl, getGalleryUrl, getProductionRedirectUrl };
