@@ -173,21 +173,48 @@ export async function safeFetch(url, options = {}) {
     }
     
     // Validate and parse JSON
-    const { isJson, data, htmlResponse } = await logger.validateJsonResponse(response);
-    
-    if (!isJson) {
-      const error = new Error(
-        htmlResponse 
-          ? "Received HTML response instead of JSON" 
-          : "Invalid response format"
-      );
+    try {
+      // Check content type
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        // Peek at the response to determine if it's HTML
+        const isHtml = await isHtmlResponse(response);
+        if (isHtml) {
+          const error = new Error("Received HTML response instead of JSON");
+          error.response = response;
+          error.isHtmlError = true;
+          throw error;
+        }
+      }
+      
+      // Attempt to parse JSON
+      const data = await response.json();
+      return data;
+    } catch (parseError) {
+      // Handle JSON parse errors or HTML response errors
+      const error = new Error("Invalid response format or failed to parse JSON");
       error.response = response;
-      error.isHtmlError = htmlResponse;
-      error.rawData = data;
+      error.originalError = parseError;
+      
+      // Check if it's an HTML response
+      if (parseError.isHtmlError) {
+        error.isHtmlError = true;
+      } else {
+        // Try to determine if the response is HTML
+        const clone = response.clone();
+        const text = await clone.text();
+        const htmlResponse = text.includes('<!DOCTYPE html>') || 
+                            text.includes('<html') ||
+                            text.includes('<body');
+        
+        if (htmlResponse) {
+          error.isHtmlError = true;
+          error.rawData = text;
+        }
+      }
+      
       throw error;
     }
-    
-    return data;
   } catch (error) {
     // Enhance the error with more context
     error.url = url;

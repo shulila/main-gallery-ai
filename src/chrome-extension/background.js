@@ -6,7 +6,7 @@
 
 // Import required modules
 import { logger } from './utils/logger.js';
-import { handleError } from './utils/errorHandler.js';
+import { handleError, safeFetch } from './utils/errorHandler.js';
 import { isSupportedPlatformUrl, getGalleryUrl, getAuthUrl } from './utils/urlUtils.js';
 import { safeSendMessage, ensureContentScriptLoaded } from './utils/messaging.js';
 import { 
@@ -14,6 +14,7 @@ import {
   openAuthPage, 
   setupAuthCallbackListener,
   handleEmailPasswordLogin,
+  logout
 } from './utils/auth.js';
 import { isGalleryEmpty, setGalleryHasImages } from './utils/galleryUtils.js';
 
@@ -342,6 +343,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       import('./utils/auth.js').then(({ getUserEmail }) => {
         getUserEmail().then(email => {
           sendResponse({ email });
+        }).catch(err => {
+          logger.error('Error getting user email:', err);
+          sendResponse({ email: null, error: err.message });
         });
       }).catch(err => {
         logger.error('Error importing auth module for getUserEmail:', err);
@@ -399,20 +403,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
     }
     else if (message.action === 'logout') {
-      // Handle logout request
+      // Handle logout request with improved error handling
       logger.log('Processing logout request');
-      import('./utils/auth.js').then(({ logout }) => {
-        logout().then(() => {
+      
+      logout()
+        .then(() => {
           logger.log('Logout successful');
+          // Clear any stored tokens and session data
+          chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
+            logger.log('Storage cleared after logout');
+          });
           sendResponse({ success: true });
-        }).catch(err => {
+        })
+        .catch(err => {
           logger.error('Logout error:', err);
+          // Try fallback logout by just clearing storage
+          chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
+            logger.log('Storage cleared as fallback after logout error');
+          });
           sendResponse({ success: false, error: err.message });
         });
-      }).catch(err => {
-        logger.error('Failed to import auth module:', err);
-        sendResponse({ success: false, error: err.message });
-      });
       
       return true; // Keep message channel open for async response
     }

@@ -1,7 +1,6 @@
-
 // Auth utilities for Chrome extension
 import { logger } from './logger.js';
-import { handleError } from './errorHandler.js';
+import { handleError, safeFetch } from './errorHandler.js';
 
 // Get the production auth callback URL - NEVER use localhost
 const getProductionRedirectUrl = () => {
@@ -10,7 +9,7 @@ const getProductionRedirectUrl = () => {
 };
 
 // Get the auth URL with environment detection
-const getAuthUrl = () => {
+const getAuthUrl = (options = {}) => {
   // Check if in preview environment
   if (typeof window !== 'undefined' && 
       window.location && 
@@ -19,8 +18,26 @@ const getAuthUrl = () => {
     return 'https://preview-main-gallery-ai.lovable.app/auth';
   }
   
-  // Default to production domain
-  return 'https://main-gallery-hub.lovable.app/auth';
+  // Build URL with query params
+  let url = 'https://main-gallery-hub.lovable.app/auth';
+  
+  // Add any provided options as query parameters
+  if (options && Object.keys(options).length > 0) {
+    const params = new URLSearchParams();
+    
+    for (const [key, value] of Object.entries(options)) {
+      if (value !== undefined && value !== null) {
+        params.append(key, value.toString());
+      }
+    }
+    
+    const queryString = params.toString();
+    if (queryString) {
+      url += '?' + queryString;
+    }
+  }
+  
+  return url;
 };
 
 // Get the gallery URL with environment detection
@@ -88,77 +105,51 @@ async function handleEmailPasswordLogin(email, password) {
     const apiUrl = `${getApiUrl()}/auth/login`;
     logger.debug('Login API URL:', apiUrl);
     
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password }),
-    });
-    
-    // Check for HTML response (which would cause JSON parse error)
-    const contentType = response.headers.get("content-type");
-    if (contentType && contentType.includes("text/html")) {
-      logger.error("Received HTML response instead of JSON");
-      throw new Error("Invalid server response format. Please try again later.");
-    }
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = "Login failed";
+    try {
+      const response = await safeFetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
       
-      try {
-        // Try to parse as JSON
-        const errorData = JSON.parse(errorText);
-        errorMessage = errorData.message || `Login failed with status: ${response.status}`;
-      } catch (parseError) {
-        // If it's not valid JSON, use the raw text
-        errorMessage = errorText || `Login failed with status: ${response.status}`;
+      if (!response || !response.access_token) {
+        throw new Error('No authentication token received');
       }
       
-      throw new Error(errorMessage);
+      // Store token info and user email for extension usage
+      const tokenData = {
+        access_token: response.access_token,
+        refresh_token: response.refresh_token || '',
+        email: email,
+        timestamp: Date.now(),
+        expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours expiry
+      };
+      
+      // Store in Chrome storage
+      chrome.storage.sync.set({
+        'main_gallery_auth_token': tokenData,
+        'main_gallery_user_email': email
+      }, () => {
+        logger.info('Auth token and user info stored in extension storage');
+      });
+      
+      return {
+        success: true,
+        user: { email },
+        token: response.access_token
+      };
+    } catch (fetchError) {
+      // Check if this is an HTML response error
+      if (fetchError.isHtmlError) {
+        logger.error('Received HTML response instead of JSON during login');
+        throw new Error("Invalid server response format. Please try again later.");
+      }
+      
+      // Other fetch errors
+      throw fetchError;
     }
-    
-    // Get the response as text first to inspect
-    const responseText = await response.text();
-    logger.debug('Login response text:', responseText);
-    
-    // Try to parse the response as JSON
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (e) {
-      logger.error('Failed to parse response as JSON:', e);
-      logger.error('Response text was:', responseText);
-      throw new Error('Invalid response format');
-    }
-    
-    if (!data.access_token) {
-      throw new Error('No authentication token received');
-    }
-    
-    // Store token info and user email for extension usage
-    const tokenData = {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token || '',
-      email: email,
-      timestamp: Date.now(),
-      expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours expiry
-    };
-    
-    // Store in Chrome storage
-    chrome.storage.sync.set({
-      'main_gallery_auth_token': tokenData,
-      'main_gallery_user_email': email
-    }, () => {
-      logger.info('Auth token and user info stored in extension storage');
-    });
-    
-    return {
-      success: true,
-      user: { email },
-      token: data.access_token
-    };
   } catch (error) {
     logger.error('Email/password login error:', error);
     throw error;
@@ -260,18 +251,8 @@ function setupAuthCallbackListener() {
 // Open auth page with improved environment detection
 function openAuthPage(tabId = null, options = {}) {
   try {
-    // Determine the correct domain based on environment
-    let authUrl = getAuthUrl();
-    
-    // Add any query parameters
-    const searchParams = new URLSearchParams();
-    if (options.redirect) searchParams.append('redirect', options.redirect);
-    if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
-    if (options.signup) searchParams.append('signup', 'true');
-    if (options.from) searchParams.append('from', options.from);
-    
-    const queryString = searchParams.toString();
-    const fullAuthUrl = queryString ? `${authUrl}?${queryString}` : authUrl;
+    // Get the full auth URL with options
+    const fullAuthUrl = getAuthUrl(options);
     
     // Log the URL we're opening for debugging
     logger.info('Opening auth URL:', fullAuthUrl);
@@ -350,20 +331,75 @@ function getUserEmail() {
   });
 }
 
-// Log out from all platforms
+// Improved logout function with better error handling
 function logout() {
-  try {
-    // Clear extension storage
-    return new Promise((resolve) => {
-      chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-        logger.info('Successfully logged out from extension storage');
-        resolve(true);
+  return new Promise((resolve, reject) => {
+    try {
+      logger.info('Processing logout request');
+      
+      // Get current token to check if we need to call API
+      chrome.storage.sync.get(['main_gallery_auth_token'], async (result) => {
+        const token = result.main_gallery_auth_token;
+        
+        // Try API logout only if we have a token
+        if (token && token.access_token) {
+          try {
+            // Call the API to invalidate the token
+            const apiUrl = `${getApiUrl()}/auth/logout`;
+            await safeFetch(apiUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token.access_token}`,
+                'Content-Type': 'application/json',
+              }
+            }).catch(err => {
+              // Log but continue even if API call fails
+              logger.error('API logout failed:', err);
+            });
+          } catch (apiError) {
+            // Log but continue with local logout even if API call fails
+            logger.error('Error during API logout:', apiError);
+          }
+        }
+        
+        // Always clear extension storage regardless of API result
+        chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
+          if (chrome.runtime.lastError) {
+            logger.error('Error clearing storage during logout:', chrome.runtime.lastError);
+          } else {
+            logger.info('Successfully cleared auth data from storage');
+          }
+          
+          // Also try to clear localStorage for web app integration
+          try {
+            if (window.localStorage) {
+              window.localStorage.removeItem('access_token');
+              window.localStorage.removeItem('main_gallery_auth_token');
+              window.localStorage.removeItem('main_gallery_user_email');
+              logger.info('Cleared localStorage items');
+            }
+          } catch (storageError) {
+            logger.error('Error clearing localStorage:', storageError);
+          }
+          
+          // Success regardless of API or localStorage results
+          resolve(true);
+        });
       });
-    });
-  } catch (error) {
-    handleError('logout', error);
-    return Promise.resolve(false);
-  }
+    } catch (error) {
+      handleError('logout', error);
+      
+      // Attempt emergency cleanup as fallback
+      try {
+        chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
+          logger.info('Emergency storage cleanup during logout error');
+          resolve(true); // Consider it a success if we at least cleared storage
+        });
+      } catch (emergencyError) {
+        reject(new Error('Failed to logout: ' + (error.message || 'Unknown error')));
+      }
+    }
+  });
 }
 
 // Export functions
