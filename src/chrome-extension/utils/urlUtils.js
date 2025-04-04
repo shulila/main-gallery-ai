@@ -1,177 +1,108 @@
 
 /**
- * URL and domain utilities for MainGallery.AI
+ * URL utility functions for MainGallery.AI
  */
 
-import { handleError } from './errorHandler.js';
+import { logger } from './logger.js';
 
-/**
- * Check if a string is a valid URL
- * @param {string} url - URL to validate
- * @returns {boolean} True if URL is valid
- */
-export function isValidUrl(url) {
-  try {
-    new URL(url);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
+// Supported platforms for extension activation - same as in auth.js
+const SUPPORTED_PLATFORMS = [
+  'midjourney.com',
+  'leonardo.ai',
+  'openai.com',
+  'dreamstudio.ai',
+  'stability.ai',
+  'runwayml.com',
+  'pika.art',
+  'discord.com/channels',
+  'playgroundai.com',
+  'creator.nightcafe.studio'
+];
 
 /**
  * Check if a URL is from a supported AI platform
- * @param {string} url - URL to check
- * @returns {boolean} True if URL is from a supported platform
+ * @param {string} url - The URL to check
+ * @returns {boolean} True if supported, false otherwise
  */
 export function isSupportedPlatformUrl(url) {
   if (!url) return false;
   
-  // Skip chrome:// URLs and extension pages
-  if (url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
+  try {
+    const urlObj = new URL(url);
+    return SUPPORTED_PLATFORMS.some(platform => 
+      urlObj.hostname.includes(platform) || 
+      (platform.includes('discord.com') && urlObj.pathname.includes('midjourney'))
+    );
+  } catch (err) {
+    logger.error('Error checking URL support:', err);
     return false;
   }
+}
+
+/**
+ * Extract platform identifier from URL
+ * @param {string} url - The URL to analyze
+ * @returns {string|null} Platform identifier or null if not recognized
+ */
+export function getPlatformIdFromUrl(url) {
+  if (!url) return null;
   
   try {
     const urlObj = new URL(url);
     
-    // Supported domains
-    const supportedDomains = [
-      'midjourney.com',
-      'www.midjourney.com',
-      'openai.com',
-      'leonardo.ai',
-      'app.leonardo.ai',
-      'runwayml.com',
-      'pika.art',
-      'dreamstudio.ai',
-      'stability.ai',
-      'playgroundai.com',
-      'creator.nightcafe.studio'
-    ];
-    
-    // Supported paths
-    const supportedPaths = [
-      '/app',
-      '/archive',
-      '/create',
-      '/organize',
-      '/generate',
-      '/workspace',
-      '/dall-e'
-    ];
-    
-    // Check domain match
-    const isDomainSupported = supportedDomains.some(domain => 
-      urlObj.hostname === domain || urlObj.hostname.endsWith(`.${domain}`)
-    );
-    
-    // Check if path is supported
-    const isPathSupported = supportedPaths.some(path => 
-      urlObj.pathname === path || urlObj.pathname.startsWith(path)
-    );
-    
-    // Special case for OpenAI
-    if (urlObj.hostname.includes('openai.com') && urlObj.pathname.includes('/dall-e')) {
-      return true;
+    for (const platform of SUPPORTED_PLATFORMS) {
+      if (urlObj.hostname.includes(platform)) {
+        // Return cleaned platform identifier (remove .com etc)
+        return platform.split('.')[0];
+      }
     }
     
-    // Special case for Midjourney - accept any URL on midjourney.com
-    if (urlObj.hostname.includes('midjourney.com')) {
-      return true;
-    }
-    
-    // Special case for Discord with Midjourney bot
-    if (urlObj.hostname.includes('discord.com') && urlObj.pathname.includes('midjourney')) {
-      return true;
-    }
-    
-    return isDomainSupported && isPathSupported;
-  } catch (error) {
-    handleError('isSupportedPlatformUrl', error, { silent: true });
-    return false;
-  }
-}
-
-/**
- * Get the platform ID from a URL
- * @param {string} url - URL to analyze
- * @returns {string} Platform ID or 'unknown'
- */
-export function getPlatformIdFromUrl(url) {
-  try {
-    const urlObj = new URL(url);
-    
-    if (urlObj.hostname.includes('midjourney')) return 'midjourney';
-    if (urlObj.hostname.includes('leonardo')) return 'leonardo';
-    if (urlObj.hostname.includes('openai')) return 'dalle';
-    if (urlObj.hostname.includes('pika')) return 'pika';
-    if (urlObj.hostname.includes('runway')) return 'runway';
-    if (urlObj.hostname.includes('stability') || urlObj.hostname.includes('dreamstudio')) return 'stability';
-    if (urlObj.hostname.includes('playgroundai')) return 'playground';
-    if (urlObj.hostname.includes('nightcafe')) return 'nightcafe';
-    if (urlObj.hostname.includes('discord')) return 'discord';
-    
-    return 'unknown';
-  } catch (error) {
-    handleError('getPlatformIdFromUrl', error, { silent: true });
-    return 'unknown';
-  }
-}
-
-/**
- * Get the production domain for MainGallery
- * @returns {string} Production domain
- */
-export function getProductionDomain() {
-  return 'main-gallery-hub.lovable.app';
-}
-
-/**
- * Get the preview domain for MainGallery
- * @returns {string} Preview domain
- */
-export function getPreviewDomain() {
-  return 'preview-main-gallery-ai.lovable.app';
-}
-
-/**
- * Check if the current domain is the production domain
- * @returns {boolean} True if on production domain
- */
-export function isProductionDomain() {
-  return window.location.hostname === getProductionDomain();
-}
-
-/**
- * Fix domain if on preview but should be on production
- * @param {string} url - Current URL
- * @returns {string|null} Corrected URL or null if no change needed
- */
-export function getCorrectDomainUrl(url) {
-  try {
-    const currentUrl = new URL(url);
-    
-    // If on preview domain with auth token, should be on production
-    if (
-      currentUrl.hostname === getPreviewDomain() &&
-      (currentUrl.hash.includes('access_token=') || 
-       currentUrl.search.includes('access_token='))
-    ) {
-      return url.replace(getPreviewDomain(), getProductionDomain());
+    // Special case for Discord + Midjourney
+    if (urlObj.hostname.includes('discord.com') && 
+        urlObj.pathname.includes('midjourney')) {
+      return 'midjourney';
     }
     
     return null;
-  } catch (error) {
-    handleError('getCorrectDomainUrl', error, { silent: true });
+  } catch (err) {
+    logger.error('Error getting platform ID from URL:', err);
     return null;
   }
 }
 
 /**
- * Get the gallery URL
- * @returns {string} URL for the gallery page
+ * Get the correct gallery URL based on environment
+ * @returns {string} The gallery URL
  */
 export function getGalleryUrl() {
-  return `https://${getProductionDomain()}/gallery`;
+  // Check if in preview environment
+  if (typeof window !== 'undefined' && 
+      window.location && 
+      window.location.hostname && 
+      window.location.hostname.includes('preview')) {
+    return 'https://preview-main-gallery-ai.lovable.app/gallery';
+  }
+  
+  // Default to production domain
+  return 'https://main-gallery-hub.lovable.app/gallery';
+}
+
+/**
+ * Is URL an authentication callback URL?
+ * @param {string} url - The URL to check
+ * @returns {boolean} True if it's an auth callback URL
+ */
+export function isAuthCallbackUrl(url) {
+  if (!url) return false;
+  
+  try {
+    return (
+      url.includes('main-gallery-hub.lovable.app/auth/callback') || 
+      url.includes('preview-main-gallery-ai.lovable.app/auth/callback') ||
+      url.includes('/auth?access_token=')
+    );
+  } catch (err) {
+    logger.error('Error checking if URL is auth callback:', err);
+    return false;
+  }
 }

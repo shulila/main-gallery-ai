@@ -1,5 +1,7 @@
 
 // Auth utilities for Chrome extension
+import { logger } from './logger.js';
+import { handleError } from './errorHandler.js';
 
 // Get the production auth callback URL - NEVER use localhost
 const getProductionRedirectUrl = () => {
@@ -72,7 +74,7 @@ function isSupportedPlatform(url) {
     return SUPPORTED_PLATFORMS.some(platform => urlObj.hostname.includes(platform) || 
       (platform.includes('discord.com') && urlObj.pathname.includes('midjourney')));
   } catch (e) {
-    console.error('Invalid URL:', url);
+    logger.error('Invalid URL:', url, e);
     return false;
   }
 }
@@ -80,11 +82,11 @@ function isSupportedPlatform(url) {
 // Handle standard email/password login
 async function handleEmailPasswordLogin(email, password) {
   try {
-    console.log('Attempting to log in with email and password');
+    logger.info('Attempting to log in with email and password');
     
     // Make API call to the backend for authentication
     const apiUrl = `${getApiUrl()}/auth/login`;
-    console.log('Login API URL:', apiUrl);
+    logger.debug('Login API URL:', apiUrl);
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -97,7 +99,7 @@ async function handleEmailPasswordLogin(email, password) {
     // Check for HTML response (which would cause JSON parse error)
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("text/html")) {
-      console.error("Received HTML response instead of JSON");
+      logger.error("Received HTML response instead of JSON");
       throw new Error("Invalid server response format. Please try again later.");
     }
     
@@ -119,15 +121,15 @@ async function handleEmailPasswordLogin(email, password) {
     
     // Get the response as text first to inspect
     const responseText = await response.text();
-    console.log('Login response text:', responseText);
+    logger.debug('Login response text:', responseText);
     
     // Try to parse the response as JSON
     let data;
     try {
       data = JSON.parse(responseText);
     } catch (e) {
-      console.error('Failed to parse response as JSON:', e);
-      console.error('Response text was:', responseText);
+      logger.error('Failed to parse response as JSON:', e);
+      logger.error('Response text was:', responseText);
       throw new Error('Invalid response format');
     }
     
@@ -149,7 +151,7 @@ async function handleEmailPasswordLogin(email, password) {
       'main_gallery_auth_token': tokenData,
       'main_gallery_user_email': email
     }, () => {
-      console.log('Auth token and user info stored in extension storage');
+      logger.info('Auth token and user info stored in extension storage');
     });
     
     return {
@@ -158,7 +160,7 @@ async function handleEmailPasswordLogin(email, password) {
       token: data.access_token
     };
   } catch (error) {
-    console.error('Email/password login error:', error);
+    logger.error('Email/password login error:', error);
     throw error;
   }
 }
@@ -166,7 +168,7 @@ async function handleEmailPasswordLogin(email, password) {
 // Set up a listener for auth callback
 function setupAuthCallbackListener() {
   try {
-    console.log('Setting up auth callback listener');
+    logger.info('Setting up auth callback listener');
     
     // Use tabs.onUpdated to detect auth callbacks
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -175,7 +177,7 @@ function setupAuthCallbackListener() {
           (tab.url.includes('main-gallery-hub.lovable.app/auth/callback') || 
            tab.url.includes('/auth?access_token='))) {
         
-        console.log('Auth callback detected:', tab.url);
+        logger.info('Auth callback detected:', tab.url);
         
         // Get auth token from the URL - handle both hash and query params
         const url = new URL(tab.url);
@@ -191,7 +193,7 @@ function setupAuthCallbackListener() {
         
         // If we have tokens, validate and store them
         if (accessToken) {
-          console.log('Auth tokens detected, will store session');
+          logger.info('Auth tokens detected, will store session');
           
           // Calculate token expiration (24 hours from now)
           const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
@@ -206,7 +208,7 @@ function setupAuthCallbackListener() {
             },
             'main_gallery_user_email': userEmail || 'User'
           }, () => {
-            console.log('Auth token and user info stored in extension storage with expiration');
+            logger.info('Auth token and user info stored in extension storage with expiration');
             
             // Show success notification
             try {
@@ -217,7 +219,7 @@ function setupAuthCallbackListener() {
                 message: 'You are now logged in to MainGallery'
               });
             } catch (err) {
-              console.error('Error showing auth success notification:', err);
+              handleError('showAuthSuccessNotification', err, { silent: true });
             }
             
             // Close the auth tab after successful login
@@ -232,7 +234,7 @@ function setupAuthCallbackListener() {
             }, 1000);
           });
         } else {
-          console.error('Auth callback detected but no access token found');
+          logger.error('Auth callback detected but no access token found');
           
           // Show error notification
           try {
@@ -243,44 +245,59 @@ function setupAuthCallbackListener() {
               message: 'Unable to login. Please try again.'
             });
           } catch (err) {
-            console.error('Error showing auth error notification:', err);
+            handleError('showAuthErrorNotification', err, { silent: true });
           }
         }
       }
     });
     
-    console.log('Auth callback listener set up using tabs API');
+    logger.info('Auth callback listener set up using tabs API');
   } catch (error) {
-    console.error('Error setting up auth callback listener:', error);
+    handleError('setupAuthCallbackListener', error);
   }
 }
 
 // Open auth page with improved environment detection
 function openAuthPage(tabId = null, options = {}) {
-  // Determine the correct domain based on environment
-  let authUrl = getAuthUrl();
-  
-  // Add any query parameters
-  const searchParams = new URLSearchParams();
-  if (options.redirect) searchParams.append('redirect', options.redirect);
-  if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
-  if (options.signup) searchParams.append('signup', 'true');
-  if (options.from) searchParams.append('from', options.from);
-  
-  const queryString = searchParams.toString();
-  const fullAuthUrl = queryString ? `${authUrl}?${queryString}` : authUrl;
-  
-  // Log the URL we're opening for debugging
-  console.log('Opening auth URL:', fullAuthUrl);
-  
-  // Open the URL
-  if (tabId) {
-    chrome.tabs.update(tabId, { url: fullAuthUrl });
-  } else {
-    chrome.tabs.create({ url: fullAuthUrl });
+  try {
+    // Determine the correct domain based on environment
+    let authUrl = getAuthUrl();
+    
+    // Add any query parameters
+    const searchParams = new URLSearchParams();
+    if (options.redirect) searchParams.append('redirect', options.redirect);
+    if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
+    if (options.signup) searchParams.append('signup', 'true');
+    if (options.from) searchParams.append('from', options.from);
+    
+    const queryString = searchParams.toString();
+    const fullAuthUrl = queryString ? `${authUrl}?${queryString}` : authUrl;
+    
+    // Log the URL we're opening for debugging
+    logger.info('Opening auth URL:', fullAuthUrl);
+    
+    // Open the URL
+    if (tabId) {
+      chrome.tabs.update(tabId, { url: fullAuthUrl });
+    } else {
+      chrome.tabs.create({ url: fullAuthUrl });
+    }
+    
+    logger.info('Opened auth URL:', fullAuthUrl);
+  } catch (error) {
+    handleError('openAuthPage', error);
+    
+    // Fallback to opening a simple URL if something went wrong
+    try {
+      if (tabId) {
+        chrome.tabs.update(tabId, { url: getAuthUrl() });
+      } else {
+        chrome.tabs.create({ url: getAuthUrl() });
+      }
+    } catch (fallbackError) {
+      handleError('openAuthPageFallback', fallbackError, { silent: true });
+    }
   }
-  
-  console.log('Opened auth URL:', fullAuthUrl);
 }
 
 // Improved isLoggedIn to check expiration
@@ -296,7 +313,7 @@ function isLoggedIn() {
           const hasExpiry = token.expires_at !== undefined;
           const isExpired = hasExpiry && Date.now() > token.expires_at;
           
-          console.log('Token found, checking expiration:', 
+          logger.debug('Token found, checking expiration:', 
                      hasExpiry ? `expires at ${new Date(token.expires_at).toISOString()}` : 'no expiry',
                      isExpired ? 'EXPIRED' : 'VALID');
           
@@ -305,7 +322,7 @@ function isLoggedIn() {
             resolve(true);
             return;
           } else {
-            console.log('Token expired, will remove it');
+            logger.info('Token expired, will remove it');
             // Token exists but is expired, clean it up
             chrome.storage.sync.remove(['main_gallery_auth_token'], () => {
               resolve(false);
@@ -317,7 +334,7 @@ function isLoggedIn() {
         resolve(false);
       });
     } catch (err) {
-      console.error('Error in isLoggedIn:', err);
+      handleError('isLoggedIn', err);
       // If there's an error, consider the user not logged in
       resolve(false);
     }
@@ -339,12 +356,12 @@ function logout() {
     // Clear extension storage
     return new Promise((resolve) => {
       chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-        console.log('Successfully logged out from extension storage');
+        logger.info('Successfully logged out from extension storage');
         resolve(true);
       });
     });
   } catch (error) {
-    console.error('Logout error:', error);
+    handleError('logout', error);
     return Promise.resolve(false);
   }
 }

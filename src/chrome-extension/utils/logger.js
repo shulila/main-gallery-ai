@@ -1,64 +1,102 @@
 
 /**
- * Centralized logging utility for MainGallery.AI
- * Provides consistent logging with environment awareness
+ * MainGallery.AI Structured Logging Module
+ * Provides consistent logging across the extension
  */
 
-const PREFIX = '[MainGallery]';
+// Log levels
+const LOG_LEVELS = {
+  ERROR: 0,
+  WARN: 1,
+  INFO: 2,
+  DEBUG: 3
+};
+
+// Current log level (can be adjusted via settings)
+let currentLogLevel = LOG_LEVELS.INFO;
+
+// Prefix for all logs
+const LOG_PREFIX = '[MainGallery]';
 
 /**
- * Determine if we're in development mode
- * @returns {boolean} True if in development mode
+ * Set the current log level
+ * @param {number} level - Log level constant from LOG_LEVELS
  */
-function isDevelopment() {
-  // In browser extension context there's no NODE_ENV, so we use a debug flag
-  // This could be configured via storage.sync in a more advanced implementation
-  return false; // Default to production behavior for safety
+function setLogLevel(level) {
+  if (Object.values(LOG_LEVELS).includes(level)) {
+    currentLogLevel = level;
+  }
 }
 
 /**
- * Log utility with severity levels and consistent formatting
+ * Log an error message
+ * @param {string} message - The message to log
+ * @param {Error|object} [error] - Optional error object
  */
-export const logger = {
-  debug: (message, data = null) => {
-    if (isDevelopment()) {
-      if (data) {
-        console.debug(`${PREFIX} DEBUG:`, message, data);
-      } else {
-        console.debug(`${PREFIX} DEBUG:`, message);
-      }
-    }
-  },
-  
-  log: (message, data = null) => {
-    if (data) {
-      console.log(`${PREFIX}`, message, data);
-    } else {
-      console.log(`${PREFIX}`, message);
-    }
-  },
-  
-  info: (message, data = null) => {
-    if (data) {
-      console.info(`${PREFIX} INFO:`, message, data);
-    } else {
-      console.info(`${PREFIX} INFO:`, message);
-    }
-  },
-  
-  warn: (message, data = null) => {
-    if (data) {
-      console.warn(`${PREFIX} WARNING:`, message, data);
-    } else {
-      console.warn(`${PREFIX} WARNING:`, message);
-    }
-  },
-  
-  error: (message, error = null) => {
-    if (error) {
-      console.error(`${PREFIX} ERROR:`, message, error);
-    } else {
-      console.error(`${PREFIX} ERROR:`, message);
-    }
+function error(message, error) {
+  if (currentLogLevel >= LOG_LEVELS.ERROR) {
+    console.error(`${LOG_PREFIX} ERROR: ${message}`, error || '');
   }
+}
+
+/**
+ * Log a warning message
+ * @param {string} message - The message to log
+ * @param {object} [data] - Optional data to include
+ */
+function warn(message, data) {
+  if (currentLogLevel >= LOG_LEVELS.WARN) {
+    console.warn(`${LOG_PREFIX} WARN: ${message}`, data || '');
+  }
+}
+
+/**
+ * Log an info message
+ * @param {string} message - The message to log
+ * @param {object} [data] - Optional data to include
+ */
+function info(message, data) {
+  if (currentLogLevel >= LOG_LEVELS.INFO) {
+    console.info(`${LOG_PREFIX} INFO: ${message}`, data || '');
+  }
+}
+
+/**
+ * Log a debug message
+ * @param {string} message - The message to log
+ * @param {object} [data] - Optional data to include
+ */
+function debug(message, data) {
+  if (currentLogLevel >= LOG_LEVELS.DEBUG) {
+    console.debug(`${LOG_PREFIX} DEBUG: ${message}`, data || '');
+  }
+}
+
+/**
+ * Simple log, equivalent to info level
+ * @param {string} message - The message to log
+ * @param {object} [data] - Optional data to include
+ */
+function log(message, data) {
+  info(message, data);
+}
+
+/**
+ * Get the current log level
+ * @returns {number} Current log level
+ */
+function getLogLevel() {
+  return currentLogLevel;
+}
+
+// Export all functions
+export const logger = {
+  setLogLevel,
+  getLogLevel,
+  error,
+  warn,
+  info,
+  debug,
+  log,
+  LOG_LEVELS
 };
