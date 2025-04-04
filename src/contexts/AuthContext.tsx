@@ -498,7 +498,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         localStorage.clear(); // More aggressive approach in case of errors
         if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
-          window.chrome.storage.sync.clear();
+          // Replace clear() with remove() for specific keys
+          window.chrome.storage.sync.remove([
+            'main_gallery_auth_token', 
+            'main_gallery_user_email',
+            // Add any other keys that need to be removed
+          ], () => {
+            console.log('Chrome storage keys removed during fallback cleanup');
+          });
         }
         setSession(null);
         setUser(null);
