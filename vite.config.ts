@@ -59,8 +59,15 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
             entryFileNames: "[name].js",
             chunkFileNames: "chunks/[name]-[hash].js",
             assetFileNames: "assets/[name]-[hash].[ext]",
+            format: 'es', // Ensure output is ES modules
+            inlineDynamicImports: false,
           },
         } as RollupOptions, // Add type assertion here
+      },
+      optimizeDeps: {
+        // Disable optimization for extension builds to prevent import issues
+        entries: [],
+        disabled: mode === 'extension',
       },
     };
     

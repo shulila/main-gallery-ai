@@ -4,6 +4,7 @@
  * Provides consistent error handling and reporting with improved API error detection
  */
 
+// Import logger in a way that works with ES modules
 import { logger } from './logger.js';
 
 /**
@@ -72,43 +73,6 @@ export function handleError(context, error, options = {}) {
   if (rethrow) {
     throw error;
   }
-}
-
-/**
- * Creates a safe function wrapper that catches errors and handles them
- * @param {Function} fn - The function to wrap
- * @param {string} context - Context for error reporting
- * @param {Object} [options] - Error handling options
- * @returns {Function} Wrapped function that handles its own errors
- */
-export function createSafeFunction(fn, context, options = {}) {
-  return function safeFunctionWrapper(...args) {
-    try {
-      const result = fn.apply(this, args);
-      
-      // Handle promises
-      if (result instanceof Promise) {
-        return result.catch(error => {
-          handleError(context, error, options);
-          if (options.defaultValue !== undefined) {
-            return options.defaultValue;
-          }
-          throw error;
-        });
-      }
-      
-      return result;
-    } catch (error) {
-      handleError(context, error, options);
-      if (options.defaultValue !== undefined) {
-        return options.defaultValue;
-      }
-      if (options.rethrow !== false) {
-        throw error;
-      }
-      return undefined;
-    }
-  };
 }
 
 /**
@@ -288,7 +252,6 @@ export async function safeFetch(url, options = {}) {
 // Export utility functions
 export const errorUtils = {
   handleError,
-  createSafeFunction,
   isHtmlResponse,
   safeFetch
 };

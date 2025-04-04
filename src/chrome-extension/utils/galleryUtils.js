@@ -3,6 +3,8 @@
  * Utility functions for gallery state management
  */
 
+import { logger } from './logger.js';
+
 /**
  * Check if gallery is empty based on localStorage data
  * @returns {Promise<boolean>} True if gallery is empty, false otherwise
@@ -22,7 +24,7 @@ export async function isGalleryEmpty() {
       });
     });
   } catch (error) {
-    console.error('Error checking gallery state:', error);
+    logger.error('Error checking gallery state:', error);
     // Default to empty gallery in case of error
     return true;
   }
@@ -36,6 +38,7 @@ export async function isGalleryEmpty() {
 export async function setGalleryHasImages(hasImages = true) {
   return new Promise((resolve) => {
     chrome.storage.local.set({ 'gallery_has_images': hasImages }, () => {
+      logger.log(`Gallery state updated: hasImages=${hasImages}`);
       resolve();
     });
   });
@@ -48,7 +51,52 @@ export async function setGalleryHasImages(hasImages = true) {
 export async function clearGalleryState() {
   return new Promise((resolve) => {
     chrome.storage.local.remove(['gallery_has_images'], () => {
+      logger.log('Gallery state cleared');
       resolve();
     });
   });
+}
+
+/**
+ * Handle cleanup when an error occurs during image sync
+ */
+export async function handleGallerySyncError(error) {
+  logger.error('Gallery sync error:', error);
+  // Don't change gallery state on error, as it might be a temporary issue
+}
+
+/**
+ * Get stored sync images from session storage
+ * @returns {Array} Array of images or empty array if none found
+ */
+export function getStoredSyncImages() {
+  try {
+    const storedImagesJson = sessionStorage.getItem('maingallery_sync_images');
+    if (!storedImagesJson) return [];
+    
+    const images = JSON.parse(storedImagesJson);
+    return Array.isArray(images) ? images : [];
+  } catch (error) {
+    logger.error('Error getting stored sync images:', error);
+    return [];
+  }
+}
+
+/**
+ * Store images in session storage for later retrieval
+ * @param {Array} images - Array of image objects
+ * @returns {boolean} Success status
+ */
+export function storeImagesForSync(images) {
+  try {
+    if (!Array.isArray(images) || images.length === 0) {
+      return false;
+    }
+    
+    sessionStorage.setItem('maingallery_sync_images', JSON.stringify(images));
+    return true;
+  } catch (error) {
+    logger.error('Error storing images for sync:', error);
+    return false;
+  }
 }

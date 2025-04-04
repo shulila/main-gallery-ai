@@ -13,13 +13,13 @@ interface Chrome {
       get: (keys: string[] | string | null, callback: (result: any) => void) => void;
       set: (items: object, callback?: () => void) => void;
       remove: (keys: string | string[], callback?: () => void) => void;
-      clear: (callback?: () => void) => void; // Ensure clear method is required, not optional
+      clear: (callback?: () => void) => void;
     };
     sync?: {
       get: (keys: string[] | string | null, callback: (result: any) => void) => void;
       set: (items: object, callback?: () => void) => void;
       remove: (keys: string | string[], callback?: () => void) => void;
-      clear: (callback?: () => void) => void; // Ensure clear method is required, not optional
+      clear: (callback?: () => void) => void;
     };
     session?: {
       get: (keys: string[] | string | null, callback: (result: any) => void) => void;
@@ -71,6 +71,10 @@ interface Chrome {
   };
   action?: {
     openPopup: () => void;
+    onClicked: {
+      addListener: (callback: (tab: any) => void) => void;
+      removeListener: (callback: (tab: any) => void) => void;
+    };
   };
 }
 

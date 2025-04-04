@@ -141,6 +141,16 @@ if (fs.existsSync(contentInjectionSource)) {
     if (fs.existsSync(sourcePath)) {
       fs.copyFileSync(sourcePath, destPath);
       console.log(`Copied ${file}`);
+      
+      // Ensure module compatibility
+      const content = fs.readFileSync(destPath, 'utf8');
+      
+      // Check if the file doesn't have import/export but should be a module
+      if (!content.includes('import ') && !content.includes('export ')) {
+        const moduleHeader = '// Ensure this file is treated as an ES module\n';
+        fs.writeFileSync(destPath, moduleHeader + content);
+        console.log(`Added module header to ${file}`);
+      }
     } else {
       // Check if it's in the output from Vite build
       const viteBuildPath = path.join(OUTPUT_DIR, file);
@@ -174,3 +184,49 @@ console.log('To load the extension in Chrome:');
 console.log('1. Go to chrome://extensions/');
 console.log('2. Enable "Developer mode"');
 console.log('3. Click "Load unpacked" and select the dist-extension folder');
+
+// Step 10: Write a post-build script to ensure module compatibility
+const postBuildScriptPath = path.join(OUTPUT_DIR, 'fix-modules.js');
+const postBuildScript = `
+/**
+ * Post-build script to fix module compatibility issues
+ * Run this with: node fix-modules.js
+ */
+const fs = require('fs');
+const path = require('path');
+
+// Function to add module export to files that need it
+function ensureModuleCompatibility(filePath) {
+  if (!fs.existsSync(filePath)) return false;
+  
+  const content = fs.readFileSync(filePath, 'utf8');
+  
+  // If the file doesn't have import/export statements, add a dummy export
+  if (!content.includes('import ') && !content.includes('export ')) {
+    console.log(\`Adding module export to \${filePath}\`);
+    fs.writeFileSync(filePath, content + "\\n// Ensure module compatibility\\nexport const __moduleCheck = true;");
+    return true;
+  }
+  
+  return false;
+}
+
+// Check core files
+['background.js', 'content.js', 'bridge.js'].forEach(file => {
+  ensureModuleCompatibility(file);
+});
+
+// Check utils folder
+const utilsDir = 'utils';
+if (fs.existsSync(utilsDir)) {
+  fs.readdirSync(utilsDir)
+    .filter(file => file.endsWith('.js'))
+    .forEach(file => {
+      ensureModuleCompatibility(path.join(utilsDir, file));
+    });
+}
+
+console.log('Module compatibility check complete');
+`;
+fs.writeFileSync(postBuildScriptPath, postBuildScript);
+console.log('Created post-build script for module compatibility');
