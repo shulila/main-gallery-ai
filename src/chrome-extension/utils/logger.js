@@ -38,10 +38,19 @@ function error(message, error) {
     // Check if error is an object with response property (fetch API error)
     if (error && error.response) {
       try {
+        const contentType = error.response.headers?.get('content-type') || 'unknown';
+        const isHtml = contentType.includes('text/html') || 
+                       (error.isHtmlError === true);
+        
+        if (isHtml) {
+          console.error(`${LOG_PREFIX} ERROR: Received HTML response instead of JSON`);
+        }
+        
         console.error(`${LOG_PREFIX} ERROR: ${message}`, {
           status: error.response.status,
           statusText: error.response.statusText,
-          responseType: error.response.headers?.get('content-type') || 'unknown',
+          responseType: contentType,
+          isHtml: isHtml,
           error: error
         });
       } catch (e) {
@@ -146,6 +155,14 @@ async function validateJsonResponse(response) {
         textPreview: text.substring(0, 100) + '...',
         parseError: e.message
       });
+      
+      // Log a specific error for HTML responses
+      if (text.includes('<!DOCTYPE html>') || text.includes('<html')) {
+        error('Received HTML response instead of JSON', {
+          contentType,
+          textPreview: text.substring(0, 100) + '...'
+        });
+      }
       
       return { 
         isJson: false, 

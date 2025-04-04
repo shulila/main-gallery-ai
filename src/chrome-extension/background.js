@@ -1,4 +1,3 @@
-
 /**
  * MainGallery.AI background script
  * Responsible for coordinating extension operations and communicating with tabs
@@ -7,14 +6,13 @@
 // Import required modules
 import { logger } from './utils/logger.js';
 import { handleError } from './utils/errorHandler.js';
-import { isSupportedPlatformUrl, getGalleryUrl } from './utils/urlUtils.js';
+import { isSupportedPlatformUrl, getGalleryUrl, getAuthUrl } from './utils/urlUtils.js';
 import { safeSendMessage, ensureContentScriptLoaded } from './utils/messaging.js';
 import { 
   isLoggedIn, 
   openAuthPage, 
   setupAuthCallbackListener,
   handleEmailPasswordLogin,
-  getAuthUrl
 } from './utils/auth.js';
 import { isGalleryEmpty, setGalleryHasImages } from './utils/galleryUtils.js';
 
@@ -174,7 +172,7 @@ function openGalleryWithImages(images) {
   });
 }
 
-// Handle action/icon clicks - Updated to check gallery state
+// Handle action/icon clicks - Direct open login or gallery
 chrome.action.onClicked.addListener(async (tab) => {
   logger.log('Extension icon clicked on tab:', tab?.url);
   
@@ -183,90 +181,107 @@ chrome.action.onClicked.addListener(async (tab) => {
     return;
   }
   
-  // Check if URL is supported
-  const supported = isSupportedPlatformUrl(tab.url);
-  logger.log('URL supported:', supported, tab.url);
-  
-  // Check login status
-  const loggedIn = await isLoggedIn();
-  logger.log('User logged in:', loggedIn);
-  
-  // Always redirect to auth page if not logged in
-  if (!loggedIn) {
-    logger.log('User not logged in, redirecting to auth page');
-    openAuthPage(null, { redirect: 'gallery', from: 'extension' });
-    return;
-  }
-  
-  // Handle unsupported site when logged in
-  if (!supported) {
-    logger.log('Tab URL not supported');
+  try {
+    // Check login status first
+    const loggedIn = await isLoggedIn();
+    logger.log('User logged in status:', loggedIn);
     
-    // Check if gallery is empty
-    const isEmpty = await isGalleryEmpty();
-    logger.log('Gallery is empty:', isEmpty);
-    
-    if (isEmpty) {
-      // Case 1: Initial Login (Empty Gallery State)
-      // Redirect to the gallery page with empty state parameter
-      chrome.tabs.create({ url: `${getGalleryUrl()}?state=empty` });
+    if (!loggedIn) {
+      // User not logged in, redirect directly to auth page
+      logger.log('User not logged in, opening auth page directly');
       
-      // Show notification to guide the user
+      // Get auth URL and open it in a new tab
+      const authUrl = getAuthUrl({ from: 'extension_icon' });
+      chrome.tabs.create({ url: authUrl });
+      
+      // Show a notification to guide the user
       createNotification(
-        'maingallery_empty_gallery', 
-        'Gallery is Empty', 
-        'Your gallery is empty. Switch to a supported AI platform to add images.'
+        'maingallery_login_redirect',
+        'Login Required',
+        'Please log in to access your AI image gallery'
       );
+      
+      return;
+    }
+    
+    // User is logged in, check if the current URL is supported
+    const supported = isSupportedPlatformUrl(tab.url);
+    logger.log('Current URL supported for scanning:', supported);
+    
+    if (supported) {
+      // If on a supported site, start the auto scan
+      const isReady = await ensureContentScriptLoaded(tab);
+      
+      if (isReady) {
+        // Content script is ready, send scan message
+        const response = await safeSendMessage(
+          tab.id, 
+          { 
+            action: 'startAutoScan',
+            options: { scrollDelay: 500, scrollStep: 800 }
+          }
+        );
+        
+        if (response && response.success) {
+          logger.log('Auto-scan initiated on page');
+          
+          createNotification(
+            'maingallery_scan_started', 
+            'Scanning Started', 
+            'MainGallery is scanning the page for AI images. Please keep the tab open.'
+          );
+        } else {
+          logger.error('Auto-scan could not be started:', response);
+          
+          // Show error to user
+          createNotification(
+            'maingallery_error', 
+            'Scan Error', 
+            'Could not scan the current page. Please refresh and try again.'
+          );
+        }
+      } else {
+        logger.error('Content script could not be loaded');
+        createNotification(
+          'maingallery_error', 
+          'Scan Error', 
+          'Could not initialize scanner. Please refresh the page and try again.'
+        );
+      }
     } else {
-      // Case 2: Subsequent Logins (Populated Gallery State)
-      // Redirect to the regular gallery page
-      chrome.tabs.create({ url: getGalleryUrl() });
+      // Not on a supported site, open the gallery directly
+      logger.log('Not on a supported site, opening gallery');
+      
+      // Check if gallery is empty
+      const isEmpty = await isGalleryEmpty();
+      
+      if (isEmpty) {
+        // Case 1: Initial Login (Empty Gallery State)
+        // Redirect to the gallery page with empty state parameter
+        chrome.tabs.create({ url: `${getGalleryUrl()}?state=empty&from=extension_icon` });
+        
+        // Show notification to guide the user
+        createNotification(
+          'maingallery_empty_gallery', 
+          'Gallery is Empty', 
+          'Your gallery is empty. Switch to a supported AI platform to add images.'
+        );
+      } else {
+        // Case 2: Subsequent Logins (Populated Gallery State)
+        // Redirect to the regular gallery page
+        chrome.tabs.create({ url: `${getGalleryUrl()}?from=extension_icon` });
+      }
     }
+  } catch (error) {
+    handleError('iconClickHandler', error);
     
-    return;
-  }
-  
-  // Handle supported site for logged-in user
-  logger.log('User is logged in and on a supported tab, starting auto-scan');
-  
-  // Ensure content script is loaded
-  const isReady = await ensureContentScriptLoaded(tab);
-  if (!isReady) {
-    logger.error('Content script could not be loaded');
-    createNotification(
-      'maingallery_error', 
-      'Scan Error', 
-      'Could not initialize scanner. Please refresh the page and try again.'
-    );
-    return;
-  }
-  
-  // Content script is ready, send scan message
-  const response = await safeSendMessage(
-    tab.id, 
-    { 
-      action: 'startAutoScan',
-      options: { scrollDelay: 500, scrollStep: 800 }
-    }
-  );
-  
-  if (response && response.success) {
-    logger.log('Auto-scan initiated on page');
+    // Fallback to opening auth page if any error occurs
+    chrome.tabs.create({ url: getAuthUrl({ from: 'extension_icon_error' }) });
     
     createNotification(
-      'maingallery_scan_started', 
-      'Scanning Started', 
-      'MainGallery is scanning the page for AI images. Please keep the tab open.'
-    );
-  } else {
-    logger.log('Auto-scan could not be started, will retry:', response);
-    
-    // Already tried in safeSendMessage's auto-retry but failed
-    // Show error to user
-    createNotification(
-      'maingallery_error', 
-      'Scan Error', 
-      'Could not scan the current page. Please refresh and try again.'
+      'maingallery_error',
+      'Error',
+      'An error occurred. Redirecting to login page.'
     );
   }
 });

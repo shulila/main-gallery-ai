@@ -31,20 +31,25 @@ export function handleError(context, error, options = {}) {
     try {
       // Log additional details about the API error
       const responseContentType = error.response.headers?.get('content-type') || 'unknown';
+      const isHtml = responseContentType.includes('text/html') || 
+                     (error.isHtmlError === true);
       
       logger.error('API Response Error Details', { 
         status: error.response.status,
         statusText: error.response.statusText,
         contentType: responseContentType,
-        isHtml: responseContentType.includes('text/html')
+        isHtml: isHtml
       });
       
       // If the error is HTML instead of JSON, log this specific issue
-      if (responseContentType.includes('text/html')) {
+      if (isHtml) {
         logger.error('Received HTML response instead of JSON', {
           url: error.response.url || 'Unknown URL',
           method: error.response.method || 'Unknown Method'
         });
+        
+        // Set a specific flag for better handling by callers
+        error.isHtmlError = true;
       }
     } catch (detailsError) {
       // If we can't extract error details, log that too
@@ -148,14 +153,19 @@ export async function safeFetch(url, options = {}) {
     
     // Check if the response is OK (status in the range 200-299)
     if (!response.ok) {
-      // Create a custom error object with the response attached
-      const error = new Error(`HTTP error ${response.status}: ${response.statusText}`);
-      error.response = response;
-      
       // Check if this is an HTML response when JSON was expected
       const isHtml = await isHtmlResponse(response);
+      
+      // Create a custom error object with the response attached
+      const error = new Error(
+        isHtml 
+          ? "Received HTML response instead of JSON" 
+          : `HTTP error ${response.status}: ${response.statusText}`
+      );
+      
+      error.response = response;
+      
       if (isHtml) {
-        error.message = "Received HTML response instead of JSON";
         error.isHtmlError = true;
       }
       
@@ -166,7 +176,11 @@ export async function safeFetch(url, options = {}) {
     const { isJson, data, htmlResponse } = await logger.validateJsonResponse(response);
     
     if (!isJson) {
-      const error = new Error("Invalid response format");
+      const error = new Error(
+        htmlResponse 
+          ? "Received HTML response instead of JSON" 
+          : "Invalid response format"
+      );
       error.response = response;
       error.isHtmlError = htmlResponse;
       error.rawData = data;
