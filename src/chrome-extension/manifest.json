@@ -2,7 +2,7 @@
 {
   "manifest_version": 3,
   "name": "MainGallery.AI",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Unified AI image gallery for multiple AI art platforms",
   "permissions": [
     "storage",

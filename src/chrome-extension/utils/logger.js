@@ -1,10 +1,10 @@
 
 /**
  * MainGallery.AI Structured Logging Module
- * Provides consistent logging across the extension
+ * Provides consistent logging across the extension with improved error handling
  */
 
-// Log levels
+// Log levels with DEBUG as highest verbosity
 const LOG_LEVELS = {
   ERROR: 0,
   WARN: 1,
@@ -29,13 +29,38 @@ function setLogLevel(level) {
 }
 
 /**
- * Log an error message
+ * Log an error message with improved error object handling
  * @param {string} message - The message to log
- * @param {Error|object} [error] - Optional error object
+ * @param {Error|object|string} [error] - Optional error object or message
  */
 function error(message, error) {
   if (currentLogLevel >= LOG_LEVELS.ERROR) {
-    console.error(`${LOG_PREFIX} ERROR: ${message}`, error || '');
+    // Check if error is an object with response property (fetch API error)
+    if (error && error.response) {
+      try {
+        console.error(`${LOG_PREFIX} ERROR: ${message}`, {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          responseType: error.response.headers?.get('content-type') || 'unknown',
+          error: error
+        });
+      } catch (e) {
+        // Fallback if response processing fails
+        console.error(`${LOG_PREFIX} ERROR: ${message}`, error);
+      }
+    } 
+    // Handle regular Error objects
+    else if (error instanceof Error) {
+      console.error(`${LOG_PREFIX} ERROR: ${message}`, {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    } 
+    // Handle plain string errors or other types
+    else {
+      console.error(`${LOG_PREFIX} ERROR: ${message}`, error || '');
+    }
   }
 }
 
@@ -89,6 +114,57 @@ function getLogLevel() {
   return currentLogLevel;
 }
 
+/**
+ * Check if the response is valid JSON
+ * This helps identify HTML responses incorrectly sent as JSON
+ * @param {Response} response - Fetch API response object
+ * @returns {Promise<{isJson: boolean, data: any, contentType: string}>}
+ */
+async function validateJsonResponse(response) {
+  const contentType = response.headers.get('content-type') || '';
+  
+  // Check if content type contains application/json
+  const isJsonContentType = contentType.includes('application/json');
+  
+  try {
+    // Try to parse as JSON regardless of content-type
+    const text = await response.text();
+    let data;
+    
+    try {
+      data = JSON.parse(text);
+      // Successfully parsed as JSON
+      return { 
+        isJson: true, 
+        data, 
+        contentType 
+      };
+    } catch (e) {
+      // Not valid JSON, could be HTML or other format
+      debug('Response is not valid JSON', { 
+        contentType,
+        textPreview: text.substring(0, 100) + '...',
+        parseError: e.message
+      });
+      
+      return { 
+        isJson: false, 
+        data: text, 
+        contentType,
+        htmlResponse: text.includes('<!DOCTYPE html>') || text.includes('<html')
+      };
+    }
+  } catch (e) {
+    error('Error reading response body', e);
+    return { 
+      isJson: false, 
+      data: null, 
+      contentType,
+      error: e 
+    };
+  }
+}
+
 // Export all functions
 export const logger = {
   setLogLevel,
@@ -98,5 +174,6 @@ export const logger = {
   info,
   debug,
   log,
-  LOG_LEVELS
+  LOG_LEVELS,
+  validateJsonResponse
 };
