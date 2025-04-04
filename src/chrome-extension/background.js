@@ -4,6 +4,7 @@
  * Responsible for coordinating extension operations and communicating with tabs
  */
 
+// Import required modules
 import { logger } from './utils/logger.js';
 import { handleError } from './utils/errorHandler.js';
 import { isSupportedPlatformUrl, getGalleryUrl } from './utils/urlUtils.js';
@@ -12,7 +13,8 @@ import {
   isLoggedIn, 
   openAuthPage, 
   setupAuthCallbackListener,
-  handleEmailPasswordLogin
+  handleEmailPasswordLogin,
+  getAuthUrl
 } from './utils/auth.js';
 import { isGalleryEmpty, setGalleryHasImages } from './utils/galleryUtils.js';
 

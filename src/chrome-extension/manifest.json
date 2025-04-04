@@ -9,7 +9,6 @@
     "tabs",
     "scripting",
     "activeTab",
-    "identity",
     "notifications"
   ],
   "host_permissions": [

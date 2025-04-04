@@ -83,7 +83,10 @@ async function handleEmailPasswordLogin(email, password) {
     console.log('Attempting to log in with email and password');
     
     // Make API call to the backend for authentication
-    const response = await fetch(`${getApiUrl()}/auth/login`, {
+    const apiUrl = `${getApiUrl()}/auth/login`;
+    console.log('Login API URL:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -91,12 +94,42 @@ async function handleEmailPasswordLogin(email, password) {
       body: JSON.stringify({ email, password }),
     });
     
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Login failed with status: ${response.status}`);
+    // Check for HTML response (which would cause JSON parse error)
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("text/html")) {
+      console.error("Received HTML response instead of JSON");
+      throw new Error("Invalid server response format. Please try again later.");
     }
     
-    const data = await response.json();
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = "Login failed";
+      
+      try {
+        // Try to parse as JSON
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || `Login failed with status: ${response.status}`;
+      } catch (parseError) {
+        // If it's not valid JSON, use the raw text
+        errorMessage = errorText || `Login failed with status: ${response.status}`;
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    // Get the response as text first to inspect
+    const responseText = await response.text();
+    console.log('Login response text:', responseText);
+    
+    // Try to parse the response as JSON
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse response as JSON:', e);
+      console.error('Response text was:', responseText);
+      throw new Error('Invalid response format');
+    }
     
     if (!data.access_token) {
       throw new Error('No authentication token received');
@@ -233,7 +266,6 @@ function openAuthPage(tabId = null, options = {}) {
   if (options.forgotPassword) searchParams.append('forgotPassword', 'true');
   if (options.signup) searchParams.append('signup', 'true');
   if (options.from) searchParams.append('from', options.from);
-  if (options.provider) searchParams.append('provider', options.provider);
   
   const queryString = searchParams.toString();
   const fullAuthUrl = queryString ? `${authUrl}?${queryString}` : authUrl;
