@@ -88,6 +88,27 @@ export function getGalleryUrl() {
 }
 
 /**
+ * Get the correct auth URL based on environment
+ * @param {object} options - Additional options for the URL
+ * @returns {string} The auth URL with query parameters
+ */
+export function getAuthUrl(options = {}) {
+  // Base URL depending on environment
+  const baseUrl = typeof window !== 'undefined' && 
+                 window.location?.hostname?.includes('preview')
+    ? 'https://preview-main-gallery-ai.lovable.app/auth'
+    : 'https://main-gallery-hub.lovable.app/auth';
+  
+  // Add query parameters if provided
+  const params = new URLSearchParams();
+  if (options.from) params.append('from', options.from);
+  if (options.redirect) params.append('redirect', options.redirect);
+  
+  const queryString = params.toString();
+  return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+}
+
+/**
  * Is URL an authentication callback URL?
  * @param {string} url - The URL to check
  * @returns {boolean} True if it's an auth callback URL
