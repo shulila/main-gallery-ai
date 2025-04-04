@@ -185,6 +185,8 @@ export async function safeFetch(url, options = {}) {
           error.isHtmlError = true;
           throw error;
         }
+        
+        logger.warn('Response content-type is not JSON:', contentType);
       }
       
       // Attempt to parse JSON
@@ -201,15 +203,19 @@ export async function safeFetch(url, options = {}) {
         error.isHtmlError = true;
       } else {
         // Try to determine if the response is HTML
-        const clone = response.clone();
-        const text = await clone.text();
-        const htmlResponse = text.includes('<!DOCTYPE html>') || 
-                            text.includes('<html') ||
-                            text.includes('<body');
-        
-        if (htmlResponse) {
-          error.isHtmlError = true;
-          error.rawData = text;
+        try {
+          const clone = response.clone();
+          const text = await clone.text();
+          const htmlResponse = text.includes('<!DOCTYPE html>') || 
+                              text.includes('<html') ||
+                              text.includes('<body');
+          
+          if (htmlResponse) {
+            error.isHtmlError = true;
+            error.rawData = text.substring(0, 500); // First 500 chars for debugging
+          }
+        } catch (textError) {
+          logger.error('Failed to read response text:', textError);
         }
       }
       
@@ -218,15 +224,23 @@ export async function safeFetch(url, options = {}) {
   } catch (error) {
     // Enhance the error with more context
     error.url = url;
-    error.fetchOptions = { ...options, headers: { ...options.headers } };
+    error.fetchOptions = { ...options };
     
     // Remove sensitive data from logs
-    if (error.fetchOptions.headers?.Authorization) {
-      error.fetchOptions.headers.Authorization = "[REDACTED]";
+    if (error.fetchOptions.headers) {
+      const safeHeaders = { ...error.fetchOptions.headers };
+      if (safeHeaders.Authorization) {
+        safeHeaders.Authorization = "[REDACTED]";
+      }
+      error.fetchOptions.headers = safeHeaders;
     }
-    if (error.fetchOptions.body && typeof error.fetchOptions.body === 'string' && 
-        (error.fetchOptions.body.includes('password') || error.fetchOptions.body.includes('token'))) {
-      error.fetchOptions.body = "[REDACTED]";
+    
+    // Redact sensitive body content
+    if (error.fetchOptions.body && typeof error.fetchOptions.body === 'string') {
+      if (error.fetchOptions.body.includes('password') || 
+          error.fetchOptions.body.includes('token')) {
+        error.fetchOptions.body = "[REDACTED]";
+      }
     }
     
     // Throw the enhanced error

@@ -412,16 +412,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // Clear any stored tokens and session data
           chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
             logger.log('Storage cleared after logout');
+            
+            // Also clear localStorage if available
+            if (typeof localStorage !== 'undefined') {
+              try {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('main_gallery_auth_token');
+                localStorage.removeItem('main_gallery_user_email');
+                logger.log('LocalStorage cleared after logout');
+              } catch (err) {
+                logger.error('Error clearing localStorage:', err);
+              }
+            }
+            
+            // Send success response
+            sendResponse({ success: true });
           });
-          sendResponse({ success: true });
         })
         .catch(err => {
           logger.error('Logout error:', err);
           // Try fallback logout by just clearing storage
           chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
             logger.log('Storage cleared as fallback after logout error');
+            
+            // Also clear localStorage if available
+            if (typeof localStorage !== 'undefined') {
+              try {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('main_gallery_auth_token');
+                localStorage.removeItem('main_gallery_user_email');
+                logger.log('LocalStorage cleared after logout error');
+              } catch (storageErr) {
+                logger.error('Error clearing localStorage:', storageErr);
+              }
+            }
+            
+            // Send success response even with error since we cleaned up
+            sendResponse({ success: true, warning: err.message });
           });
-          sendResponse({ success: false, error: err.message });
         });
       
       return true; // Keep message channel open for async response

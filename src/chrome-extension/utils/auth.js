@@ -1,3 +1,4 @@
+
 // Auth utilities for Chrome extension
 import { logger } from './logger.js';
 import { handleError, safeFetch } from './errorHandler.js';
@@ -366,24 +367,25 @@ function logout() {
         chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
           if (chrome.runtime.lastError) {
             logger.error('Error clearing storage during logout:', chrome.runtime.lastError);
+            reject(new Error('Failed to clear auth data: ' + chrome.runtime.lastError.message));
           } else {
             logger.info('Successfully cleared auth data from storage');
-          }
-          
-          // Also try to clear localStorage for web app integration
-          try {
-            if (window.localStorage) {
-              window.localStorage.removeItem('access_token');
-              window.localStorage.removeItem('main_gallery_auth_token');
-              window.localStorage.removeItem('main_gallery_user_email');
-              logger.info('Cleared localStorage items');
+            
+            // Also try to clear localStorage for web app integration
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('main_gallery_auth_token');
+                localStorage.removeItem('main_gallery_user_email');
+                logger.info('Cleared localStorage items');
+              } catch (storageError) {
+                logger.error('Error clearing localStorage:', storageError);
+              }
             }
-          } catch (storageError) {
-            logger.error('Error clearing localStorage:', storageError);
+            
+            // Success regardless of API or localStorage results
+            resolve(true);
           }
-          
-          // Success regardless of API or localStorage results
-          resolve(true);
         });
       });
     } catch (error) {
@@ -393,6 +395,18 @@ function logout() {
       try {
         chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
           logger.info('Emergency storage cleanup during logout error');
+          
+          // Also try to clear localStorage
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('main_gallery_auth_token');
+              localStorage.removeItem('main_gallery_user_email');
+            } catch (e) {
+              logger.error('Error clearing localStorage during emergency cleanup:', e);
+            }
+          }
+          
           resolve(true); // Consider it a success if we at least cleared storage
         });
       } catch (emergencyError) {
