@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -53,6 +52,41 @@ const constructGoogleOAuthUrl = (redirectUrl: string) => {
   });
   
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+};
+
+// Helper function for cleaning up storage during logout
+const cleanupStorageData = () => {
+  try {
+    // Clear localStorage tokens
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('main_gallery_auth_token');
+    localStorage.removeItem('main_gallery_user_email');
+    
+    // Clean up Chrome extension storage if available
+    if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
+      try {
+        window.chrome.storage.sync.remove([
+          'main_gallery_auth_token', 
+          'main_gallery_user_email'
+        ], () => {
+          console.log('Chrome storage items removed during logout');
+        });
+        
+        // If local storage also has items, clean those too
+        window.chrome.storage.local.remove([
+          'main_gallery_auth_token', 
+          'main_gallery_user_email'
+        ], () => {
+          console.log('Chrome local storage items removed during logout');
+        });
+      } catch (err) {
+        console.error('Error cleaning chrome storage:', err);
+      }
+    }
+  } catch (err) {
+    console.error('Error during storage cleanup:', err);
+  }
 };
 
 type AuthContextType = {
@@ -125,23 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             } else {
               // If no session, clear localStorage
-              try {
-                localStorage.removeItem('main_gallery_user_email');
-                localStorage.removeItem('main_gallery_auth_token');
-                
-                // Also clear chrome.storage if in extension context
-                if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
-                  try {
-                    window.chrome.storage?.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-                      console.log('Chrome storage cleared on session end');
-                    });
-                  } catch (err) {
-                    console.error('Error clearing chrome storage:', err);
-                  }
-                }
-              } catch (err) {
-                console.error('Error clearing localStorage:', err);
-              }
+              cleanupStorageData();
             }
           }
         );
@@ -213,39 +231,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 if (error) {
                   console.error('Error restoring session from localStorage token:', error);
                   
-                  // Clear invalid token
-                  localStorage.removeItem('main_gallery_auth_token');
-                  localStorage.removeItem('main_gallery_user_email');
-                  
-                  // Also clear chrome.storage if in extension context
-                  if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
-                    try {
-                      window.chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-                        console.log('Chrome storage cleared after session restore failure');
-                      });
-                    } catch (err) {
-                      console.error('Error clearing chrome storage:', err);
-                    }
-                  }
+                  // Clean up storage if token is invalid
+                  cleanupStorageData();
                 } else if (data?.session) {
                   console.log('Successfully restored session from localStorage token');
                   // No need to set session/user state as onAuthStateChange will handle it
                 }
               } else if (isExpired) {
                 console.log('Found expired token in localStorage, removing it');
-                localStorage.removeItem('main_gallery_auth_token');
-                localStorage.removeItem('main_gallery_user_email');
-                
-                // Also clear chrome.storage if in extension context
-                if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
-                  try {
-                    window.chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-                      console.log('Chrome storage cleared after finding expired token');
-                    });
-                  } catch (err) {
-                    console.error('Error clearing chrome storage:', err);
-                  }
-                }
+                cleanupStorageData();
               }
             }
           } catch (err) {
@@ -418,8 +412,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           console.log('Attempting to logout from Chrome extension');
           
-          // Use a promise to handle the extension logout
-          await new Promise<void>((resolve, reject) => {
+          // Use a promise to handle the extension logout with timeout
+          await new Promise<void>((resolve) => {
             const timeoutId = setTimeout(() => {
               console.warn('Extension logout timed out');
               resolve(); // Continue anyway after timeout
@@ -453,35 +447,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
       
-      // Always clear localStorage items used by extension
+      // Always clean storage before Supabase logout
+      cleanupStorageData();
+      
+      // Then perform Supabase logout - using try/catch to handle errors
       try {
-        localStorage.removeItem('main_gallery_auth_token');
-        localStorage.removeItem('main_gallery_user_email');
-        console.log('Cleared auth tokens from localStorage');
-      } catch (err) {
-        console.error('Error clearing localStorage:', err);
-      }
-      
-      // Then perform Supabase logout
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('Supabase signOut error:', error);
-        throw error;
-      }
-      
-      console.log('Successfully logged out from Supabase');
-      
-      // Also clear Chrome storage sync if extension logout wasn't attempted
-      if (!extensionLogoutAttempted && typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
-        try {
-          window.chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-            console.log('Chrome storage cleared after logout');
-          });
-        } catch (storageErr) {
-          console.error('Error clearing Chrome storage:', storageErr);
+        const { error } = await supabase.auth.signOut();
+        
+        if (error) {
+          console.error('Supabase signOut error:', error);
+          // Even with error, continue with session cleanup
         }
+        
+        console.log('Successfully logged out from Supabase');
+      } catch (supabaseError) {
+        console.error('Exception during Supabase logout:', supabaseError);
+        // Continue with cleanup even if Supabase logout fails
       }
+      
+      // Force state reset regardless of API success
+      setSession(null);
+      setUser(null);
+      
+      // Clean storage again as a safety measure
+      cleanupStorageData();
       
       toast({
         title: "Logged out successfully",
@@ -490,28 +479,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error during logout process:', error);
       toast({
         title: "Error signing out",
-        description: error.message || "Failed to log out completely, please try again",
+        description: error.message || "Failed to log out completely, but your local session has been cleared",
         variant: "destructive",
       });
       
-      // Fallback - force clear session data
-      try {
-        localStorage.clear(); // More aggressive approach in case of errors
-        if (typeof window !== 'undefined' && 'chrome' in window && window.chrome?.storage) {
-          // Replace clear() with remove() for specific keys
-          window.chrome.storage.sync.remove([
-            'main_gallery_auth_token', 
-            'main_gallery_user_email',
-            // Add any other keys that need to be removed
-          ], () => {
-            console.log('Chrome storage keys removed during fallback cleanup');
-          });
-        }
-        setSession(null);
-        setUser(null);
-      } catch (e) {
-        console.error('Error in logout fallback cleanup:', e);
-      }
+      // Force clear session state and storage
+      setSession(null);
+      setUser(null);
+      cleanupStorageData();
     } finally {
       setIsLoading(false);
     }

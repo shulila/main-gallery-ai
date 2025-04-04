@@ -12,14 +12,24 @@ interface Chrome {
     local: {
       get: (keys: string[] | string | null, callback: (result: any) => void) => void;
       set: (items: object, callback?: () => void) => void;
-      remove?: (keys: string | string[], callback?: () => void) => void;
-      clear?: (callback?: () => void) => void; // Added clear method
+      remove: (keys: string | string[], callback?: () => void) => void;
+      clear: (callback?: () => void) => void; // Ensure clear method is required, not optional
     };
     sync?: {
       get: (keys: string[] | string | null, callback: (result: any) => void) => void;
       set: (items: object, callback?: () => void) => void;
       remove: (keys: string | string[], callback?: () => void) => void;
-      clear?: (callback?: () => void) => void; // Added clear method
+      clear: (callback?: () => void) => void; // Ensure clear method is required, not optional
+    };
+    session?: {
+      get: (keys: string[] | string | null, callback: (result: any) => void) => void;
+      set: (items: object, callback?: () => void) => void;
+      remove: (keys: string | string[], callback?: () => void) => void;
+      clear: (callback?: () => void) => void;
+    };
+    onChanged?: {
+      addListener: (callback: (changes: object, areaName: string) => void) => void;
+      removeListener: (callback: (changes: object, areaName: string) => void) => void;
     };
   };
   notifications?: {
@@ -41,9 +51,18 @@ interface Chrome {
     create: (createProperties: any, callback?: (tab: any) => void) => void;
     update: (tabId: number, updateProperties: any, callback?: (tab: any) => void) => void;
     remove: (tabIds: number | number[], callback?: () => void) => void;
+    onUpdated?: {
+      addListener: (callback: (tabId: number, changeInfo: any, tab: any) => void) => void;
+      removeListener: (callback: (tabId: number, changeInfo: any, tab: any) => void) => void;
+    };
+    onRemoved?: {
+      addListener: (callback: (tabId: number, removeInfo: any) => void) => void;
+    };
   };
   windows?: {
     update: (windowId: number, updateInfo: any, callback?: (window: any) => void) => void;
+    get: (windowId: number, getInfo: any, callback: (window: any) => void) => void;
+    getAll: (getInfo: any, callback: (windows: any[]) => void) => void;
   };
   webNavigation?: {
     onCompleted: {

@@ -23,7 +23,8 @@
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    }
+    },
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js",
@@ -39,7 +40,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "bridge.js"],
+      "resources": ["icons/*", "bridge.js", "utils/*"],
       "matches": ["<all_urls>"]
     }
   ]

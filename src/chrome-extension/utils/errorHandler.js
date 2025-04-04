@@ -149,78 +149,112 @@ export async function isHtmlResponse(response) {
  */
 export async function safeFetch(url, options = {}) {
   try {
-    const response = await fetch(url, options);
+    // Add retry capabilities
+    const maxRetries = options.maxRetries || 2;
+    let retries = 0;
+    let lastError = null;
     
-    // Check if the response is OK (status in the range 200-299)
-    if (!response.ok) {
-      // Check if this is an HTML response when JSON was expected
-      const isHtml = await isHtmlResponse(response);
-      
-      // Create a custom error object with the response attached
-      const error = new Error(
-        isHtml 
-          ? "Received HTML response instead of JSON" 
-          : `HTTP error ${response.status}: ${response.statusText}`
-      );
-      
-      error.response = response;
-      
-      if (isHtml) {
-        error.isHtmlError = true;
-      }
-      
-      throw error;
-    }
-    
-    // Validate and parse JSON
-    try {
-      // Check content type
-      const contentType = response.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        // Peek at the response to determine if it's HTML
-        const isHtml = await isHtmlResponse(response);
-        if (isHtml) {
-          const error = new Error("Received HTML response instead of JSON");
+    while (retries <= maxRetries) {
+      try {
+        if (retries > 0) {
+          logger.warn(`Retry attempt ${retries} for ${url}`);
+          // Add exponential backoff
+          await new Promise(r => setTimeout(r, 500 * Math.pow(2, retries-1)));
+        }
+        
+        const response = await fetch(url, options);
+        
+        // Check if the response is OK (status in the range 200-299)
+        if (!response.ok) {
+          // Check if this is an HTML response when JSON was expected
+          const isHtml = await isHtmlResponse(response);
+          
+          // Create a custom error object with the response attached
+          const error = new Error(
+            isHtml 
+              ? "Received HTML response instead of JSON" 
+              : `HTTP error ${response.status}: ${response.statusText}`
+          );
+          
           error.response = response;
-          error.isHtmlError = true;
+          
+          if (isHtml) {
+            error.isHtmlError = true;
+          }
+          
           throw error;
         }
         
-        logger.warn('Response content-type is not JSON:', contentType);
-      }
-      
-      // Attempt to parse JSON
-      const data = await response.json();
-      return data;
-    } catch (parseError) {
-      // Handle JSON parse errors or HTML response errors
-      const error = new Error("Invalid response format or failed to parse JSON");
-      error.response = response;
-      error.originalError = parseError;
-      
-      // Check if it's an HTML response
-      if (parseError.isHtmlError) {
-        error.isHtmlError = true;
-      } else {
-        // Try to determine if the response is HTML
+        // Validate and parse JSON
         try {
-          const clone = response.clone();
-          const text = await clone.text();
-          const htmlResponse = text.includes('<!DOCTYPE html>') || 
-                              text.includes('<html') ||
-                              text.includes('<body');
-          
-          if (htmlResponse) {
-            error.isHtmlError = true;
-            error.rawData = text.substring(0, 500); // First 500 chars for debugging
+          // Check content type
+          const contentType = response.headers.get('content-type') || '';
+          if (!contentType.includes('application/json')) {
+            // Peek at the response to determine if it's HTML
+            const isHtml = await isHtmlResponse(response);
+            if (isHtml) {
+              const error = new Error("Received HTML response instead of JSON");
+              error.response = response;
+              error.isHtmlError = true;
+              throw error;
+            }
+            
+            logger.warn('Response content-type is not JSON:', contentType);
           }
-        } catch (textError) {
-          logger.error('Failed to read response text:', textError);
+          
+          // Attempt to parse JSON
+          const data = await response.json();
+          return data;
+        } catch (parseError) {
+          // Check if we have an HTML error already identified
+          if (parseError.isHtmlError) {
+            throw parseError;
+          }
+          
+          // Try to determine if the response is HTML
+          const clone = response.clone();
+          try {
+            const text = await clone.text();
+            const htmlResponse = text.includes('<!DOCTYPE html>') || 
+                                text.includes('<html') ||
+                                text.includes('<body');
+            
+            const error = new Error("Invalid response format or failed to parse JSON");
+            error.response = response;
+            error.originalError = parseError;
+            
+            if (htmlResponse) {
+              error.isHtmlError = true;
+              error.rawData = text.substring(0, 500); // First 500 chars for debugging
+            }
+            
+            throw error;
+          } catch (textError) {
+            // If we can't even read the response as text, throw the original parse error
+            logger.error('Failed to read response text:', textError);
+            throw parseError;
+          }
         }
+      } catch (error) {
+        lastError = error;
+        
+        // Only retry on network errors or 5xx server errors
+        const shouldRetry = (
+          !error.response || // Network error
+          (error.response && error.response.status >= 500) // Server error
+        ) && retries < maxRetries;
+        
+        if (!shouldRetry) {
+          // Don't retry, break out of the loop
+          break;
+        }
+        
+        retries++;
       }
-      
-      throw error;
     }
+    
+    // If we got here, all retries failed
+    throw lastError || new Error(`Failed to fetch ${url} after ${maxRetries} retries`);
   } catch (error) {
     // Enhance the error with more context
     error.url = url;
@@ -242,6 +276,9 @@ export async function safeFetch(url, options = {}) {
         error.fetchOptions.body = "[REDACTED]";
       }
     }
+    
+    // Remove maxRetries as it's not a standard fetch option
+    delete error.fetchOptions.maxRetries;
     
     // Throw the enhanced error
     throw error;
