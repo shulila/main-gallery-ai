@@ -97,6 +97,14 @@ async function checkAuthAndRedirect() {
     // Check authentication with the background script
     chrome.runtime.sendMessage({ action: 'isLoggedIn' }, async (response) => {
       try {
+        // Handle no response (possible disconnection)
+        if (!response) {
+          console.error('No response from background script');
+          showToast('Connection error. Please try again.', 'error');
+          if (states.loginView) showState(states.loginView);
+          return;
+        }
+        
         const loggedIn = response && response.loggedIn;
         
         if (loggedIn) {
@@ -119,11 +127,13 @@ async function checkAuthAndRedirect() {
         }
       } catch (err) {
         console.error('Error processing auth status:', err);
+        showToast('Error checking login status', 'error');
         if (states.loginView) showState(states.loginView); // Default to login view
       }
     });
   } catch (error) {
     console.error('Error checking auth status:', error);
+    showToast('Connection error', 'error');
     if (states.loginView) showState(states.loginView); // Default to login view
   }
 }
@@ -165,12 +175,34 @@ function handleLogin(e) {
     email: email,
     password: password
   }, (response) => {
+    // Handle no response case (possible disconnect)
+    if (!response) {
+      console.error('No response from background script');
+      showToast('Server connection error. Please try again later.', 'error');
+      if (states.loginView) showState(states.loginView);
+      return;
+    }
+    
     if (response && response.success) {
       showToast('Login successful', 'success');
       checkAuthAndRedirect(); // This will update UI based on new auth state
     } else {
       console.error('Login failed:', response?.error || 'Unknown error');
-      showToast(response?.error || 'Login failed. Please check your credentials.', 'error');
+      
+      // Show more specific error message based on type
+      let errorMessage = 'Login failed. Please check your credentials.';
+      
+      if (response?.error) {
+        if (response.error.includes('format') || response.error.includes('HTML')) {
+          errorMessage = 'Invalid server response format. Please try again later.';
+        } else if (response.error.includes('network') || response.error.includes('connect')) {
+          errorMessage = 'Network error. Please check your connection.';
+        } else if (response.error.includes('credentials') || response.error.includes('password')) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        }
+      }
+      
+      showToast(errorMessage, 'error');
       if (states.loginView) showState(states.loginView);
     }
   });
