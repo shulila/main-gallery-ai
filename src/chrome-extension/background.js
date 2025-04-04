@@ -1,3 +1,4 @@
+
 /**
  * MainGallery.AI background script
  * Responsible for coordinating extension operations and communicating with tabs
