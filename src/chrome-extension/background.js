@@ -7,7 +7,13 @@
 // Import required modules
 import { logger } from './utils/logger.js';
 import { handleError, safeFetch } from './utils/errorHandler.js';
-import { isSupportedPlatformUrl, getGalleryUrl, getAuthUrl, isPreviewEnvironment } from './utils/urlUtils.js';
+import { 
+  isSupportedPlatformUrl, 
+  getGalleryUrl, 
+  getAuthUrl, 
+  isPreviewEnvironment,
+  getBaseUrl 
+} from './utils/urlUtils.js';
 import { safeSendMessage, ensureContentScriptLoaded } from './utils/messaging.js';
 import { 
   isLoggedIn, 
@@ -16,7 +22,11 @@ import {
   handleEmailPasswordLogin,
   logout
 } from './utils/auth.js';
-import { isGalleryEmpty, setGalleryHasImages } from './utils/galleryUtils.js';
+import { 
+  isGalleryEmpty, 
+  setGalleryHasImages,
+  logEnvironmentDetails 
+} from './utils/galleryUtils.js';
 
 logger.log('MainGallery.AI background script initialized');
 logger.log('Environment check:', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION');
@@ -42,10 +52,9 @@ setupAuthCallbackListener();
 chrome.storage.local.set({ 'environment': isPreviewEnvironment() ? 'preview' : 'production' }, () => {
   logger.log('Environment stored in local storage:', isPreviewEnvironment() ? 'preview' : 'production');
   
-  // Set a global variable for immediate access in the current context
-  if (typeof window !== 'undefined') {
-    window.__MAINGALLERY_ENV = isPreviewEnvironment() ? 'preview' : 'production';
-  }
+  // Log detailed environment info for debugging
+  const envDetails = logEnvironmentDetails();
+  logger.log('Environment details:', envDetails);
 });
 
 // Implement image syncing with improved error handling
@@ -132,7 +141,7 @@ function openGalleryWithImages(images) {
     // Set up listener for when gallery tab is ready
     chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, updatedTab) {
       if (tabId === tab.id && changeInfo.status === 'complete' && 
-          updatedTab.url && updatedTab.url.includes(getGalleryUrl())) {
+          updatedTab.url && updatedTab.url.includes(getBaseUrl())) {
         
         logger.log('Gallery tab fully loaded, waiting to ensure bridge is ready');
         
@@ -189,6 +198,11 @@ function openGalleryWithImages(images) {
 chrome.action.onClicked.addListener(async (tab) => {
   logger.log('Extension icon clicked on tab:', tab?.url);
   
+  // First, log the current environment for easier debugging
+  const environment = isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION';
+  const baseUrl = getBaseUrl();
+  logger.log(`Environment: ${environment}, Base URL: ${baseUrl}`);
+  
   if (!tab || !tab.url || !tab.id) {
     logger.error('Invalid tab or missing URL/ID');
     return;
@@ -198,17 +212,10 @@ chrome.action.onClicked.addListener(async (tab) => {
     // Check login status first
     const loggedIn = await isLoggedIn();
     logger.log('User logged in status:', loggedIn);
-    logger.log('Environment is:', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION');
-    
-    // Log environment and URLs for debugging
-    const baseUrl = isPreviewEnvironment() ? 
-      'https://preview-main-gallery-ai.lovable.app' : 
-      'https://main-gallery-hub.lovable.app';
-    logger.log('Current base URL:', baseUrl);
     
     if (!loggedIn) {
       // User not logged in, redirect directly to auth page
-      logger.log('User not logged in, opening auth page directly');
+      logger.log('User not logged in, opening auth page');
       
       // Get auth URL and open it in a new tab
       const authUrl = getAuthUrl({ from: 'extension_icon' });
@@ -484,6 +491,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       logger.log('Bridge connected on:', message.host, message.path);
       sendResponse({ success: true });
     }
+    else if (message.action === 'getEnvironmentDetails') {
+      // New action to help with debugging - returns environment info
+      const details = {
+        isPreview: isPreviewEnvironment(),
+        baseUrl: getBaseUrl(),
+        galleryUrl: getGalleryUrl(),
+        authUrl: getAuthUrl(),
+        buildTimestamp: Date.now()
+      };
+      
+      logger.log('Environment details requested:', details);
+      sendResponse({ success: true, details });
+    }
     else {
       // Default response for unhandled messages
       sendResponse({ success: true, action: 'default' });
@@ -495,3 +515,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   return true; // Keep message channel open for async response
 });
+
+// Immediately log environment details at startup for debugging
+logger.log('ENVIRONMENT DETAILS AT STARTUP:');
+logger.log('Is Preview:', isPreviewEnvironment());
+logger.log('Base URL:', getBaseUrl());
+logger.log('Gallery URL:', getGalleryUrl());
+logger.log('Auth URL:', getAuthUrl());

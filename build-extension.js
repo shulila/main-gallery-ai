@@ -47,9 +47,6 @@ if (!fs.existsSync(OUTPUT_DIR)) {
 // Create subdirectories if they don't exist
 fs.mkdirSync(`${OUTPUT_DIR}/icons`, { recursive: true });
 fs.mkdirSync(`${OUTPUT_DIR}/utils`, { recursive: true });
-fs.mkdirSync(`${OUTPUT_DIR}/src`, { recursive: true });
-fs.mkdirSync(`${OUTPUT_DIR}/src/utils`, { recursive: true });
-fs.mkdirSync(`${OUTPUT_DIR}/src/config`, { recursive: true });
 
 // Step 3: Copy and modify manifest - Special handling for preview vs production
 console.log('Copying and configuring manifest.json...');
@@ -61,24 +58,12 @@ const manifest = JSON.parse(manifestContent);
 if (isPreviewBuild) {
   manifest.name = manifest.name + ' (Preview)';
   manifest.description = manifest.description + ' - PREVIEW BUILD';
-  
-  // Store environment type in manifest
-  if (!manifest.storage) {
-    manifest.storage = {};
-  }
-  manifest.storage.managed_schema = "environment.json";
-  
-  // Create environment schema file
-  const envSchema = {
-    "type": "object",
-    "properties": {
-      "environment": {
-        "type": "string",
-        "default": "preview"
-      }
-    }
-  };
-  fs.writeFileSync(path.join(OUTPUT_DIR, 'environment.json'), JSON.stringify(envSchema, null, 2));
+}
+
+// Remove any default_popup setting to ensure background.js handles clicks
+if (manifest.action && manifest.action.default_popup) {
+  delete manifest.action.default_popup;
+  console.log('Removed default_popup from manifest to ensure background script handles clicks');
 }
 
 // Always ensure service worker is treated as a module
@@ -96,7 +81,7 @@ if (manifest.content_scripts && manifest.content_scripts.length > 0) {
 // Write updated manifest
 fs.writeFileSync(path.join(OUTPUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
-// Step 4: Copy popup files
+// Step 4: Copy popup files if they exist
 console.log('Copying popup files...');
 ['popup.html', 'popup.css', 'popup.js'].forEach(file => {
   try {
@@ -148,17 +133,30 @@ try {
         
         // If this is the urlUtils.js file, inject the environment setting
         if (file === 'urlUtils.js') {
-          // Find the isPreviewEnvironment function
-          const funcRegex = /export function isPreviewEnvironment\(\) \{([\s\S]*?)\}/;
-          if (funcRegex.test(content)) {
-            // Modify the function to force the correct environment
-            const forcedEnvFunc = `export function isPreviewEnvironment() {
-  // Environment forced during build
-  return ${isPreviewBuild ? 'true' : 'false'};
-}`;
-            
-            content = content.replace(funcRegex, forcedEnvFunc);
-            console.log(`Injected forced environment (${isPreviewBuild ? 'preview' : 'production'}) into ${file}`);
+          // Directly replace the isPreviewEnvironment function with a hardcoded value
+          const funcStart = 'export function isPreviewEnvironment() {';
+          const funcEnd = '}';
+          const replacementFunc = `export function isPreviewEnvironment() {
+  // ENVIRONMENT VALUE - Injected during build
+  return ${isPreviewBuild};
+`;
+          
+          const startIdx = content.indexOf(funcStart);
+          if (startIdx >= 0) {
+            const endIdx = content.indexOf(funcEnd, startIdx);
+            if (endIdx >= 0) {
+              content = content.substring(0, startIdx) + replacementFunc + content.substring(endIdx);
+              console.log(`Successfully injected environment value (${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'}) into urlUtils.js`);
+            }
+          }
+          
+          // Also replace any hardcoded URLs
+          if (isPreviewBuild) {
+            content = content.replace(
+              /'https:\/\/main-gallery-hub\.lovable\.app'/g, 
+              "'https://preview-main-gallery-ai.lovable.app'"
+            );
+            console.log('Replaced hardcoded production URLs with preview URLs');
           }
         }
         
@@ -167,92 +165,13 @@ try {
         console.log(`Copied util: ${file}`);
       }
     });
-  } else {
-    console.warn('Warning: utils directory not found at', UTILS_SOURCE);
   }
 } catch (e) {
-  console.warn('Warning: utils directory not found or empty:', e.message);
+  console.warn('Warning: Error copying utility files:', e.message);
 }
 
-// Copy files to src/utils for proper imports
-try {
-  if (fs.existsSync(UTILS_SOURCE)) {
-    const utilFiles = fs.readdirSync(UTILS_SOURCE);
-    utilFiles.forEach(file => {
-      if (file.endsWith('.js')) {
-        // Read the file content
-        let content = fs.readFileSync(path.join(UTILS_SOURCE, file), 'utf8');
-        
-        // If this is the urlUtils.js file, inject the environment setting
-        if (file === 'urlUtils.js') {
-          // Find the isPreviewEnvironment function
-          const funcRegex = /export function isPreviewEnvironment\(\) \{([\s\S]*?)\}/;
-          if (funcRegex.test(content)) {
-            // Modify the function to force the correct environment
-            const forcedEnvFunc = `export function isPreviewEnvironment() {
-  // Environment forced during build
-  return ${isPreviewBuild ? 'true' : 'false'};
-}`;
-            
-            content = content.replace(funcRegex, forcedEnvFunc);
-          }
-        }
-        
-        // Write the possibly modified file
-        fs.writeFileSync(path.join(OUTPUT_DIR, 'src', 'utils', file), content);
-        console.log(`Copied util to src/utils: ${file}`);
-      }
-    });
-  }
-} catch (e) {
-  console.warn('Warning: Could not copy files to src/utils:', e.message);
-}
-
-// Step 7: Copy content-injection.js if it exists
-const contentInjectionSource = path.join(SOURCE_DIR, 'content-injection.js');
-if (fs.existsSync(contentInjectionSource)) {
-  fs.copyFileSync(
-    contentInjectionSource,
-    path.join(OUTPUT_DIR, 'content-injection.js')
-  );
-  console.log('Copied content-injection.js');
-}
-
-// Step 8: Ensure core JS files exist
-['background.js', 'content.js', 'bridge.js'].forEach(file => {
-  const sourcePath = path.join(SOURCE_DIR, file);
-  const destPath = path.join(OUTPUT_DIR, file);
-  
-  try {
-    if (fs.existsSync(sourcePath)) {
-      fs.copyFileSync(sourcePath, destPath);
-      console.log(`Copied ${file}`);
-      
-      // Ensure module compatibility
-      const content = fs.readFileSync(destPath, 'utf8');
-      
-      // Check if the file doesn't have import/export but should be a module
-      if (!content.includes('import ') && !content.includes('export ')) {
-        const moduleHeader = '// Ensure this file is treated as an ES module\n';
-        fs.writeFileSync(destPath, moduleHeader + content);
-        console.log(`Added module header to ${file}`);
-      }
-    } else {
-      // Check if it's in the output from Vite build
-      const viteBuildPath = path.join(OUTPUT_DIR, file);
-      if (!fs.existsSync(viteBuildPath)) {
-        console.error(`Warning: Could not find ${file} in source or build output`);
-      } else {
-        console.log(`${file} already exists in build output`);
-      }
-    }
-  } catch (e) {
-    console.warn(`Warning: Could not copy ${file}: ${e.message}`);
-  }
-});
-
-// Step 9: Create environment.js file to explicitly set the environment
-const environmentJs = `// Environment configuration - DO NOT MODIFY
+// Step 7: Create environment.js file to explicitly set the environment
+const environmentJs = `// Environment configuration - Injected during build
 export const ENVIRONMENT = "${isPreviewBuild ? 'preview' : 'production'}";
 export const BASE_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app' : 'https://main-gallery-hub.lovable.app'}";
 export const API_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/api' : 'https://main-gallery-hub.lovable.app/api'}";
@@ -260,25 +179,73 @@ export const AUTH_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lov
 export const GALLERY_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/gallery' : 'https://main-gallery-hub.lovable.app/gallery'}";
 `;
 
+// Write environment file to multiple locations for reliable imports
 fs.writeFileSync(path.join(OUTPUT_DIR, 'environment.js'), environmentJs);
 console.log('Created environment.js with explicit environment settings');
 
-// Also add to utils for proper imports
 fs.writeFileSync(path.join(OUTPUT_DIR, 'utils', 'environment.js'), environmentJs);
 console.log('Created utils/environment.js with explicit environment settings');
 
-// Step 9: Ensure _redirects file exists for SPA routing in both the extension and web app
+// Step 8: Copy core JS files
+['background.js', 'content.js', 'bridge.js'].forEach(file => {
+  const sourcePath = path.join(SOURCE_DIR, file);
+  const destPath = path.join(OUTPUT_DIR, file);
+  
+  try {
+    if (fs.existsSync(sourcePath)) {
+      let content = fs.readFileSync(sourcePath, 'utf8');
+      
+      // Replace any hardcoded URLs in JS files based on environment
+      if (isPreviewBuild) {
+        content = content.replace(
+          /['"]https:\/\/main-gallery-hub\.lovable\.app['"]/g, 
+          "'https://preview-main-gallery-ai.lovable.app'"
+        );
+      }
+      
+      fs.writeFileSync(destPath, content);
+      console.log(`Copied and processed ${file}`);
+    } else {
+      console.error(`Warning: Could not find ${file} in source directory`);
+    }
+  } catch (e) {
+    console.warn(`Warning: Could not copy ${file}: ${e.message}`);
+  }
+});
+
+// Step 9: Create _redirects file for SPA routing
 console.log('Creating _redirects file for SPA routing...');
 const redirectsContent = '/*    /index.html   200';
-const publicDir = 'public';
+fs.writeFileSync(path.join(OUTPUT_DIR, '_redirects'), redirectsContent);
+console.log('_redirects file created successfully');
 
-if (!fs.existsSync(publicDir)) {
-  fs.mkdirSync(publicDir);
+// Final validation
+console.log('Performing final validation checks...');
+
+// Check for critical files
+const criticalFiles = ['manifest.json', 'background.js', 'content.js', 'utils/urlUtils.js', 'utils/environment.js'];
+let missingFiles = criticalFiles.filter(file => !fs.existsSync(path.join(OUTPUT_DIR, file)));
+
+if (missingFiles.length > 0) {
+  console.error('ERROR: Missing critical files:', missingFiles.join(', '));
+  process.exit(1);
 }
 
-fs.writeFileSync(path.join(publicDir, '_redirects'), redirectsContent);
-fs.writeFileSync(path.join(OUTPUT_DIR, '_redirects'), redirectsContent);
-console.log('_redirects files created successfully');
+// Verify environment in urlUtils.js
+try {
+  const urlUtilsContent = fs.readFileSync(path.join(OUTPUT_DIR, 'utils', 'urlUtils.js'), 'utf8');
+  const hasCorrectEnv = isPreviewBuild ? 
+    urlUtilsContent.includes('return true') : 
+    urlUtilsContent.includes('return false');
+  
+  if (!hasCorrectEnv) {
+    console.error('WARNING: urlUtils.js may not have the correct environment setting');
+  } else {
+    console.log(`Environment correctly set to ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} in urlUtils.js`);
+  }
+} catch (e) {
+  console.error('Error verifying urlUtils.js environment:', e.message);
+}
 
 console.log(`Build completed successfully for ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} environment!`);
 console.log(`Extension files are ready in the '${OUTPUT_DIR}' directory`);
@@ -288,49 +255,3 @@ console.log('2. Enable "Developer mode"');
 console.log('3. Click "Load unpacked" and select the dist-extension folder');
 console.log('');
 console.log(`IMPORTANT: This is a ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} build that will connect to ${isPreviewBuild ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-hub.lovable.app'}`);
-
-// Step 10: Write a post-build script to ensure module compatibility
-const postBuildScriptPath = path.join(OUTPUT_DIR, 'fix-modules.js');
-const postBuildScript = `
-/**
- * Post-build script to fix module compatibility issues
- * Run this with: node fix-modules.js
- */
-const fs = require('fs');
-const path = require('path');
-
-// Function to add module export to files that need it
-function ensureModuleCompatibility(filePath) {
-  if (!fs.existsSync(filePath)) return false;
-  
-  const content = fs.readFileSync(filePath, 'utf8');
-  
-  // If the file doesn't have import/export statements, add a dummy export
-  if (!content.includes('import ') && !content.includes('export ')) {
-    console.log(\`Adding module export to \${filePath}\`);
-    fs.writeFileSync(filePath, content + "\\n// Ensure module compatibility\\nexport const __moduleCheck = true;");
-    return true;
-  }
-  
-  return false;
-}
-
-// Check core files
-['background.js', 'content.js', 'bridge.js'].forEach(file => {
-  ensureModuleCompatibility(file);
-});
-
-// Check utils folder
-const utilsDir = 'utils';
-if (fs.existsSync(utilsDir)) {
-  fs.readdirSync(utilsDir)
-    .filter(file => file.endsWith('.js'))
-    .forEach(file => {
-      ensureModuleCompatibility(path.join(utilsDir, file));
-    });
-}
-
-console.log('Module compatibility check complete');
-`;
-fs.writeFileSync(postBuildScriptPath, postBuildScript);
-console.log('Created post-build script for module compatibility');

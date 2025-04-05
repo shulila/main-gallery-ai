@@ -6,54 +6,77 @@
 if [[ "$1" == "--preview" || "$1" == "-p" ]]; then
   echo "Building MainGallery.AI Chrome Extension for PREVIEW environment..."
   BUILD_ENV=preview
+  PREVIEW_FLAG="--preview"
 else
   echo "Building MainGallery.AI Chrome Extension for PRODUCTION environment..."
   BUILD_ENV=production
+  PREVIEW_FLAG=""
 fi
 
 echo "Removing old build directory..."
 rm -rf dist-extension
 
 echo "Running build script with improved bundling..."
-if [[ "$BUILD_ENV" == "preview" ]]; then
-  # Pass environment flag to the build script
-  node build-extension.js --preview
-else
-  node build-extension.js
-fi
+# Pass environment flag to the build script
+node build-extension.js ${PREVIEW_FLAG}
 
 echo "Making post-build fixes for module support..."
 # Ensure all JS files in dist-extension have type="module"
 # This is for any HTML files that might include scripts
 find dist-extension -name "*.html" -exec sed -i 's/<script /<script type="module" /g' {} \;
 
-# Ensure content.js and background.js have the proper module syntax
-for file in dist-extension/content.js dist-extension/background.js; do
-  if [ -f "$file" ]; then
-    # Check if the file already has module syntax
-    if ! grep -q "export" "$file" && ! grep -q "import" "$file"; then
-      # Add module exports wrapper if needed
-      echo "// Ensuring module compatibility" > "$file.temp"
-      cat "$file" >> "$file.temp"
-      mv "$file.temp" "$file"
-    fi
-  fi
-done
+echo "Validating build..."
+# Check for expected files
+if [ ! -f "dist-extension/manifest.json" ]; then
+  echo "ERROR: manifest.json is missing from the build!"
+  exit 1
+fi
 
-echo "Copying utility files..."
-mkdir -p dist-extension/utils
-cp -r src/chrome-extension/utils/*.js dist-extension/utils/
+if [ ! -f "dist-extension/utils/urlUtils.js" ]; then
+  echo "ERROR: urlUtils.js is missing from the build!"
+  exit 1
+fi
 
-# Inject environment information into manifest.json
+# Print environment info for verification
 if [[ "$BUILD_ENV" == "preview" ]]; then
-  echo "Injecting PREVIEW environment information into manifest.json..."
-  # sed command to modify manifest.json name and description to indicate preview
-  if [ -f "dist-extension/manifest.json" ]; then
-    sed -i 's/"name": "MainGallery.AI"/"name": "MainGallery.AI (Preview)"/g' dist-extension/manifest.json
-    sed -i 's/"description": "Unified AI image gallery for multiple AI art platforms"/"description": "Unified AI image gallery for multiple AI art platforms - PREVIEW BUILD"/g' dist-extension/manifest.json
+  echo ""
+  echo "VERIFICATION: This is a PREVIEW build"
+  echo "URLs should point to: https://preview-main-gallery-ai.lovable.app"
+  
+  # Verify environment.js contains preview URLs
+  if grep -q "preview-main-gallery-ai.lovable.app" dist-extension/environment.js; then
+    echo "✅ environment.js correctly contains preview URLs"
+  else
+    echo "❌ WARNING: environment.js may not contain preview URLs!"
+  fi
+  
+  # Verify urlUtils.js is set to preview mode
+  if grep -q "return true" dist-extension/utils/urlUtils.js; then
+    echo "✅ urlUtils.js correctly set to preview mode"
+  else
+    echo "❌ WARNING: urlUtils.js may not be set to preview mode!"
+  fi
+else
+  echo ""
+  echo "VERIFICATION: This is a PRODUCTION build"
+  echo "URLs should point to: https://main-gallery-hub.lovable.app"
+  
+  # Verify environment.js contains production URLs
+  if grep -q "main-gallery-hub.lovable.app" dist-extension/environment.js; then
+    echo "✅ environment.js correctly contains production URLs"
+  else
+    echo "❌ WARNING: environment.js may not contain production URLs!"
+  fi
+  
+  # Verify urlUtils.js is set to production mode
+  if grep -q "return false" dist-extension/utils/urlUtils.js; then
+    echo "✅ urlUtils.js correctly set to production mode"
+  else
+    echo "❌ WARNING: urlUtils.js may not be set to production mode!"
   fi
 fi
 
+echo ""
 echo "Done! Your extension is now ready in the dist-extension folder."
 echo ""
 echo "Environment: ${BUILD_ENV^^}"

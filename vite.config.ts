@@ -30,6 +30,11 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
   
   console.log(`Building with mode: ${mode}, environment: ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'}`);
   
+  // Base URL based on environment
+  const baseUrl = isPreviewBuild 
+    ? 'https://preview-main-gallery-ai.lovable.app'
+    : 'https://main-gallery-hub.lovable.app';
+  
   // Base configuration shared between both modes
   const baseConfig: UserConfig = {
     server: {
@@ -49,10 +54,7 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
     define: {
       // Define global constants for environment detection during build
       'import.meta.env.IS_PREVIEW': isPreviewBuild,
-      'import.meta.env.BASE_URL': JSON.stringify(isPreviewBuild ? 
-        'https://preview-main-gallery-ai.lovable.app' : 
-        'https://main-gallery-hub.lovable.app'
-      ),
+      'import.meta.env.BASE_URL': JSON.stringify(baseUrl),
       // Add a global flag for preview detection
       'window.__MAINGALLERY_ENV': JSON.stringify(isPreviewBuild ? 'preview' : 'production')
     }

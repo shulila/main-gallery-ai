@@ -4,6 +4,7 @@
  */
 
 import { logger } from './logger.js';
+import { isPreviewEnvironment, getBaseUrl } from './urlUtils.js';
 
 /**
  * Check if the gallery is empty
@@ -152,4 +153,31 @@ export function clearGalleryData() {
       resolve(false);
     }
   });
+}
+
+/**
+ * Get the gallery URL with environment detection
+ * @returns {string} The correct gallery URL for current environment
+ */
+export function getEnvironmentAwareGalleryUrl() {
+  // Use the environment detection from urlUtils
+  return `${getBaseUrl()}/gallery`;
+}
+
+/**
+ * Log current environment details for debugging
+ */
+export function logEnvironmentDetails() {
+  const envType = isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION';
+  const baseUrl = getBaseUrl();
+  
+  logger.info(`Current environment: ${envType}`);
+  logger.info(`Base URL: ${baseUrl}`);
+  logger.info(`Gallery URL: ${getEnvironmentAwareGalleryUrl()}`);
+  
+  return {
+    environment: envType,
+    baseUrl: baseUrl,
+    galleryUrl: getEnvironmentAwareGalleryUrl()
+  };
 }

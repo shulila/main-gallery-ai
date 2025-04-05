@@ -10,6 +10,12 @@ const getProductionRedirectUrl = () => {
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
+// Get the preview auth callback URL
+const getPreviewRedirectUrl = () => {
+  // Use the preview domain
+  return 'https://preview-main-gallery-ai.lovable.app/auth/callback';
+};
+
 // Get the auth URL with environment detection
 const getAuthUrl = (options = {}) => {
   return getEnvironmentAuthUrl(options);
@@ -91,15 +97,16 @@ function clearAuthStorage(callback = () => {}) {
     }
     
     // Also clear localStorage if available (e.g., in popup context)
-    if (typeof localStorage !== 'undefined') {
-      try {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('main_gallery_auth_token');
-        localStorage.removeItem('main_gallery_user_email');
+    try {
+      // Check if we're in a window context before accessing localStorage
+      if (typeof self !== 'undefined' && self.localStorage) {
+        self.localStorage.removeItem('access_token');
+        self.localStorage.removeItem('main_gallery_auth_token');
+        self.localStorage.removeItem('main_gallery_user_email');
         logger.info('localStorage cleared');
-      } catch (err) {
-        logger.error('Error clearing localStorage:', err);
       }
+    } catch (err) {
+      logger.error('Error clearing localStorage (this is normal in service worker):', err);
     }
   } catch (err) {
     logger.error('Error clearing auth storage:', err);
@@ -287,10 +294,14 @@ function openAuthPage(tabId = null, options = {}) {
     
     // Fallback to opening a simple URL if something went wrong
     try {
+      const fallbackUrl = isPreviewEnvironment() 
+        ? 'https://preview-main-gallery-ai.lovable.app/auth' 
+        : 'https://main-gallery-hub.lovable.app/auth';
+        
       if (tabId) {
-        chrome.tabs.update(tabId, { url: getAuthUrl() });
+        chrome.tabs.update(tabId, { url: fallbackUrl });
       } else {
-        chrome.tabs.create({ url: getAuthUrl() });
+        chrome.tabs.create({ url: fallbackUrl });
       }
     } catch (fallbackError) {
       handleError('openAuthPageFallback', fallbackError, { silent: true });
@@ -429,5 +440,6 @@ export {
   isSupportedPlatform, 
   getAuthUrl, 
   getGalleryUrl, 
-  getProductionRedirectUrl 
+  getProductionRedirectUrl,
+  getPreviewRedirectUrl
 };

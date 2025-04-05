@@ -12,7 +12,8 @@ export const getAuthBaseUrl = (): string => {
       window.location.hostname) {
     
     // Check for preview domain
-    if (window.location.hostname.includes('preview-main-gallery-ai')) {
+    if (window.location.hostname.includes('preview-main-gallery-ai') ||
+        window.location.hostname.includes('preview--main-gallery-ai')) {
       return 'https://preview-main-gallery-ai.lovable.app';
     }
   }
@@ -52,17 +53,11 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
     
     console.log('Auth callback detected, attempting to handle token');
 
-    // Check for incorrect domain and redirect if needed
+    // Extract current location information for proper redirect handling
     const currentHostname = window.location.hostname;
-    if (currentHostname.includes('preview-main-gallery-ai')) {
-      console.warn('Detected auth callback on preview domain - redirecting to production domain');
-      const correctedURL = window.location.href.replace(
-        'preview-main-gallery-ai.lovable.app',
-        'main-gallery-hub.lovable.app'
-      );
-      window.location.href = correctedURL;
-      return true;
-    }
+    
+    // Log hostname for debugging
+    console.log('Current hostname:', currentHostname);
     
     // Check for development domain and adapt behavior
     const isDev = currentHostname === 'localhost' || 
@@ -72,6 +67,12 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
     if (isDev) {
       console.log('Detected development environment:', currentHostname);
     }
+    
+    // Determine if we're in the preview environment
+    const isPreview = currentHostname.includes('preview-main-gallery-ai') ||
+                     currentHostname.includes('preview--main-gallery-ai');
+                     
+    console.log('Environment detection - isPreview:', isPreview);
     
     // Extract from hash first (most common with OAuth providers)
     if (hash && hash.includes('access_token')) {
