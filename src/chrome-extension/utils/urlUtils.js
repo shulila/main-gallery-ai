@@ -9,6 +9,7 @@ import { logger } from './logger.js';
 const SUPPORTED_PLATFORMS = [
   'midjourney.com',
   'leonardo.ai',
+  'openai.ai',
   'openai.com',
   'dreamstudio.ai',
   'stability.ai',
@@ -71,20 +72,61 @@ export function getPlatformIdFromUrl(url) {
 }
 
 /**
+ * Determine if the current environment is the preview environment
+ * @returns {boolean} True if in preview environment, false otherwise
+ */
+export function isPreviewEnvironment() {
+  try {
+    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      return window.location.hostname.includes('preview') || 
+             window.location.hostname === 'localhost' || 
+             window.location.hostname.includes('127.0.0.1');
+    }
+    
+    // If can't detect window location, use a fallback method
+    // Check if this code is running in a Chrome extension context
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+      // Check storage for environment indicator (can be set during installation)
+      return new Promise(resolve => {
+        chrome.storage.local.get(['environment'], (result) => {
+          resolve(result.environment === 'preview');
+        });
+      });
+    }
+    
+    // Default to production as safest option
+    return false;
+  } catch (err) {
+    logger.error('Error detecting environment:', err);
+    return false;
+  }
+}
+
+/**
+ * Get the correct base URL for the current environment
+ * @returns {string} The base URL for the current environment
+ */
+export function getBaseUrl() {
+  try {
+    if (isPreviewEnvironment()) {
+      return 'https://preview-main-gallery-ai.lovable.app';
+    }
+    
+    // Default to production domain
+    return 'https://main-gallery-hub.lovable.app';
+  } catch (err) {
+    logger.error('Error getting base URL:', err);
+    // Default to production as fallback
+    return 'https://main-gallery-hub.lovable.app';
+  }
+}
+
+/**
  * Get the correct gallery URL based on environment
  * @returns {string} The gallery URL
  */
 export function getGalleryUrl() {
-  // Check if in preview environment
-  if (typeof window !== 'undefined' && 
-      window.location && 
-      window.location.hostname && 
-      window.location.hostname.includes('preview')) {
-    return 'https://preview-main-gallery-ai.lovable.app/gallery';
-  }
-  
-  // Default to production domain
-  return 'https://main-gallery-hub.lovable.app/gallery';
+  return `${getBaseUrl()}/gallery`;
 }
 
 /**
@@ -94,10 +136,7 @@ export function getGalleryUrl() {
  */
 export function getAuthUrl(options = {}) {
   // Base URL depending on environment
-  const baseUrl = typeof window !== 'undefined' && 
-                 window.location?.hostname?.includes('preview')
-    ? 'https://preview-main-gallery-ai.lovable.app/auth'
-    : 'https://main-gallery-hub.lovable.app/auth';
+  const baseUrl = `${getBaseUrl()}/auth`;
   
   // Add query parameters if provided
   const params = new URLSearchParams();

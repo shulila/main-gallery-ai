@@ -4,6 +4,7 @@
  */
 
 import { logger } from './logger.js';
+import { getBaseUrl } from './urlUtils.js';
 
 /**
  * Check if gallery is empty based on localStorage data
@@ -63,6 +64,33 @@ export async function clearGalleryState() {
 export async function handleGallerySyncError(error) {
   logger.error('Gallery sync error:', error);
   // Don't change gallery state on error, as it might be a temporary issue
+}
+
+/**
+ * Get the gallery URL with appropriate environment detection
+ * @param {object} options - Query parameters to add to the URL
+ * @returns {string} The gallery URL
+ */
+export function getGalleryUrl(options = {}) {
+  const baseUrl = `${getBaseUrl()}/gallery`;
+  
+  // Add query parameters if provided
+  if (options && Object.keys(options).length > 0) {
+    const params = new URLSearchParams();
+    
+    for (const [key, value] of Object.entries(options)) {
+      if (value !== undefined && value !== null) {
+        params.append(key, value.toString());
+      }
+    }
+    
+    const queryString = params.toString();
+    if (queryString) {
+      return `${baseUrl}?${queryString}`;
+    }
+  }
+  
+  return baseUrl;
 }
 
 /**

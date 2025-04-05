@@ -1,7 +1,7 @@
-
 // Auth utilities for Chrome extension
 import { logger } from './logger.js';
 import { handleError, safeFetch } from './errorHandler.js';
+import { isPreviewEnvironment, getBaseUrl, getAuthUrl as getEnvironmentAuthUrl } from './urlUtils.js';
 
 // Get the production auth callback URL - NEVER use localhost
 const getProductionRedirectUrl = () => {
@@ -11,62 +11,17 @@ const getProductionRedirectUrl = () => {
 
 // Get the auth URL with environment detection
 const getAuthUrl = (options = {}) => {
-  // Check if in preview environment
-  if (typeof window !== 'undefined' && 
-      window.location && 
-      window.location.hostname && 
-      window.location.hostname.includes('preview')) {
-    return 'https://preview-main-gallery-ai.lovable.app/auth';
-  }
-  
-  // Build URL with query params
-  let url = 'https://main-gallery-hub.lovable.app/auth';
-  
-  // Add any provided options as query parameters
-  if (options && Object.keys(options).length > 0) {
-    const params = new URLSearchParams();
-    
-    for (const [key, value] of Object.entries(options)) {
-      if (value !== undefined && value !== null) {
-        params.append(key, value.toString());
-      }
-    }
-    
-    const queryString = params.toString();
-    if (queryString) {
-      url += '?' + queryString;
-    }
-  }
-  
-  return url;
+  return getEnvironmentAuthUrl(options);
 };
 
 // Get the gallery URL with environment detection
 const getGalleryUrl = () => {
-  // Check if in preview environment
-  if (typeof window !== 'undefined' && 
-      window.location && 
-      window.location.hostname && 
-      window.location.hostname.includes('preview')) {
-    return 'https://preview-main-gallery-ai.lovable.app/gallery';
-  }
-  
-  // Default to production domain
-  return 'https://main-gallery-hub.lovable.app/gallery';
+  return `${getBaseUrl()}/gallery`;
 };
 
 // API endpoint for authentication
 const getApiUrl = () => {
-  // Check if in preview environment
-  if (typeof window !== 'undefined' && 
-      window.location && 
-      window.location.hostname && 
-      window.location.hostname.includes('preview')) {
-    return 'https://preview-main-gallery-ai.lovable.app/api';
-  }
-  
-  // Default to production domain
-  return 'https://main-gallery-hub.lovable.app/api';
+  return `${getBaseUrl()}/api`;
 };
 
 // Supported platforms for extension activation

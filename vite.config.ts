@@ -19,9 +19,16 @@ interface WebAppRollupInput {
   main: string;
 }
 
+// Check if this is a preview build
+const isPreviewBuild = process.env.BUILD_ENV === 'preview' || 
+                      process.argv.includes('--preview') || 
+                      process.argv.includes('-p');
+
 // https://vitejs.dev/config/
 export default defineConfig((configEnv: ConfigEnv): UserConfig => {
   const { mode } = configEnv;
+  
+  console.log(`Building with mode: ${mode}, environment: ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'}`);
   
   // Base configuration shared between both modes
   const baseConfig: UserConfig = {
@@ -38,6 +45,14 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
+    },
+    define: {
+      // Define global constants for environment detection during build
+      'import.meta.env.IS_PREVIEW': isPreviewBuild,
+      'import.meta.env.BASE_URL': JSON.stringify(isPreviewBuild ? 
+        'https://preview-main-gallery-ai.lovable.app' : 
+        'https://main-gallery-hub.lovable.app'
+      )
     }
   };
 

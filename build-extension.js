@@ -1,4 +1,3 @@
-
 /**
  * MainGallery.AI Chrome Extension Build Script
  * 
@@ -9,6 +8,13 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+
+// Check if this is a preview build
+const isPreviewBuild = process.env.BUILD_ENV === 'preview' || 
+                      process.argv.includes('--preview') || 
+                      process.argv.includes('-p');
+
+console.log(`Building for ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} environment`);
 
 // Configuration
 const OUTPUT_DIR = 'dist-extension';
@@ -38,10 +44,50 @@ fs.mkdirSync(`${OUTPUT_DIR}/src`, { recursive: true });
 fs.mkdirSync(`${OUTPUT_DIR}/src/utils`, { recursive: true });
 fs.mkdirSync(`${OUTPUT_DIR}/src/config`, { recursive: true });
 
-// Step 3: Copy manifest
-console.log('Copying manifest.json...');
+// Step 3: Copy and modify manifest - Special handling for preview vs production
+console.log('Copying and configuring manifest.json...');
 const manifestPath = path.join(SOURCE_DIR, 'manifest.json');
-fs.copyFileSync(manifestPath, path.join(OUTPUT_DIR, 'manifest.json'));
+const manifestContent = fs.readFileSync(manifestPath, 'utf8');
+const manifest = JSON.parse(manifestContent);
+
+// Update manifest based on environment
+if (isPreviewBuild) {
+  manifest.name = manifest.name + ' (Preview)';
+  manifest.description = manifest.description + ' - PREVIEW BUILD';
+  
+  // Store environment type in manifest
+  if (!manifest.storage) {
+    manifest.storage = {};
+  }
+  manifest.storage.managed_schema = "environment.json";
+  
+  // Create environment schema file
+  const envSchema = {
+    "type": "object",
+    "properties": {
+      "environment": {
+        "type": "string",
+        "default": "preview"
+      }
+    }
+  };
+  fs.writeFileSync(path.join(OUTPUT_DIR, 'environment.json'), JSON.stringify(envSchema, null, 2));
+}
+
+// Always ensure service worker is treated as a module
+if (manifest.background) {
+  manifest.background.type = "module";
+}
+
+// Make sure content scripts are correctly configured
+if (manifest.content_scripts && manifest.content_scripts.length > 0) {
+  manifest.content_scripts.forEach(script => {
+    script.type = "module";
+  });
+}
+
+// Write updated manifest
+fs.writeFileSync(path.join(OUTPUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
 // Step 4: Copy popup files
 console.log('Copying popup files...');
@@ -90,10 +136,27 @@ try {
     const utilFiles = fs.readdirSync(UTILS_SOURCE);
     utilFiles.forEach(file => {
       if (file.endsWith('.js')) {
-        fs.copyFileSync(
-          path.join(UTILS_SOURCE, file),
-          path.join(UTILS_DEST, file)
-        );
+        // Read the file content
+        let content = fs.readFileSync(path.join(UTILS_SOURCE, file), 'utf8');
+        
+        // If this is the urlUtils.js file, inject the environment setting
+        if (file === 'urlUtils.js') {
+          // Find the isPreviewEnvironment function
+          const funcRegex = /export function isPreviewEnvironment\(\) \{([\s\S]*?)\}/;
+          if (funcRegex.test(content)) {
+            // Modify the function to force the correct environment
+            const forcedEnvFunc = `export function isPreviewEnvironment() {
+  // Environment forced during build
+  return ${isPreviewBuild ? 'true' : 'false'};
+}`;
+            
+            content = content.replace(funcRegex, forcedEnvFunc);
+            console.log(`Injected forced environment (${isPreviewBuild ? 'preview' : 'production'}) into ${file}`);
+          }
+        }
+        
+        // Write the possibly modified file
+        fs.writeFileSync(path.join(UTILS_DEST, file), content);
         console.log(`Copied util: ${file}`);
       }
     });
@@ -110,10 +173,26 @@ try {
     const utilFiles = fs.readdirSync(UTILS_SOURCE);
     utilFiles.forEach(file => {
       if (file.endsWith('.js')) {
-        fs.copyFileSync(
-          path.join(UTILS_SOURCE, file),
-          path.join(OUTPUT_DIR, 'src', 'utils', file)
-        );
+        // Read the file content
+        let content = fs.readFileSync(path.join(UTILS_SOURCE, file), 'utf8');
+        
+        // If this is the urlUtils.js file, inject the environment setting
+        if (file === 'urlUtils.js') {
+          // Find the isPreviewEnvironment function
+          const funcRegex = /export function isPreviewEnvironment\(\) \{([\s\S]*?)\}/;
+          if (funcRegex.test(content)) {
+            // Modify the function to force the correct environment
+            const forcedEnvFunc = `export function isPreviewEnvironment() {
+  // Environment forced during build
+  return ${isPreviewBuild ? 'true' : 'false'};
+}`;
+            
+            content = content.replace(funcRegex, forcedEnvFunc);
+          }
+        }
+        
+        // Write the possibly modified file
+        fs.writeFileSync(path.join(OUTPUT_DIR, 'src', 'utils', file), content);
         console.log(`Copied util to src/utils: ${file}`);
       }
     });
@@ -165,6 +244,22 @@ if (fs.existsSync(contentInjectionSource)) {
   }
 });
 
+// Step 9: Create environment.js file to explicitly set the environment
+const environmentJs = `// Environment configuration - DO NOT MODIFY
+export const ENVIRONMENT = "${isPreviewBuild ? 'preview' : 'production'}";
+export const BASE_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app' : 'https://main-gallery-hub.lovable.app'}";
+export const API_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/api' : 'https://main-gallery-hub.lovable.app/api'}";
+export const AUTH_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/auth' : 'https://main-gallery-hub.lovable.app/auth'}";
+export const GALLERY_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/gallery' : 'https://main-gallery-hub.lovable.app/gallery'}";
+`;
+
+fs.writeFileSync(path.join(OUTPUT_DIR, 'environment.js'), environmentJs);
+console.log('Created environment.js with explicit environment settings');
+
+// Also add to utils for proper imports
+fs.writeFileSync(path.join(OUTPUT_DIR, 'utils', 'environment.js'), environmentJs);
+console.log('Created utils/environment.js with explicit environment settings');
+
 // Step 9: Ensure _redirects file exists for SPA routing in both the extension and web app
 console.log('Creating _redirects file for SPA routing...');
 const redirectsContent = '/*    /index.html   200';
@@ -178,12 +273,14 @@ fs.writeFileSync(path.join(publicDir, '_redirects'), redirectsContent);
 fs.writeFileSync(path.join(OUTPUT_DIR, '_redirects'), redirectsContent);
 console.log('_redirects files created successfully');
 
-console.log('Build completed successfully!');
+console.log(`Build completed successfully for ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} environment!`);
 console.log(`Extension files are ready in the '${OUTPUT_DIR}' directory`);
 console.log('To load the extension in Chrome:');
 console.log('1. Go to chrome://extensions/');
 console.log('2. Enable "Developer mode"');
 console.log('3. Click "Load unpacked" and select the dist-extension folder');
+console.log('');
+console.log(`IMPORTANT: This is a ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} build that will connect to ${isPreviewBuild ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-hub.lovable.app'}`);
 
 // Step 10: Write a post-build script to ensure module compatibility
 const postBuildScriptPath = path.join(OUTPUT_DIR, 'fix-modules.js');

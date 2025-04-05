@@ -13,6 +13,7 @@
   ],
   "host_permissions": [
     "https://main-gallery-hub.lovable.app/*",
+    "https://preview-main-gallery-ai.lovable.app/*",
     "https://*.lovable.app/*"
   ],
   "content_security_policy": {
@@ -39,7 +40,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "bridge.js", "utils/*"],
+      "resources": ["icons/*", "bridge.js", "utils/*", "environment.js"],
       "matches": ["<all_urls>"]
     }
   ]

@@ -1,4 +1,3 @@
-
 /**
  * MainGallery.AI background script
  * Responsible for coordinating extension operations and communicating with tabs
@@ -7,7 +6,7 @@
 // Import required modules
 import { logger } from './utils/logger.js';
 import { handleError, safeFetch } from './utils/errorHandler.js';
-import { isSupportedPlatformUrl, getGalleryUrl, getAuthUrl } from './utils/urlUtils.js';
+import { isSupportedPlatformUrl, getGalleryUrl, getAuthUrl, isPreviewEnvironment } from './utils/urlUtils.js';
 import { safeSendMessage, ensureContentScriptLoaded } from './utils/messaging.js';
 import { 
   isLoggedIn, 
@@ -19,6 +18,7 @@ import {
 import { isGalleryEmpty, setGalleryHasImages } from './utils/galleryUtils.js';
 
 logger.log('MainGallery.AI background script initialized');
+logger.log('Environment check:', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION');
 
 // Create notification utility
 function createNotification(id, title, message) {
@@ -36,6 +36,11 @@ function createNotification(id, title, message) {
 
 // Set up the auth callback listener immediately
 setupAuthCallbackListener();
+
+// Store the environment type in local storage (helps with detection in content scripts)
+chrome.storage.local.set({ 'environment': isPreviewEnvironment() ? 'preview' : 'production' }, () => {
+  logger.log('Environment stored in local storage:', isPreviewEnvironment() ? 'preview' : 'production');
+});
 
 // Implement image syncing with improved error handling
 async function syncImagesToGallery(images) {
@@ -187,6 +192,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     // Check login status first
     const loggedIn = await isLoggedIn();
     logger.log('User logged in status:', loggedIn);
+    logger.log('Environment is:', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION');
     
     if (!loggedIn) {
       // User not logged in, redirect directly to auth page
@@ -194,6 +200,7 @@ chrome.action.onClicked.addListener(async (tab) => {
       
       // Get auth URL and open it in a new tab
       const authUrl = getAuthUrl({ from: 'extension_icon' });
+      logger.log('Opening auth URL:', authUrl);
       chrome.tabs.create({ url: authUrl });
       
       // Show a notification to guide the user
@@ -260,7 +267,9 @@ chrome.action.onClicked.addListener(async (tab) => {
       if (isEmpty) {
         // Case 1: Initial Login (Empty Gallery State)
         // Redirect to the gallery page with empty state parameter
-        chrome.tabs.create({ url: `${getGalleryUrl()}?state=empty&from=extension_icon` });
+        const galleryUrl = `${getGalleryUrl()}?state=empty&from=extension_icon`;
+        logger.log('Opening gallery URL (empty state):', galleryUrl);
+        chrome.tabs.create({ url: galleryUrl });
         
         // Show notification to guide the user
         createNotification(
@@ -271,14 +280,18 @@ chrome.action.onClicked.addListener(async (tab) => {
       } else {
         // Case 2: Subsequent Logins (Populated Gallery State)
         // Redirect to the regular gallery page
-        chrome.tabs.create({ url: `${getGalleryUrl()}?from=extension_icon` });
+        const galleryUrl = `${getGalleryUrl()}?from=extension_icon`;
+        logger.log('Opening gallery URL (populated):', galleryUrl);
+        chrome.tabs.create({ url: galleryUrl });
       }
     }
   } catch (error) {
     handleError('iconClickHandler', error);
     
     // Fallback to opening auth page if any error occurs
-    chrome.tabs.create({ url: getAuthUrl({ from: 'extension_icon_error' }) });
+    const authUrl = getAuthUrl({ from: 'extension_icon_error' });
+    logger.log('Opening fallback auth URL:', authUrl);
+    chrome.tabs.create({ url: authUrl });
     
     createNotification(
       'maingallery_error',
