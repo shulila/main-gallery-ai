@@ -1,3 +1,4 @@
+
 // Auth utilities for Chrome extension
 import { logger } from './logger.js';
 import { handleError, safeFetch } from './errorHandler.js';
@@ -178,6 +179,7 @@ function setupAuthCallbackListener() {
         // Only process completed loads with our auth callback URL
         if (changeInfo.status === 'complete' && tab.url && 
             (tab.url.includes('main-gallery-hub.lovable.app/auth/callback') || 
+             tab.url.includes('preview-main-gallery-ai.lovable.app/auth/callback') ||
              tab.url.includes('/auth?access_token='))) {
           
           logger.info('Auth callback detected:', tab.url);
@@ -383,6 +385,15 @@ function logout() {
         // Always clear extension storage regardless of API result
         clearAuthStorage(() => {
           logger.info('Successfully cleared auth data during logout');
+          
+          // Redirect to login page after logout
+          try {
+            chrome.tabs.create({ url: getAuthUrl() });
+            logger.info('Redirected to login page after logout');
+          } catch (redirectError) {
+            logger.error('Failed to redirect after logout:', redirectError);
+          }
+          
           resolve(true);
         });
       });
@@ -392,6 +403,14 @@ function logout() {
       // Attempt emergency cleanup as fallback
       clearAuthStorage(() => {
         logger.info('Emergency storage cleanup during logout error');
+        
+        // Try to redirect even after error
+        try {
+          chrome.tabs.create({ url: getAuthUrl() });
+        } catch (e) {
+          logger.error('Failed to redirect after logout error:', e);
+        }
+        
         resolve(true); // Consider it a success if we at least cleared storage
       });
     }

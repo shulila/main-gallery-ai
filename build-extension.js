@@ -1,8 +1,10 @@
+
 /**
  * MainGallery.AI Chrome Extension Build Script
  * 
  * This script organizes extension files into a proper structure for loading as an unpacked extension.
  * Run with: node build-extension.js
+ * For preview build: node build-extension.js --preview
  */
 
 const fs = require('fs');
@@ -24,7 +26,12 @@ const ICONS_DIR = `${SOURCE_DIR}/icons`;
 // Step 1: Run Vite build with 'extension' mode
 console.log('Building extension with Vite...');
 try {
-  execSync('npx vite build --mode extension', { stdio: 'inherit' });
+  // Pass the environment to Vite build
+  const buildCmd = isPreviewBuild ? 
+    'npx vite build --mode extension --env BUILD_ENV=preview' : 
+    'npx vite build --mode extension';
+    
+  execSync(buildCmd, { stdio: 'inherit' });
   console.log('Vite build completed successfully');
 } catch (error) {
   console.error('Error building extension with Vite:', error);

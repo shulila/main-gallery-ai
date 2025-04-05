@@ -77,27 +77,35 @@ export function getPlatformIdFromUrl(url) {
  */
 export function isPreviewEnvironment() {
   try {
+    // First, check if we have an explicit environment flag set during build
+    if (typeof window !== 'undefined' && window.__MAINGALLERY_ENV) {
+      return window.__MAINGALLERY_ENV === 'preview';
+    }
+    
+    // Check Chrome extension storage for environment flag
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      // This will be asynchronous, so we can't return directly from here
+      // Instead we'll set a global flag
+      chrome.storage.local.get(['environment'], (result) => {
+        if (result && result.environment) {
+          window.__MAINGALLERY_ENV = result.environment;
+        }
+      });
+    }
+    
+    // Check if we're in a web context and look at the hostname
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      // If hostname contains 'preview' or is 'localhost' or '127.0.0.1'
       return window.location.hostname.includes('preview') || 
              window.location.hostname === 'localhost' || 
              window.location.hostname.includes('127.0.0.1');
     }
     
-    // If can't detect window location, use a fallback method
-    // Check if this code is running in a Chrome extension context
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
-      // Check storage for environment indicator (can be set during installation)
-      return new Promise(resolve => {
-        chrome.storage.local.get(['environment'], (result) => {
-          resolve(result.environment === 'preview');
-        });
-      });
-    }
-    
-    // Default to production as safest option
+    // Default to false (production) if we can't determine
     return false;
   } catch (err) {
     logger.error('Error detecting environment:', err);
+    // Default to false (production) as safest option
     return false;
   }
 }

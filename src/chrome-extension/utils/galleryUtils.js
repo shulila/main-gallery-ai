@@ -1,130 +1,155 @@
 
 /**
- * Utility functions for gallery state management
+ * Utilities for gallery management in MainGallery.AI extension
  */
 
 import { logger } from './logger.js';
-import { getBaseUrl } from './urlUtils.js';
 
 /**
- * Check if gallery is empty based on localStorage data
- * @returns {Promise<boolean>} True if gallery is empty, false otherwise
+ * Check if the gallery is empty
+ * @returns {Promise<boolean>} True if gallery is empty
  */
-export async function isGalleryEmpty() {
-  try {
-    // First check localStorage for any previously synced images
-    return new Promise((resolve) => {
+export function isGalleryEmpty() {
+  return new Promise((resolve) => {
+    try {
+      // Check if we have a flag in storage
       chrome.storage.local.get(['gallery_has_images'], (result) => {
-        if (result && result.gallery_has_images === true) {
-          // We have previously synced images
+        // If flag exists and is true, gallery is not empty
+        resolve(!(result && result.gallery_has_images === true));
+      });
+    } catch (err) {
+      logger.error('Error checking gallery state:', err);
+      // Default to empty if we can't check
+      resolve(true);
+    }
+  });
+}
+
+/**
+ * Set the gallery state flag
+ * @param {boolean} hasImages - Whether the gallery has images
+ * @returns {Promise<boolean>} Success state
+ */
+export function setGalleryHasImages(hasImages) {
+  return new Promise((resolve) => {
+    try {
+      // Store flag in local storage
+      chrome.storage.local.set({ 'gallery_has_images': hasImages }, () => {
+        if (chrome.runtime.lastError) {
+          logger.error('Error saving gallery state:', chrome.runtime.lastError);
           resolve(false);
         } else {
-          // No images found in storage
+          logger.info(`Gallery state updated: gallery_has_images=${hasImages}`);
           resolve(true);
         }
       });
-    });
-  } catch (error) {
-    logger.error('Error checking gallery state:', error);
-    // Default to empty gallery in case of error
-    return true;
-  }
-}
-
-/**
- * Set gallery state after successful image sync
- * @param {boolean} hasImages - Whether gallery has images
- * @returns {Promise<void>}
- */
-export async function setGalleryHasImages(hasImages = true) {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ 'gallery_has_images': hasImages }, () => {
-      logger.log(`Gallery state updated: hasImages=${hasImages}`);
-      resolve();
-    });
+    } catch (err) {
+      logger.error('Error setting gallery state:', err);
+      resolve(false);
+    }
   });
 }
 
 /**
- * Clear gallery state
- * @returns {Promise<void>}
+ * Reset gallery state
+ * @returns {Promise<boolean>} Success state
  */
-export async function clearGalleryState() {
+export function resetGalleryState() {
   return new Promise((resolve) => {
-    chrome.storage.local.remove(['gallery_has_images'], () => {
-      logger.log('Gallery state cleared');
-      resolve();
-    });
+    try {
+      chrome.storage.local.remove(['gallery_has_images'], () => {
+        if (chrome.runtime.lastError) {
+          logger.error('Error resetting gallery state:', chrome.runtime.lastError);
+          resolve(false);
+        } else {
+          logger.info('Gallery state reset successfully');
+          resolve(true);
+        }
+      });
+    } catch (err) {
+      logger.error('Error resetting gallery state:', err);
+      resolve(false);
+    }
   });
 }
 
 /**
- * Handle cleanup when an error occurs during image sync
+ * Get the gallery images count from storage
+ * @returns {Promise<number>} Number of images or 0 if none/error
  */
-export async function handleGallerySyncError(error) {
-  logger.error('Gallery sync error:', error);
-  // Don't change gallery state on error, as it might be a temporary issue
+export function getGalleryImageCount() {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(['gallery_image_count'], (result) => {
+        if (result && typeof result.gallery_image_count === 'number') {
+          resolve(result.gallery_image_count);
+        } else {
+          resolve(0);
+        }
+      });
+    } catch (err) {
+      logger.error('Error getting gallery image count:', err);
+      resolve(0);
+    }
+  });
 }
 
 /**
- * Get the gallery URL with appropriate environment detection
- * @param {object} options - Query parameters to add to the URL
- * @returns {string} The gallery URL
+ * Update the gallery images count in storage
+ * @param {number} count - The new count
+ * @returns {Promise<boolean>} Success state
  */
-export function getGalleryUrl(options = {}) {
-  const baseUrl = `${getBaseUrl()}/gallery`;
-  
-  // Add query parameters if provided
-  if (options && Object.keys(options).length > 0) {
-    const params = new URLSearchParams();
-    
-    for (const [key, value] of Object.entries(options)) {
-      if (value !== undefined && value !== null) {
-        params.append(key, value.toString());
-      }
+export function updateGalleryImageCount(count) {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.set({ 'gallery_image_count': count }, () => {
+        if (chrome.runtime.lastError) {
+          logger.error('Error updating gallery image count:', chrome.runtime.lastError);
+          resolve(false);
+        } else {
+          logger.info(`Gallery image count updated: ${count}`);
+          // Also update the has_images flag if count > 0
+          if (count > 0) {
+            setGalleryHasImages(true)
+              .then(() => resolve(true))
+              .catch(() => resolve(true)); // Still consider success even if flag update fails
+          } else {
+            resolve(true);
+          }
+        }
+      });
+    } catch (err) {
+      logger.error('Error updating gallery image count:', err);
+      resolve(false);
     }
-    
-    const queryString = params.toString();
-    if (queryString) {
-      return `${baseUrl}?${queryString}`;
-    }
-  }
-  
-  return baseUrl;
+  });
 }
 
 /**
- * Get stored sync images from session storage
- * @returns {Array} Array of images or empty array if none found
+ * Clear all gallery-related data from storage
+ * @returns {Promise<boolean>} Success state
  */
-export function getStoredSyncImages() {
-  try {
-    const storedImagesJson = sessionStorage.getItem('maingallery_sync_images');
-    if (!storedImagesJson) return [];
-    
-    const images = JSON.parse(storedImagesJson);
-    return Array.isArray(images) ? images : [];
-  } catch (error) {
-    logger.error('Error getting stored sync images:', error);
-    return [];
-  }
-}
-
-/**
- * Store images in session storage for later retrieval
- * @param {Array} images - Array of image objects
- * @returns {boolean} Success status
- */
-export function storeImagesForSync(images) {
-  try {
-    if (!Array.isArray(images) || images.length === 0) {
-      return false;
+export function clearGalleryData() {
+  return new Promise((resolve) => {
+    try {
+      const keysToRemove = [
+        'gallery_has_images',
+        'gallery_image_count',
+        'last_sync_timestamp'
+      ];
+      
+      chrome.storage.local.remove(keysToRemove, () => {
+        if (chrome.runtime.lastError) {
+          logger.error('Error clearing gallery data:', chrome.runtime.lastError);
+          resolve(false);
+        } else {
+          logger.info('Gallery data cleared successfully');
+          resolve(true);
+        }
+      });
+    } catch (err) {
+      logger.error('Error clearing gallery data:', err);
+      resolve(false);
     }
-    
-    sessionStorage.setItem('maingallery_sync_images', JSON.stringify(images));
-    return true;
-  } catch (error) {
-    logger.error('Error storing images for sync:', error);
-    return false;
-  }
+  });
 }

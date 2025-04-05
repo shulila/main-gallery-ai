@@ -52,7 +52,9 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
       'import.meta.env.BASE_URL': JSON.stringify(isPreviewBuild ? 
         'https://preview-main-gallery-ai.lovable.app' : 
         'https://main-gallery-hub.lovable.app'
-      )
+      ),
+      // Add a global flag for preview detection
+      'window.__MAINGALLERY_ENV': JSON.stringify(isPreviewBuild ? 'preview' : 'production')
     }
   };
 

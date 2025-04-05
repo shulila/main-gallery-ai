@@ -144,6 +144,18 @@ export async function safeFetch(url, options = {}) {
           
           if (isHtml) {
             error.isHtmlError = true;
+            
+            // Log more details about HTML errors
+            const clone = response.clone();
+            const text = await clone.text();
+            const preview = text.substring(0, 200) + '...'; // First 200 chars
+            
+            logger.error('HTML Error Response Preview:', {
+              url: url,
+              status: response.status,
+              preview: preview,
+              contentType: response.headers.get('content-type')
+            });
           }
           
           throw error;
@@ -160,6 +172,18 @@ export async function safeFetch(url, options = {}) {
               const error = new Error("Received HTML response instead of JSON");
               error.response = response;
               error.isHtmlError = true;
+              
+              // Log more detailed error for HTML responses
+              const clone = response.clone();
+              const text = await clone.text();
+              const preview = text.substring(0, 200) + '...'; // First 200 chars
+              
+              logger.error('Received HTML when expecting JSON:', {
+                url: url,
+                contentType: contentType,
+                preview: preview
+              });
+              
               throw error;
             }
             
@@ -190,6 +214,12 @@ export async function safeFetch(url, options = {}) {
             if (htmlResponse) {
               error.isHtmlError = true;
               error.rawData = text.substring(0, 500); // First 500 chars for debugging
+              
+              logger.error('Failed to parse JSON - received HTML:', {
+                url: url,
+                preview: text.substring(0, 200) + '...',
+                method: options.method || 'GET'
+              });
             }
             
             throw error;

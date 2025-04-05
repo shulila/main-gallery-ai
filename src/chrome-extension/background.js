@@ -1,3 +1,4 @@
+
 /**
  * MainGallery.AI background script
  * Responsible for coordinating extension operations and communicating with tabs
@@ -40,6 +41,11 @@ setupAuthCallbackListener();
 // Store the environment type in local storage (helps with detection in content scripts)
 chrome.storage.local.set({ 'environment': isPreviewEnvironment() ? 'preview' : 'production' }, () => {
   logger.log('Environment stored in local storage:', isPreviewEnvironment() ? 'preview' : 'production');
+  
+  // Set a global variable for immediate access in the current context
+  if (typeof window !== 'undefined') {
+    window.__MAINGALLERY_ENV = isPreviewEnvironment() ? 'preview' : 'production';
+  }
 });
 
 // Implement image syncing with improved error handling
@@ -193,6 +199,12 @@ chrome.action.onClicked.addListener(async (tab) => {
     const loggedIn = await isLoggedIn();
     logger.log('User logged in status:', loggedIn);
     logger.log('Environment is:', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION');
+    
+    // Log environment and URLs for debugging
+    const baseUrl = isPreviewEnvironment() ? 
+      'https://preview-main-gallery-ai.lovable.app' : 
+      'https://main-gallery-hub.lovable.app';
+    logger.log('Current base URL:', baseUrl);
     
     if (!loggedIn) {
       // User not logged in, redirect directly to auth page
@@ -422,47 +434,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       logout()
         .then(() => {
           logger.log('Logout successful');
-          // Clear any stored tokens and session data
-          chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-            logger.log('Storage cleared after logout');
-            
-            // Also clear localStorage if available
-            if (typeof localStorage !== 'undefined') {
-              try {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('main_gallery_auth_token');
-                localStorage.removeItem('main_gallery_user_email');
-                logger.log('LocalStorage cleared after logout');
-              } catch (err) {
-                logger.error('Error clearing localStorage:', err);
-              }
-            }
-            
-            // Send success response
-            sendResponse({ success: true });
-          });
+          // Send success response
+          sendResponse({ success: true });
         })
         .catch(err => {
           logger.error('Logout error:', err);
-          // Try fallback logout by just clearing storage
-          chrome.storage.sync.remove(['main_gallery_auth_token', 'main_gallery_user_email'], () => {
-            logger.log('Storage cleared as fallback after logout error');
-            
-            // Also clear localStorage if available
-            if (typeof localStorage !== 'undefined') {
-              try {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('main_gallery_auth_token');
-                localStorage.removeItem('main_gallery_user_email');
-                logger.log('LocalStorage cleared after logout error');
-              } catch (storageErr) {
-                logger.error('Error clearing localStorage:', storageErr);
-              }
-            }
-            
-            // Send success response even with error since we cleaned up
-            sendResponse({ success: true, warning: err.message });
-          });
+          // Send success response even with error since we cleaned up
+          sendResponse({ success: true, warning: err.message });
         });
       
       return true; // Keep message channel open for async response
