@@ -7,18 +7,16 @@ import { isPreviewEnvironment, getBaseUrl, getAuthUrl as getEnvironmentAuthUrl }
 // Extension ID - important for OAuth flow
 const EXTENSION_ID = chrome.runtime.id || 'oapmlmnmepbgiafhbbkjbkbppfdclknlb';
 
-// ALWAYS use the Preview OAuth client ID for Chrome extensions to avoid invalid_client errors
-const GOOGLE_CLIENT_ID = '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
+// Use the correct Preview OAuth client ID
+const GOOGLE_CLIENT_ID = '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com';
 
-// Get the production auth callback URL - NEVER use localhost
+// Get the production auth callback URL
 const getProductionRedirectUrl = () => {
-  // Use the production domain
   return 'https://main-gallery-hub.lovable.app/auth/callback';
 };
 
 // Get the preview auth callback URL
 const getPreviewRedirectUrl = () => {
-  // Use the preview domain
   return 'https://preview-main-gallery-ai.lovable.app/auth/callback';
 };
 
@@ -42,7 +40,7 @@ const getApiUrl = () => {
   return `${getBaseUrl()}/api`;
 };
 
-// Get Google OAuth client ID - FIXED to always use Preview client ID
+// Get Google OAuth client ID
 const getGoogleClientId = () => {
   // Always use the Preview client ID for extension OAuth flow
   return GOOGLE_CLIENT_ID;
@@ -143,7 +141,7 @@ async function handleInPopupGoogleLogin() {
     
     // Use the fixed Preview client ID
     const clientId = getGoogleClientId();
-    const redirectURL = getExtensionRedirectUrl();
+    const redirectURL = getProductionRedirectUrl(); // Use the full redirect URL as specified
     
     logger.info('Using OAuth client ID:', clientId);
     logger.info('Using redirect URL:', redirectURL);
@@ -263,6 +261,23 @@ async function handleInPopupGoogleLogin() {
     });
   } catch (error) {
     logger.error('Error initiating in-popup Google login:', error);
+    throw error;
+  }
+}
+
+// Handle email/password login - adding this to fix the missing export error
+async function handleEmailPasswordLogin(email, password) {
+  logger.info('Email/password login requested');
+  
+  try {
+    // Implement a stub function to satisfy imports
+    // This is just a placeholder since we're using Google OAuth
+    return {
+      success: false,
+      error: 'Email/password login is not implemented in the extension. Please use Google login.'
+    };
+  } catch (error) {
+    logger.error('Error in handleEmailPasswordLogin:', error);
     throw error;
   }
 }
@@ -391,17 +406,6 @@ function logout() {
         // Always clear extension storage regardless of API result
         clearAuthStorage(() => {
           logger.info('Successfully cleared auth data during logout');
-          
-          // Redirect to login page after logout if needed
-          try {
-            if (options?.redirect) {
-              chrome.tabs.create({ url: getAuthUrl() });
-              logger.info('Redirected to login page after logout');
-            }
-          } catch (redirectError) {
-            logger.error('Failed to redirect after logout:', redirectError);
-          }
-          
           resolve(true);
         });
       });
@@ -528,5 +532,6 @@ export {
   getProductionRedirectUrl,
   getPreviewRedirectUrl,
   getExtensionRedirectUrl,
-  getGoogleClientId
+  getGoogleClientId,
+  handleEmailPasswordLogin  // Added the missing export
 };

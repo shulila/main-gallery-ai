@@ -58,12 +58,12 @@ const manifest = JSON.parse(manifestContent);
 if (isPreviewBuild) {
   manifest.name = manifest.name + ' (Preview)';
   manifest.description = manifest.description + ' - PREVIEW BUILD';
-  
-  // Always use the Preview OAuth client ID for all builds
-  if (manifest.oauth2 && manifest.oauth2.client_id) {
-    manifest.oauth2.client_id = '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
-    console.log('Using Preview OAuth client ID for the extension');
-  }
+}
+
+// Always use the correct OAuth client ID
+if (manifest.oauth2 && manifest.oauth2.client_id) {
+  manifest.oauth2.client_id = '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com';
+  console.log('Using correct OAuth client ID for the extension');
 }
 
 // Make sure web_accessible_resources include utils directory
@@ -217,6 +217,18 @@ try {
           }
         }
         
+        // If this is auth.js, ensure the client ID is always the correct one
+        if (file === 'auth.js') {
+          // Replace the Google client ID with the correct one
+          const googleClientIdRegex = /const GOOGLE_CLIENT_ID = ['"].*?['"]/;
+          const correctClientId = `const GOOGLE_CLIENT_ID = '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com'`;
+          
+          if (content.match(googleClientIdRegex)) {
+            content = content.replace(googleClientIdRegex, correctClientId);
+            console.log('Ensured correct Google Client ID in auth.js');
+          }
+        }
+        
         // Ensure proper module imports
         content = content.replace(/from ['"]\.\/([^'"]+)['"]/g, (match, p1) => {
           // If the import doesn't end with .js, add it
@@ -357,7 +369,7 @@ export const BASE_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lov
 export const API_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/api' : 'https://main-gallery-hub.lovable.app/api'}";
 export const AUTH_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/auth' : 'https://main-gallery-hub.lovable.app/auth'}";
 export const GALLERY_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/gallery' : 'https://main-gallery-hub.lovable.app/gallery'}";
-export const OAUTH_CLIENT_ID = "288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com";
+export const OAUTH_CLIENT_ID = "733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com";
 `;
 
 // Write environment file to multiple locations for reliable imports
@@ -451,12 +463,12 @@ try {
       return match;
     });
     
-    // Ensure the Preview client ID is used
-    if (!authContent.includes('288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com')) {
-      console.warn('WARNING: auth.js does not contain the correct client ID. Attempting to fix...');
+    // Ensure the correct client ID is used
+    if (!authContent.includes('733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com')) {
+      console.warn('WARNING: auth.js does not contain the correct client ID. Updating...');
       authContent = authContent.replace(
         /const GOOGLE_CLIENT_ID = ['"].*['"]/,
-        `const GOOGLE_CLIENT_ID = '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com'`
+        `const GOOGLE_CLIENT_ID = '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com'`
       );
     }
     
