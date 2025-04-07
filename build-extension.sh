@@ -37,8 +37,8 @@ if [ ! -f "dist-extension/utils/urlUtils.js" ]; then
   exit 1
 fi
 
-if [ ! -f "dist-extension/popup.html" ]; then
-  echo "ERROR: popup.html is missing from the build!"
+if [ ! -f "dist-extension/background.js" ]; then
+  echo "ERROR: background.js is missing from the build!"
   exit 1
 fi
 
@@ -47,6 +47,22 @@ if grep -q "\"identity\"" dist-extension/manifest.json; then
   echo "✅ identity permission found in manifest.json"
 else
   echo "❌ WARNING: identity permission missing from manifest.json!"
+fi
+
+# Check for service worker module type
+if grep -q "\"type\": \"module\"" dist-extension/manifest.json; then
+  echo "✅ Service worker correctly configured as module type"
+else
+  echo "❌ WARNING: Service worker module type missing from manifest.json!"
+fi
+
+# Verify imports in background.js have .js extensions
+if grep -q "from './utils/" dist-extension/background.js; then
+  if grep -q "from './utils/[^']*'" dist-extension/background.js | grep -v "\.js'"; then
+    echo "❌ WARNING: Some imports in background.js may be missing .js extension!"
+  else
+    echo "✅ Imports in background.js appear to have proper .js extensions"
+  fi
 fi
 
 # Print environment info for verification

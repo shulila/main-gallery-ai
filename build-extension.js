@@ -60,22 +60,20 @@ if (isPreviewBuild) {
   manifest.description = manifest.description + ' - PREVIEW BUILD';
 }
 
-// Remove any default_popup setting to ensure background.js handles clicks
-if (manifest.action && manifest.action.default_popup) {
-  delete manifest.action.default_popup;
-  console.log('Removed default_popup from manifest to ensure background script handles clicks');
+// Make sure web_accessible_resources include utils directory
+if (manifest.web_accessible_resources && manifest.web_accessible_resources.length > 0) {
+  // Check if utils/*.js is in resources
+  const hasUtilsWildcard = manifest.web_accessible_resources[0].resources.includes("utils/*.js");
+  if (!hasUtilsWildcard) {
+    manifest.web_accessible_resources[0].resources.push("utils/*.js");
+    console.log('Added utils/*.js to web_accessible_resources');
+  }
 }
 
-// Always ensure service worker is treated as a module
+// Ensure background script is properly configured
 if (manifest.background) {
   manifest.background.type = "module";
-}
-
-// Make sure content scripts are correctly configured
-if (manifest.content_scripts && manifest.content_scripts.length > 0) {
-  manifest.content_scripts.forEach(script => {
-    script.type = "module";
-  });
+  console.log('Ensured background script is configured as module type');
 }
 
 // Write updated manifest
@@ -118,8 +116,8 @@ console.log('Copying icons...');
   }
 });
 
-// Step 6: Copy utility files (that might not be bundled with Vite)
-console.log('Copying utility files...');
+// Step 6: Copy utility files and create proper module structure
+console.log('Copying utility files with module structure...');
 const UTILS_SOURCE = path.join(SOURCE_DIR, 'utils');
 const UTILS_DEST = path.join(OUTPUT_DIR, 'utils');
 
@@ -160,9 +158,26 @@ try {
           }
         }
         
-        // Write the possibly modified file
+        // Ensure proper module imports
+        content = content.replace(/from ['"]\.\/([^'"]+)['"]/g, (match, p1) => {
+          // If the import doesn't end with .js, add it
+          if (!p1.endsWith('.js')) {
+            return `from './${p1}.js'`;
+          }
+          return match;
+        });
+        
+        content = content.replace(/from ['"]\.\.\/utils\/([^'"]+)['"]/g, (match, p1) => {
+          // If the import doesn't end with .js, add it
+          if (!p1.endsWith('.js')) {
+            return `from '../utils/${p1}.js'`;
+          }
+          return match;
+        });
+        
+        // Write the modified file
         fs.writeFileSync(path.join(UTILS_DEST, file), content);
-        console.log(`Copied util: ${file}`);
+        console.log(`Copied and processed util: ${file}`);
       }
     });
   }
@@ -170,7 +185,44 @@ try {
   console.warn('Warning: Error copying utility files:', e.message);
 }
 
-// Step 7: Create environment.js file to explicitly set the environment
+// Step 7: Process background.js to ensure proper module imports
+console.log('Processing background.js for proper module structure...');
+try {
+  const backgroundPath = path.join(SOURCE_DIR, 'background.js');
+  const backgroundDestPath = path.join(OUTPUT_DIR, 'background.js');
+  
+  if (fs.existsSync(backgroundPath)) {
+    let content = fs.readFileSync(backgroundPath, 'utf8');
+    
+    // Ensure proper module imports
+    content = content.replace(/from ['"]\.\/utils\/([^'"]+)['"]/g, (match, p1) => {
+      // If the import doesn't end with .js, add it
+      if (!p1.endsWith('.js')) {
+        return `from './utils/${p1}.js'`;
+      }
+      return match;
+    });
+    
+    // Fix dynamic imports if any
+    content = content.replace(/import\(['"]\.\/utils\/([^'"]+)['"]\)/g, (match, p1) => {
+      // If the import doesn't end with .js, add it
+      if (!p1.endsWith('.js')) {
+        return `import('./utils/${p1}.js')`;
+      }
+      return match;
+    });
+    
+    // Write the modified background.js
+    fs.writeFileSync(backgroundDestPath, content);
+    console.log('Successfully processed background.js');
+  } else {
+    console.error('ERROR: background.js not found in source directory!');
+  }
+} catch (e) {
+  console.error('Error processing background.js:', e.message);
+}
+
+// Step 8: Create environment.js file to explicitly set the environment
 const environmentJs = `// Environment configuration - Injected during build
 export const ENVIRONMENT = "${isPreviewBuild ? 'preview' : 'production'}";
 export const BASE_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app' : 'https://main-gallery-hub.lovable.app'}";
@@ -186,40 +238,7 @@ console.log('Created environment.js with explicit environment settings');
 fs.writeFileSync(path.join(OUTPUT_DIR, 'utils', 'environment.js'), environmentJs);
 console.log('Created utils/environment.js with explicit environment settings');
 
-// Step 8: Copy core JS files
-['background.js', 'content.js', 'bridge.js'].forEach(file => {
-  const sourcePath = path.join(SOURCE_DIR, file);
-  const destPath = path.join(OUTPUT_DIR, file);
-  
-  try {
-    if (fs.existsSync(sourcePath)) {
-      let content = fs.readFileSync(sourcePath, 'utf8');
-      
-      // Replace any hardcoded URLs in JS files based on environment
-      if (isPreviewBuild) {
-        content = content.replace(
-          /['"]https:\/\/main-gallery-hub\.lovable\.app['"]/g, 
-          "'https://preview-main-gallery-ai.lovable.app'"
-        );
-      }
-      
-      fs.writeFileSync(destPath, content);
-      console.log(`Copied and processed ${file}`);
-    } else {
-      console.error(`Warning: Could not find ${file} in source directory`);
-    }
-  } catch (e) {
-    console.warn(`Warning: Could not copy ${file}: ${e.message}`);
-  }
-});
-
-// Step 9: Create _redirects file for SPA routing
-console.log('Creating _redirects file for SPA routing...');
-const redirectsContent = '/*    /index.html   200';
-fs.writeFileSync(path.join(OUTPUT_DIR, '_redirects'), redirectsContent);
-console.log('_redirects file created successfully');
-
-// Final validation
+// Step 9: Verify and validate the build files
 console.log('Performing final validation checks...');
 
 // Check for critical files
@@ -231,27 +250,37 @@ if (missingFiles.length > 0) {
   process.exit(1);
 }
 
-// Verify environment in urlUtils.js
+// Additional verification - check for module compatibility
 try {
-  const urlUtilsContent = fs.readFileSync(path.join(OUTPUT_DIR, 'utils', 'urlUtils.js'), 'utf8');
-  const hasCorrectEnv = isPreviewBuild ? 
-    urlUtilsContent.includes('return true') : 
-    urlUtilsContent.includes('return false');
+  const backgroundContent = fs.readFileSync(path.join(OUTPUT_DIR, 'background.js'), 'utf8');
   
-  if (!hasCorrectEnv) {
-    console.error('WARNING: urlUtils.js may not have the correct environment setting');
-  } else {
-    console.log(`Environment correctly set to ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} in urlUtils.js`);
+  // Look for import statements without .js extensions
+  const importMatches = [...backgroundContent.matchAll(/import .* from ['"]\.\/utils\/([^'"]+)['"]/g)];
+  const problematicImports = importMatches.filter(match => {
+    const importPath = match[1];
+    return !importPath.endsWith('.js');
+  });
+  
+  if (problematicImports.length > 0) {
+    console.warn('WARNING: Found imports without .js extension in background.js:');
+    problematicImports.forEach(match => {
+      console.warn(`  - ${match[0]}`);
+    });
+    
+    // Auto-fix the issues
+    let fixedContent = backgroundContent;
+    problematicImports.forEach(match => {
+      const original = match[0];
+      const fixed = original.replace(`"${match[1]}"`, `"${match[1]}.js"`).replace(`'${match[1]}'`, `'${match[1]}.js'`);
+      fixedContent = fixedContent.replace(original, fixed);
+    });
+    
+    fs.writeFileSync(path.join(OUTPUT_DIR, 'background.js'), fixedContent);
+    console.log('Auto-fixed import extensions in background.js');
   }
 } catch (e) {
-  console.error('Error verifying urlUtils.js environment:', e.message);
+  console.warn('Warning: Error checking background.js imports:', e.message);
 }
 
 console.log(`Build completed successfully for ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} environment!`);
 console.log(`Extension files are ready in the '${OUTPUT_DIR}' directory`);
-console.log('To load the extension in Chrome:');
-console.log('1. Go to chrome://extensions/');
-console.log('2. Enable "Developer mode"');
-console.log('3. Click "Load unpacked" and select the dist-extension folder');
-console.log('');
-console.log(`IMPORTANT: This is a ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} build that will connect to ${isPreviewBuild ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-hub.lovable.app'}`);
