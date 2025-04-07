@@ -108,7 +108,16 @@ function showToast(message, type = 'info') {
 // Show error state with custom message
 function showError(message) {
   if (errorTextElement) {
-    errorTextElement.textContent = message || 'Authentication failed. Please try again.';
+    // Make sure we never display [object Object] or technical errors
+    let displayMessage = message || 'Authentication failed. Please try again.';
+    
+    if (typeof displayMessage === 'object') {
+      displayMessage = 'An error occurred during authentication. Please try again.';
+    } else if (displayMessage.includes('invalid_client')) {
+      displayMessage = 'Google authentication failed. Please try the full login page instead.';
+    }
+    
+    errorTextElement.textContent = displayMessage;
   }
   showState(states.errorView);
 }
@@ -157,6 +166,9 @@ async function checkCurrentTab() {
         platformName = "NightCafe";
       }
       
+      // Additional debug logging for platform detection
+      console.log(`MainGallery: Platform detected - ${platformName} from URL ${currentUrl}`);
+      
       platformNameElement.textContent = platformName;
       platformDetectedDiv.style.display = 'block';
       
@@ -170,6 +182,7 @@ async function checkCurrentTab() {
       
       return true;
     } else {
+      console.log(`MainGallery: No supported platform detected for URL ${currentUrl}`);
       updateUIForUnsupportedPlatform();
       return false;
     }
@@ -196,18 +209,18 @@ function updateUIForUnsupportedPlatform() {
   }
 }
 
-// Improved Google OAuth login using chrome.identity
+// Fixed Google OAuth login using chrome.identity and Preview client ID
 async function handleInPopupGoogleLogin() {
   try {
     if (states.loading) showState(states.loading);
     logger.log('Starting Google login flow with chrome.identity');
     
-    // Get client ID from manifest
-    const manifest = chrome.runtime.getManifest();
-    const clientId = manifest.oauth2?.client_id || 
-                  '288496481194-rk8jtjt5vka8j90eofdki6q4fgjp2799.apps.googleusercontent.com';
+    // Use Preview environment client ID for all environments to resolve the oauth issue
+    const clientId = isPreviewEnvironment() 
+      ? '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com'
+      : '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
     
-    // Get extension redirect URL
+    // Get extension redirect URL - this is crucial for Chrome extension auth flow
     const redirectURL = chrome.identity.getRedirectURL();
     logger.log('Chrome identity redirect URL:', redirectURL);
     
@@ -347,7 +360,7 @@ async function handleInPopupGoogleLogin() {
       if (oauthError.message.includes('did not approve')) {
         errorMessage = 'You did not approve access to your Google account.';
       } else if (oauthError.message.includes('invalid_client')) {
-        errorMessage = 'OAuth client configuration error. Please contact support.';
+        errorMessage = 'OAuth client configuration error. Please try opening the full login page instead.';
       } else if (oauthError.message.includes('cancel')) {
         errorMessage = 'Authentication was canceled.';
       } else if (oauthError.message.includes('access')) {
@@ -358,7 +371,7 @@ async function handleInPopupGoogleLogin() {
     }
   } catch (error) {
     logger.error('Error initiating Google login:', error);
-    showError('Could not start login process. Please try again.');
+    showError('Could not start login process. Please try again or use the full login page option.');
   }
 }
 

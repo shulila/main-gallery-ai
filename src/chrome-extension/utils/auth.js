@@ -1,4 +1,3 @@
-
 // Auth utilities for Chrome extension
 import { logger } from './logger.js';
 import { handleError, safeFetch } from './errorHandler.js';
@@ -39,18 +38,10 @@ const getApiUrl = () => {
   return `${getBaseUrl()}/api`;
 };
 
-// Get Google OAuth client ID based on context
+// Get Google OAuth client ID based on context - FIXED to use Preview client ID
 const getGoogleClientId = () => {
-  // Get client ID from manifest if available (Chrome extension flow)
-  const manifest = chrome.runtime.getManifest();
-  if (manifest.oauth2 && manifest.oauth2.client_id) {
-    return manifest.oauth2.client_id;
-  }
-  
-  // Fallback to environment-specific client IDs
-  return isPreviewEnvironment() 
-    ? '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com' 
-    : '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
+  // Always use the Preview client ID for extension OAuth flow to avoid invalid_client errors
+  return '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
 };
 
 // Supported platforms for extension activation
@@ -73,6 +64,8 @@ function isSupportedPlatform(url) {
   
   try {
     const urlObj = new URL(url);
+    // Add additional debugging
+    console.log(`MainGallery: Checking if platform is supported: ${urlObj.hostname}`);
     return SUPPORTED_PLATFORMS.some(platform => urlObj.hostname.includes(platform) || 
       (platform.includes('discord.com') && urlObj.pathname.includes('midjourney')));
   } catch (e) {
@@ -303,12 +296,12 @@ function setupAuthCallbackListener() {
   }
 }
 
-// Handle in-popup Google OAuth login using chrome.identity
+// Handle in-popup Google OAuth login using chrome.identity - FIXED to use Preview client ID
 async function handleInPopupGoogleLogin() {
   try {
     logger.info('Starting in-popup Google login flow with chrome.identity');
     
-    // Get the OAuth client ID from manifest or fallback
+    // Always use the fixed Preview client ID for the extension OAuth flow
     const clientId = getGoogleClientId();
     const redirectURL = getExtensionRedirectUrl();
     

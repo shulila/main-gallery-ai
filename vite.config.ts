@@ -56,7 +56,9 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
       'import.meta.env.IS_PREVIEW': isPreviewBuild,
       'import.meta.env.BASE_URL': JSON.stringify(baseUrl),
       // Add a global flag for preview detection
-      'window.__MAINGALLERY_ENV': JSON.stringify(isPreviewBuild ? 'preview' : 'production')
+      'window.__MAINGALLERY_ENV': JSON.stringify(isPreviewBuild ? 'preview' : 'production'),
+      // Ensure we're not using undefined values in code
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production')
     }
   };
 
@@ -67,6 +69,7 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
       build: {
         outDir: "dist-extension",
         emptyOutDir: true,
+        sourcemap: true, // Add source maps for debugging
         rollupOptions: {
           input: {
             background: path.resolve(__dirname, "src/chrome-extension/background.js"),

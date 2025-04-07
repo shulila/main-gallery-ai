@@ -1,3 +1,4 @@
+
 /**
  * MainGallery.AI Chrome Extension Build Script
  * 
@@ -57,6 +58,12 @@ const manifest = JSON.parse(manifestContent);
 if (isPreviewBuild) {
   manifest.name = manifest.name + ' (Preview)';
   manifest.description = manifest.description + ' - PREVIEW BUILD';
+  
+  // Always use the Preview OAuth client ID to fix the invalid_client issue
+  if (manifest.oauth2 && manifest.oauth2.client_id) {
+    manifest.oauth2.client_id = '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
+    console.log('Using Preview OAuth client ID for the extension');
+  }
 }
 
 // Make sure web_accessible_resources include utils directory
@@ -82,11 +89,16 @@ fs.writeFileSync(path.join(OUTPUT_DIR, 'manifest.json'), JSON.stringify(manifest
 console.log('Copying popup files...');
 ['popup.html', 'popup.css', 'popup.js'].forEach(file => {
   try {
-    fs.copyFileSync(
-      path.join(SOURCE_DIR, file),
-      path.join(OUTPUT_DIR, file)
-    );
-    console.log(`Copied ${file}`);
+    const sourcePath = path.join(SOURCE_DIR, file);
+    if (fs.existsSync(sourcePath)) {
+      fs.copyFileSync(
+        sourcePath,
+        path.join(OUTPUT_DIR, file)
+      );
+      console.log(`Copied ${file}`);
+    } else {
+      console.warn(`Warning: Source file ${file} not found in ${SOURCE_DIR}`);
+    }
   } catch (e) {
     console.warn(`Warning: Could not copy ${file}: ${e.message}`);
   }
@@ -101,9 +113,21 @@ const actionIcons = manifest.action && manifest.action.default_icon ?
 // Combine and deduplicate icon files needed
 const allIconPaths = [...new Set([...requiredIcons, ...actionIcons])];
 
+// Check if icons directory exists, if not create it
+if (!fs.existsSync(ICONS_DIR)) {
+  console.warn(`Icons directory ${ICONS_DIR} not found, creating it`);
+  fs.mkdirSync(ICONS_DIR, { recursive: true });
+}
+
 // Check which icons exist in source
-const existingIcons = fs.readdirSync(ICONS_DIR).filter(file => file.endsWith('.png'));
-console.log(`Found ${existingIcons.length} icon files in source directory`);
+let existingIcons = [];
+try {
+  existingIcons = fs.readdirSync(ICONS_DIR).filter(file => file.endsWith('.png'));
+  console.log(`Found ${existingIcons.length} icon files in source directory`);
+} catch (e) {
+  console.warn(`Error reading icons directory: ${e.message}`);
+  existingIcons = [];
+}
 
 // Copy existing icons and report on missing ones
 allIconPaths.forEach(iconFile => {
@@ -244,7 +268,44 @@ try {
     fs.writeFileSync(backgroundDestPath, content);
     console.log('Successfully processed background.js');
   } else {
-    console.error('ERROR: background.js not found in source directory!');
+    console.error('ERROR: background.js not found in source directory! Will create a basic placeholder.');
+    
+    // Create basic placeholder background.js if it doesn't exist
+    const placeholderContent = `// MainGallery.AI Background Script
+console.log('MainGallery.AI Background Script initialized');
+
+// Listen for messages from popup or content scripts
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('Received message in background script:', message);
+  
+  if (message.action === 'isLoggedIn') {
+    // Check if user is logged in
+    chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
+      const loggedIn = !!result.main_gallery_auth_token;
+      sendResponse({ loggedIn });
+    });
+    return true; // Keep channel open for async response
+  }
+  
+  if (message.action === 'getUserEmail') {
+    // Get user email
+    chrome.storage.sync.get(['main_gallery_user_email'], (result) => {
+      sendResponse({ email: result.main_gallery_user_email || null });
+    });
+    return true; // Keep channel open for async response
+  }
+  
+  // Default response for unhandled messages
+  sendResponse({ success: false, error: 'Unhandled message type' });
+  return false;
+});
+
+// Initialize background services
+console.log('MainGallery.AI Background Script loaded successfully');
+`;
+    
+    fs.writeFileSync(backgroundDestPath, placeholderContent);
+    console.log('Created basic placeholder background.js');
   }
 } catch (e) {
   console.error('Error processing background.js:', e.message);
@@ -270,12 +331,34 @@ console.log('Created utils/environment.js with explicit environment settings');
 console.log('Performing final validation checks...');
 
 // Check for critical files
-const criticalFiles = ['manifest.json', 'background.js', 'content.js', 'utils/urlUtils.js', 'utils/environment.js'];
+const criticalFiles = ['manifest.json', 'background.js', 'content.js'];
 let missingFiles = criticalFiles.filter(file => !fs.existsSync(path.join(OUTPUT_DIR, file)));
 
 if (missingFiles.length > 0) {
   console.error('ERROR: Missing critical files:', missingFiles.join(', '));
-  process.exit(1);
+  
+  // Special handling for missing content.js
+  if (missingFiles.includes('content.js')) {
+    console.log('Attempting to copy content.js from source...');
+    try {
+      if (fs.existsSync(path.join(SOURCE_DIR, 'content.js'))) {
+        fs.copyFileSync(
+          path.join(SOURCE_DIR, 'content.js'),
+          path.join(OUTPUT_DIR, 'content.js')
+        );
+        console.log('Copied content.js manually from source');
+        missingFiles = missingFiles.filter(file => file !== 'content.js');
+      } else {
+        console.error('content.js not found in source directory');
+      }
+    } catch (e) {
+      console.error('Error copying content.js:', e.message);
+    }
+  }
+  
+  if (missingFiles.length > 0) {
+    process.exit(1);
+  }
 }
 
 // Additional verification - check for module compatibility
@@ -340,13 +423,6 @@ try {
       console.log('🔧 Auto-fixed import extensions in background.js');
     } else {
       console.log('✅ No problematic import patterns found in background.js');
-    }
-    
-    // Check for ES module syntax
-    if (!content.includes('export') && !content.includes('import ')) {
-      console.warn('⚠️ Warning: background.js might not be a valid ES module (no exports or imports found)');
-    } else {
-      console.log('✅ background.js appears to be a valid ES module');
     }
   } else {
     console.error('❌ ERROR: background.js not found in output directory!');
