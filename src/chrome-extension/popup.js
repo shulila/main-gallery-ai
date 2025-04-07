@@ -9,7 +9,7 @@ const BRAND = {
   }
 };
 
-// Import required utilities
+// Import required utilities - ensure proper module paths with .js extensions
 import { isPreviewEnvironment, getBaseUrl, getAuthUrl, getGalleryUrl, isSupportedPlatformUrl } from './utils/urlUtils.js';
 import { logger } from './utils/logger.js';
 import { handleError } from './utils/errorHandler.js';
@@ -163,6 +163,7 @@ async function checkCurrentTab() {
       // Enable "Add to MainGallery" button with active styling
       if (scanPageBtn) {
         scanPageBtn.disabled = false;
+        scanPageBtn.title = "Scan this page for AI-generated images";
         safelyRemoveClass(scanPageBtn, 'disabled');
         safelyAddClass(scanPageBtn, 'primary');
       }
@@ -189,7 +190,7 @@ function updateUIForUnsupportedPlatform() {
   // Disable scan button with tooltip
   if (scanPageBtn) {
     scanPageBtn.disabled = true;
-    scanPageBtn.setAttribute('data-tooltip', 'Not on a supported AI platform');
+    scanPageBtn.title = "You must be on a supported AI platform to scan for images";
     safelyAddClass(scanPageBtn, 'disabled');
     safelyRemoveClass(scanPageBtn, 'primary');
   }

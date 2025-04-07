@@ -86,7 +86,7 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
       optimizeDeps: {
         // Disable optimization for extension builds to prevent import issues
         entries: [],
-        disabled: mode === 'extension',
+        disabled: true, // Changed from mode === 'extension' to always disable optimization for extension mode
       },
     };
     

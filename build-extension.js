@@ -1,4 +1,3 @@
-
 /**
  * MainGallery.AI Chrome Extension Build Script
  * 
@@ -232,6 +231,14 @@ try {
       }
       return match;
     });
+
+    // Ensure all relative paths have .js extension
+    content = content.replace(/from ['"]\.\.\/([^'"]+)['"]/g, (match, p1) => {
+      if (!p1.endsWith('.js') && !p1.includes('/')) {
+        return `from '../${p1}.js'`;
+      }
+      return match;
+    });
     
     // Write the modified background.js
     fs.writeFileSync(backgroundDestPath, content);
@@ -301,6 +308,51 @@ try {
   }
 } catch (e) {
   console.warn('Warning: Error checking background.js imports:', e.message);
+}
+
+// Add additional validation specifically for background.js
+console.log('Performing additional validation for background.js...');
+try {
+  const backgroundPath = path.join(OUTPUT_DIR, 'background.js');
+  if (fs.existsSync(backgroundPath)) {
+    console.log('✅ background.js found in output directory');
+    
+    // Check if it's a valid module
+    const content = fs.readFileSync(backgroundPath, 'utf8');
+    
+    // Check for problematic import patterns that might cause service worker errors
+    const missingExtensions = [...content.matchAll(/from ['"]\.\/[^'"]+['"]/g)]
+      .filter(match => !match[0].includes('.js'))
+      .map(match => match[0]);
+    
+    if (missingExtensions.length > 0) {
+      console.warn('⚠️ Warning: Found imports in background.js without .js extension:');
+      missingExtensions.forEach(imp => console.warn(`  - ${imp}`));
+      
+      // Auto-fix these issues
+      let fixedContent = content;
+      missingExtensions.forEach(imp => {
+        const fixed = imp.replace(/(['"])\.\/([^'"]+)(['"])/, '$1./$2.js$3');
+        fixedContent = fixedContent.replace(imp, fixed);
+      });
+      
+      fs.writeFileSync(backgroundPath, fixedContent);
+      console.log('🔧 Auto-fixed import extensions in background.js');
+    } else {
+      console.log('✅ No problematic import patterns found in background.js');
+    }
+    
+    // Check for ES module syntax
+    if (!content.includes('export') && !content.includes('import ')) {
+      console.warn('⚠️ Warning: background.js might not be a valid ES module (no exports or imports found)');
+    } else {
+      console.log('✅ background.js appears to be a valid ES module');
+    }
+  } else {
+    console.error('❌ ERROR: background.js not found in output directory!');
+  }
+} catch (e) {
+  console.error('Error validating background.js:', e.message);
 }
 
 console.log(`Build completed successfully for ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} environment!`);
