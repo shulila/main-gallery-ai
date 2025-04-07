@@ -287,3 +287,8 @@ footer {
 .main-gallery-toast.warning {
   background-color: var(--warning-color);
 }
+
+/* Icon styling */
+.icon {
+  flex-shrink: 0;
+}
