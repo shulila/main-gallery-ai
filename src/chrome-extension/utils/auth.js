@@ -267,11 +267,16 @@ async function handleInPopupGoogleLogin() {
 
 // Handle email/password login - adding this to fix the missing export error
 async function handleEmailPasswordLogin(email, password) {
-  logger.info('Email/password login requested');
+  logger.info('Email/password login requested for:', email);
   
   try {
-    // Implement a stub function to satisfy imports
-    // This is just a placeholder since we're using Google OAuth
+    // This is a stub implementation that provides the required export
+    // Email/password login is not currently used in the extension
+    // but we need this export to satisfy background.js imports
+    
+    logger.info('Note: Email/password login is not fully implemented in this extension');
+    
+    // Let the caller know this is a stub implementation
     return {
       success: false,
       error: 'Email/password login is not implemented in the extension. Please use Google login.'
@@ -533,5 +538,5 @@ export {
   getPreviewRedirectUrl,
   getExtensionRedirectUrl,
   getGoogleClientId,
-  handleEmailPasswordLogin  // Added the missing export
+  handleEmailPasswordLogin  // Added the export that was missing
 };

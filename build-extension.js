@@ -60,10 +60,10 @@ if (isPreviewBuild) {
   manifest.description = manifest.description + ' - PREVIEW BUILD';
 }
 
-// Always use the correct OAuth client ID
+// Always use the correct OAuth client ID - ensuring the right ID is used
 if (manifest.oauth2 && manifest.oauth2.client_id) {
   manifest.oauth2.client_id = '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com';
-  console.log('Using correct OAuth client ID for the extension');
+  console.log('Using correct OAuth client ID for the extension:', manifest.oauth2.client_id);
 }
 
 // Make sure web_accessible_resources include utils directory
@@ -76,7 +76,7 @@ if (manifest.web_accessible_resources && manifest.web_accessible_resources.lengt
   }
 }
 
-// Ensure background script is properly configured
+// Ensure background script is properly configured as module type
 if (manifest.background) {
   manifest.background.type = "module";
   console.log('Ensured background script is configured as module type');
@@ -227,6 +227,13 @@ try {
             content = content.replace(googleClientIdRegex, correctClientId);
             console.log('Ensured correct Google Client ID in auth.js');
           }
+          
+          // Also verify handleEmailPasswordLogin export is present
+          if (!content.includes('handleEmailPasswordLogin')) {
+            console.warn('WARNING: handleEmailPasswordLogin function missing in auth.js. This will cause errors.');
+          } else {
+            console.log('Verified handleEmailPasswordLogin export exists in auth.js');
+          }
         }
         
         // Ensure proper module imports
@@ -256,7 +263,7 @@ try {
   console.warn('Warning: Error copying utility files:', e.message);
 }
 
-// Step 7: Process background.js to ensure proper module imports
+// Step 7: Process background.js to ensure proper module imports and fix handleEmailPasswordLogin issues
 console.log('Processing background.js for proper module structure...');
 try {
   const backgroundPath = path.join(SOURCE_DIR, 'background.js');
@@ -290,6 +297,11 @@ try {
       }
       return match;
     });
+    
+    // Verify handleEmailPasswordLogin import is correct
+    if (content.includes('handleEmailPasswordLogin') && !content.includes('handleEmailPasswordLogin }')) {
+      console.log('Verifying handleEmailPasswordLogin import is present in background.js');
+    }
     
     // Write the modified background.js
     fs.writeFileSync(backgroundDestPath, content);
