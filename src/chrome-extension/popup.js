@@ -13,13 +13,24 @@ const BRAND = {
 import { isPreviewEnvironment, getBaseUrl, getAuthUrl, getGalleryUrl, isSupportedPlatformUrl } from './utils/urlUtils.js';
 import { logger } from './utils/logger.js';
 import { handleError } from './utils/errorHandler.js';
-
-// Update gallery URL based on environment
-const galleryUrl = getGalleryUrl();
-const authUrl = getAuthUrl();
+import { 
+  handleInPopupGoogleLogin, 
+  isLoggedIn, 
+  getUserEmail, 
+  logout, 
+  openAuthPage,
+  isSupportedPlatform
+} from './utils/auth.js';
 
 // Extension ID - important for OAuth flow
 const EXTENSION_ID = chrome.runtime.id || 'oapmlmnmepbgiafhbbkjbkbppfdclknlb';
+
+// Log environment for debugging
+logger.log('MainGallery.AI popup initialized in', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION', 'environment');
+logger.log('Base URL:', getBaseUrl());
+logger.log('Auth URL:', getAuthUrl());
+logger.log('Gallery URL:', getGalleryUrl());
+logger.log('Extension ID:', EXTENSION_ID);
 
 // DOM elements - verify they exist before using them
 const states = {
@@ -41,13 +52,6 @@ const statusMessage = document.getElementById('status-message');
 const platformDetectedDiv = document.getElementById('platform-detected');
 const platformNameElement = document.getElementById('platform-name');
 const errorTextElement = document.getElementById('error-text');
-
-// Log environment for debugging
-logger.log('MainGallery.AI popup initialized in', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION', 'environment');
-logger.log('Base URL:', getBaseUrl());
-logger.log('Auth URL:', authUrl);
-logger.log('Gallery URL:', galleryUrl);
-logger.log('Extension ID:', EXTENSION_ID);
 
 // Helper functions
 function safelyAddClass(element, className) {
@@ -134,7 +138,7 @@ async function checkCurrentTab() {
     }
     
     const currentUrl = tabs[0].url;
-    const isSupported = isSupportedPlatformUrl(currentUrl);
+    const isSupported = isSupportedPlatform(currentUrl);
     
     logger.log('Current tab URL:', currentUrl);
     logger.log('Is supported platform:', isSupported);
@@ -209,134 +213,25 @@ function updateUIForUnsupportedPlatform() {
   }
 }
 
-// Fixed Google OAuth login using chrome.identity and Preview client ID
-async function handleInPopupGoogleLogin() {
+// Google OAuth login
+async function initiateGoogleLogin() {
   try {
     if (states.loading) showState(states.loading);
     logger.log('Starting Google login flow with chrome.identity');
     
-    // Use Preview environment client ID for all environments to resolve the oauth issue
-    const clientId = isPreviewEnvironment() 
-      ? '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com'
-      : '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
-    
-    // Get extension redirect URL - this is crucial for Chrome extension auth flow
-    const redirectURL = chrome.identity.getRedirectURL();
-    logger.log('Chrome identity redirect URL:', redirectURL);
-    
-    // Build OAuth URL with proper scopes
-    const scopes = ['openid', 'email', 'profile'];
-    const nonce = Math.random().toString(36).substring(2, 15);
-    
-    const authParams = new URLSearchParams({
-      client_id: clientId,
-      response_type: 'token id_token',
-      redirect_uri: redirectURL,
-      scope: scopes.join(' '),
-      nonce: nonce,
-      prompt: 'select_account',
-    });
-    
-    const authURL = `https://accounts.google.com/o/oauth2/auth?${authParams.toString()}`;
-    
-    logger.log('Auth URL for chrome.identity:', authURL);
-    
     try {
-      // Launch the identity flow
-      const responseUrl = await new Promise((resolve, reject) => {
-        chrome.identity.launchWebAuthFlow(
-          { 
-            url: authURL, 
-            interactive: true
-          },
-          (responseUrl) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-              return;
-            }
-            
-            if (!responseUrl) {
-              reject(new Error('The user did not approve access.'));
-              return;
-            }
-            
-            resolve(responseUrl);
-          }
-        );
-      });
+      // Use the handleInPopupGoogleLogin from auth.js
+      const response = await handleInPopupGoogleLogin();
       
-      logger.log('Auth response URL received');
-      
-      // Parse the response URL
-      const url = new URL(responseUrl);
-      
-      // Get tokens from hash fragment
-      const hashParams = new URLSearchParams(url.hash.substring(1));
-      
-      // Extract tokens and user info
-      const accessToken = hashParams.get('access_token');
-      const idToken = hashParams.get('id_token');
-      
-      if (!accessToken) {
-        throw new Error('No access token received');
-      }
-      
-      // Get user info from id_token or fetch it with the access token
-      let userEmail = null;
-      let userName = null;
-      
-      try {
-        if (idToken) {
-          // Parse the JWT to get user info
-          const payload = JSON.parse(atob(idToken.split('.')[1]));
-          userEmail = payload.email;
-          userName = payload.name;
-          logger.log('User info from ID token:', { email: userEmail });
-        } else {
-          // Use access token to fetch user info
-          const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: { Authorization: `Bearer ${accessToken}` }
-          });
-          
-          if (userInfoResponse.ok) {
-            const userInfo = await userInfoResponse.json();
-            userEmail = userInfo.email;
-            userName = userInfo.name;
-            logger.log('User info from userinfo endpoint:', { email: userEmail });
-          } else {
-            throw new Error('Failed to fetch user info');
-          }
-        }
-      } catch (userInfoError) {
-        logger.error('Error getting user info:', userInfoError);
-        // Continue even without email - we still have the token
-        userEmail = 'User';
-      }
-      
-      // Calculate token expiration (1 hour from now)
-      const expiresIn = parseInt(hashParams.get('expires_in') || '3600', 10);
-      const expiresAt = Date.now() + (expiresIn * 1000);
-      
-      // Store token info and user email for extension usage
-      chrome.storage.sync.set({
-        'main_gallery_auth_token': {
-          access_token: accessToken,
-          id_token: idToken,
-          token_type: hashParams.get('token_type') || 'Bearer',
-          timestamp: Date.now(),
-          expires_at: expiresAt
-        },
-        'main_gallery_user_email': userEmail || 'User',
-        'main_gallery_user_name': userName
-      }, () => {
-        logger.log('Auth tokens and user info stored successfully');
+      if (response.success) {
+        logger.log('Login successful:', response.user);
         
         // Show success notification
         showToast('Successfully signed in!', 'success');
         
         // Update UI to show logged-in state
-        if (userEmailElement) {
-          userEmailElement.textContent = userEmail || 'User';
+        if (userEmailElement && response.user && response.user.email) {
+          userEmailElement.textContent = response.user.email;
         }
         
         showState(states.mainView);
@@ -347,10 +242,11 @@ async function handleInPopupGoogleLogin() {
         // Send message to background script to update other contexts
         chrome.runtime.sendMessage({ 
           action: 'updateUI',
-          userEmail: userEmail,
-          userName: userName 
+          userEmail: response.user?.email
         });
-      });
+      } else {
+        throw new Error('Login failed');
+      }
     } catch (oauthError) {
       logger.error('OAuth error:', oauthError);
       
@@ -381,46 +277,28 @@ async function checkAuthAndRedirect() {
     if (states.loading) showState(states.loading);
     logger.log('Checking authentication status...');
     
-    // Check authentication with the background script
-    chrome.runtime.sendMessage({ action: 'isLoggedIn' }, async (response) => {
-      try {
-        // Handle no response (possible disconnection)
-        if (!response) {
-          logger.error('No response from background script');
-          showToast('Connection error. Please try again.', 'error');
-          showState(states.loginView);
-          return;
-        }
-        
-        const loggedIn = response && response.loggedIn;
-        
-        if (loggedIn) {
-          logger.log('User is logged in, showing logged-in state');
-          
-          // Get user email to display
-          chrome.runtime.sendMessage({ action: 'getUserEmail' }, (emailResponse) => {
-            const userEmail = emailResponse && emailResponse.email;
-            logger.log('User email:', userEmail);
-            
-            if (userEmail && userEmailElement) {
-              userEmailElement.textContent = userEmail;
-            }
-            
-            showState(states.mainView);
-            
-            // Check if current tab is a supported platform
-            checkCurrentTab();
-          });
-        } else {
-          logger.log('User is not logged in, showing login options');
-          showState(states.loginView);
-        }
-      } catch (err) {
-        logger.error('Error processing auth status:', err);
-        showToast('Error checking login status', 'error');
-        showState(states.loginView); // Default to login view
+    // Use isLoggedIn from auth.js
+    const loggedIn = await isLoggedIn();
+    
+    if (loggedIn) {
+      logger.log('User is logged in, showing logged-in state');
+      
+      // Get user email to display
+      const userEmail = await getUserEmail();
+      logger.log('User email:', userEmail);
+      
+      if (userEmail && userEmailElement) {
+        userEmailElement.textContent = userEmail;
       }
-    });
+      
+      showState(states.mainView);
+      
+      // Check if current tab is a supported platform
+      checkCurrentTab();
+    } else {
+      logger.log('User is not logged in, showing login options');
+      showState(states.loginView);
+    }
   } catch (error) {
     logger.error('Error checking auth status:', error);
     showToast('Connection error', 'error');
@@ -431,6 +309,7 @@ async function checkAuthAndRedirect() {
 // Open gallery in new tab or focus existing tab
 function openGallery() {
   try {
+    const galleryUrl = getGalleryUrl();
     logger.log('Opening gallery at', galleryUrl);
     
     // Send message to background script to handle opening gallery
@@ -450,11 +329,8 @@ function openWebLogin() {
     if (states.loading) showState(states.loading);
     logger.log('Opening full web login page');
     
-    // Send message to open the auth page
-    chrome.runtime.sendMessage({ 
-      action: 'openAuthPage',
-      from: 'extension_popup'
-    });
+    // Use openAuthPage from auth.js
+    openAuthPage(null, { from: 'extension_popup' });
     
     // Close popup after a short delay
     setTimeout(() => window.close(), 300);
@@ -466,8 +342,8 @@ function openWebLogin() {
 }
 
 // Log out the user
-function logout() {
-  chrome.runtime.sendMessage({ action: 'logout' }, response => {
+function handleLogout() {
+  logout().then(success => {
     showState(states.loginView);
     showToast('You have been logged out', 'info');
   });
@@ -512,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Set up event listeners for Google login
   if (googleLoginBtn) {
-    googleLoginBtn.addEventListener('click', handleInPopupGoogleLogin);
+    googleLoginBtn.addEventListener('click', initiateGoogleLogin);
     logger.log('Google login button listener set up');
   }
   
@@ -532,7 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', logout);
+    logoutBtn.addEventListener('click', handleLogout);
     logger.log('Logout button listener set up');
   }
   

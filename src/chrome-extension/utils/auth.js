@@ -1,3 +1,4 @@
+
 // Auth utilities for Chrome extension
 import { logger } from './logger.js';
 import { handleError, safeFetch } from './errorHandler.js';
@@ -5,6 +6,9 @@ import { isPreviewEnvironment, getBaseUrl, getAuthUrl as getEnvironmentAuthUrl }
 
 // Extension ID - important for OAuth flow
 const EXTENSION_ID = chrome.runtime.id || 'oapmlmnmepbgiafhbbkjbkbppfdclknlb';
+
+// ALWAYS use the Preview OAuth client ID for Chrome extensions to avoid invalid_client errors
+const GOOGLE_CLIENT_ID = '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
 
 // Get the production auth callback URL - NEVER use localhost
 const getProductionRedirectUrl = () => {
@@ -38,10 +42,10 @@ const getApiUrl = () => {
   return `${getBaseUrl()}/api`;
 };
 
-// Get Google OAuth client ID based on context - FIXED to use Preview client ID
+// Get Google OAuth client ID - FIXED to always use Preview client ID
 const getGoogleClientId = () => {
-  // Always use the Preview client ID for extension OAuth flow to avoid invalid_client errors
-  return '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
+  // Always use the Preview client ID for extension OAuth flow
+  return GOOGLE_CLIENT_ID;
 };
 
 // Supported platforms for extension activation
@@ -132,176 +136,12 @@ function clearAuthStorage(callback = () => {}) {
   }
 }
 
-// Handle standard email/password login
-async function handleEmailPasswordLogin(email, password) {
-  try {
-    logger.info('Attempting to log in with email and password');
-    
-    // Make API call to the backend for authentication
-    const apiUrl = `${getApiUrl()}/auth/login`;
-    logger.debug('Login API URL:', apiUrl);
-    
-    try {
-      const response = await safeFetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-        maxRetries: 2 // Add retry capabilities for auth endpoints
-      });
-      
-      if (!response || !response.access_token) {
-        throw new Error('No authentication token received');
-      }
-      
-      // Store token info and user email for extension usage
-      const tokenData = {
-        access_token: response.access_token,
-        refresh_token: response.refresh_token || '',
-        email: email,
-        timestamp: Date.now(),
-        expires_at: Date.now() + (24 * 60 * 60 * 1000) // 24 hours expiry
-      };
-      
-      // Store in Chrome storage
-      chrome.storage.sync.set({
-        'main_gallery_auth_token': tokenData,
-        'main_gallery_user_email': email
-      }, () => {
-        logger.info('Auth token and user info stored in extension storage');
-      });
-      
-      return {
-        success: true,
-        user: { email },
-        token: response.access_token
-      };
-    } catch (fetchError) {
-      // Check if this is an HTML response error
-      if (fetchError.isHtmlError) {
-        logger.error('Received HTML response instead of JSON during login');
-        throw new Error("Invalid server response format. Please try again later.");
-      }
-      
-      // Other fetch errors
-      throw fetchError;
-    }
-  } catch (error) {
-    logger.error('Email/password login error:', error);
-    throw error;
-  }
-}
-
-// Set up a listener for auth callback
-function setupAuthCallbackListener() {
-  try {
-    logger.info('Setting up auth callback listener');
-    
-    // Use tabs.onUpdated to detect auth callbacks
-    if (chrome.tabs && chrome.tabs.onUpdated) {
-      chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-        // Only process completed loads with our auth callback URL
-        if (changeInfo.status === 'complete' && tab.url && 
-            (tab.url.includes('main-gallery-hub.lovable.app/auth/callback') || 
-             tab.url.includes('preview-main-gallery-ai.lovable.app/auth/callback') ||
-             tab.url.includes('/auth?access_token='))) {
-          
-          logger.info('Auth callback detected:', tab.url);
-          
-          // Get auth token from the URL - handle both hash and query params
-          const url = new URL(tab.url);
-          
-          // Check for token in hash first (fragment identifier)
-          const hashParams = new URLSearchParams(url.hash ? url.hash.substring(1) : '');
-          const queryParams = new URLSearchParams(url.search);
-          
-          // Try to get token from both locations
-          const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
-          const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
-          const userEmail = hashParams.get('email') || queryParams.get('email');
-          
-          // If we have tokens, validate and store them
-          if (accessToken) {
-            logger.info('Auth tokens detected, will store session');
-            
-            // Calculate token expiration (24 hours from now)
-            const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
-            
-            // Store token info and user email for extension usage
-            chrome.storage.sync.set({
-              'main_gallery_auth_token': {
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                timestamp: Date.now(),
-                expires_at: expiresAt
-              },
-              'main_gallery_user_email': userEmail || 'User'
-            }, () => {
-              logger.info('Auth token and user info stored in extension storage with expiration');
-              
-              // Show success notification
-              try {
-                chrome.notifications.create('auth_success', {
-                  type: 'basic',
-                  iconUrl: 'icons/icon128.png',
-                  title: 'Login Successful',
-                  message: 'You are now logged in to MainGallery'
-                });
-              } catch (err) {
-                handleError('showAuthSuccessNotification', err, { silent: true });
-              }
-              
-              // Close the auth tab after successful login
-              setTimeout(() => {
-                chrome.tabs.remove(tabId);
-                
-                // Open gallery in a new tab
-                chrome.tabs.create({ url: getGalleryUrl() });
-                
-                // Send message to update UI in popup if open
-                chrome.runtime.sendMessage({ action: 'updateUI' });
-              }, 1000);
-            });
-          } else {
-            logger.error('Auth callback detected but no access token found');
-            
-            // Send error message to popup if open
-            chrome.runtime.sendMessage({ 
-              action: 'authError', 
-              error: 'Authentication failed. No access token received.' 
-            });
-            
-            // Show error notification
-            try {
-              chrome.notifications.create('auth_error', {
-                type: 'basic',
-                iconUrl: 'icons/icon128.png',
-                title: 'Login Failed',
-                message: 'Unable to login. Please try again.'
-              });
-            } catch (err) {
-              handleError('showAuthErrorNotification', err, { silent: true });
-            }
-          }
-        }
-      });
-      
-      logger.info('Auth callback listener set up using tabs API');
-    } else {
-      logger.error('Chrome tabs API not available, cannot set up auth callback listener');
-    }
-  } catch (error) {
-    handleError('setupAuthCallbackListener', error);
-  }
-}
-
-// Handle in-popup Google OAuth login using chrome.identity - FIXED to use Preview client ID
+// Handle in-popup Google OAuth login using chrome.identity
 async function handleInPopupGoogleLogin() {
   try {
     logger.info('Starting in-popup Google login flow with chrome.identity');
     
-    // Always use the fixed Preview client ID for the extension OAuth flow
+    // Use the fixed Preview client ID
     const clientId = getGoogleClientId();
     const redirectURL = getExtensionRedirectUrl();
     
@@ -309,7 +149,6 @@ async function handleInPopupGoogleLogin() {
     logger.info('Using redirect URL:', redirectURL);
     
     // Build the OAuth URL with proper scopes for Chrome extension
-    const scopes = encodeURIComponent('openid email profile');
     const nonce = Math.random().toString(36).substring(2, 15);
     
     const authParams = new URLSearchParams({
@@ -553,10 +392,12 @@ function logout() {
         clearAuthStorage(() => {
           logger.info('Successfully cleared auth data during logout');
           
-          // Redirect to login page after logout
+          // Redirect to login page after logout if needed
           try {
-            chrome.tabs.create({ url: getAuthUrl() });
-            logger.info('Redirected to login page after logout');
+            if (options?.redirect) {
+              chrome.tabs.create({ url: getAuthUrl() });
+              logger.info('Redirected to login page after logout');
+            }
           } catch (redirectError) {
             logger.error('Failed to redirect after logout:', redirectError);
           }
@@ -570,23 +411,110 @@ function logout() {
       // Attempt emergency cleanup as fallback
       clearAuthStorage(() => {
         logger.info('Emergency storage cleanup during logout error');
-        
-        // Try to redirect even after error
-        try {
-          chrome.tabs.create({ url: getAuthUrl() });
-        } catch (e) {
-          logger.error('Failed to redirect after logout error:', e);
-        }
-        
         resolve(true); // Consider it a success if we at least cleared storage
       });
     }
   });
 }
 
+// Setup auth callback listener
+function setupAuthCallbackListener() {
+  try {
+    logger.info('Setting up auth callback listener');
+    
+    // Use tabs.onUpdated to detect auth callbacks
+    if (chrome.tabs && chrome.tabs.onUpdated) {
+      chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        // Only process completed loads with our auth callback URL
+        if (changeInfo.status === 'complete' && tab.url && 
+            (tab.url.includes('main-gallery-hub.lovable.app/auth/callback') || 
+             tab.url.includes('preview-main-gallery-ai.lovable.app/auth/callback') ||
+             tab.url.includes('/auth?access_token='))) {
+          
+          logger.info('Auth callback detected:', tab.url);
+          
+          // Process the callback and update extension state
+          try {
+            // Get auth token from the URL - handle both hash and query params
+            const url = new URL(tab.url);
+            
+            // Check for token in hash first (fragment identifier)
+            const hashParams = new URLSearchParams(url.hash ? url.hash.substring(1) : '');
+            const queryParams = new URLSearchParams(url.search);
+            
+            // Try to get token from both locations
+            const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
+            const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
+            const userEmail = hashParams.get('email') || queryParams.get('email');
+            
+            // If we have tokens, validate and store them
+            if (accessToken) {
+              logger.info('Auth tokens detected, will store session');
+              
+              // Calculate token expiration (24 hours from now)
+              const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+              
+              // Store token info and user email for extension usage
+              chrome.storage.sync.set({
+                'main_gallery_auth_token': {
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                  timestamp: Date.now(),
+                  expires_at: expiresAt
+                },
+                'main_gallery_user_email': userEmail || 'User'
+              }, () => {
+                logger.info('Auth token and user info stored in extension storage with expiration');
+                
+                // Show success notification
+                try {
+                  chrome.notifications.create('auth_success', {
+                    type: 'basic',
+                    iconUrl: 'icons/icon128.png',
+                    title: 'Login Successful',
+                    message: 'You are now logged in to MainGallery'
+                  });
+                } catch (err) {
+                  handleError('showAuthSuccessNotification', err, { silent: true });
+                }
+                
+                // Close the auth tab after successful login
+                setTimeout(() => {
+                  chrome.tabs.remove(tabId);
+                  
+                  // Open gallery in a new tab
+                  chrome.tabs.create({ url: getGalleryUrl() });
+                  
+                  // Send message to update UI in popup if open
+                  chrome.runtime.sendMessage({ action: 'updateUI' });
+                }, 1000);
+              });
+            } else {
+              logger.error('Auth callback detected but no access token found');
+              
+              // Send error message to popup if open
+              chrome.runtime.sendMessage({ 
+                action: 'authError', 
+                error: 'Authentication failed. No access token received.' 
+              });
+            }
+          } catch (e) {
+            logger.error('Error processing auth callback:', e);
+          }
+        }
+      });
+      
+      logger.info('Auth callback listener set up using tabs API');
+    } else {
+      logger.error('Chrome tabs API not available, cannot set up auth callback listener');
+    }
+  } catch (error) {
+    handleError('setupAuthCallbackListener', error);
+  }
+}
+
 // Export functions
 export { 
-  handleEmailPasswordLogin,
   handleInPopupGoogleLogin, 
   setupAuthCallbackListener, 
   openAuthPage, 

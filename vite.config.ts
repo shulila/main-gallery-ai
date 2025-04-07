@@ -50,6 +50,8 @@ export default defineConfig((configEnv: ConfigEnv): UserConfig => {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
+      // Ensure ESM imports work properly in extension
+      extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json']
     },
     define: {
       // Define global constants for environment detection during build

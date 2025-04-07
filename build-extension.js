@@ -59,7 +59,7 @@ if (isPreviewBuild) {
   manifest.name = manifest.name + ' (Preview)';
   manifest.description = manifest.description + ' - PREVIEW BUILD';
   
-  // Always use the Preview OAuth client ID to fix the invalid_client issue
+  // Always use the Preview OAuth client ID for all builds
   if (manifest.oauth2 && manifest.oauth2.client_id) {
     manifest.oauth2.client_id = '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
     console.log('Using Preview OAuth client ID for the extension');
@@ -159,6 +159,21 @@ allIconPaths.forEach(iconFile => {
     console.warn(`⚠️ Warning: Error handling icon ${iconFile}: ${e.message}`);
   }
 });
+
+// Copy Google icon for login button
+try {
+  const googleIconSrc = path.join(ICONS_DIR, 'google-icon.svg');
+  const googleIconDest = path.join(OUTPUT_DIR, 'icons', 'google-icon.svg');
+  
+  if (fs.existsSync(googleIconSrc)) {
+    fs.copyFileSync(googleIconSrc, googleIconDest);
+    console.log('✅ Copied Google icon for login button');
+  } else {
+    console.warn('⚠️ Warning: Google icon for login button not found');
+  }
+} catch (err) {
+  console.warn('Error copying Google icon:', err.message);
+}
 
 // Step 6: Copy utility files and create proper module structure
 console.log('Copying utility files with module structure...');
@@ -274,14 +289,19 @@ try {
     const placeholderContent = `// MainGallery.AI Background Script
 console.log('MainGallery.AI Background Script initialized');
 
+// Import auth utilities
+import { setupAuthCallbackListener, isLoggedIn, getUserEmail } from './utils/auth.js';
+
+// Set up auth callback listener
+setupAuthCallbackListener();
+
 // Listen for messages from popup or content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Received message in background script:', message);
   
   if (message.action === 'isLoggedIn') {
     // Check if user is logged in
-    chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
-      const loggedIn = !!result.main_gallery_auth_token;
+    isLoggedIn().then(loggedIn => {
       sendResponse({ loggedIn });
     });
     return true; // Keep channel open for async response
@@ -289,16 +309,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   if (message.action === 'getUserEmail') {
     // Get user email
-    chrome.storage.sync.get(['main_gallery_user_email'], (result) => {
-      sendResponse({ email: result.main_gallery_user_email || null });
+    getUserEmail().then(email => {
+      sendResponse({ email });
     });
     return true; // Keep channel open for async response
+  }
+  
+  if (message.action === 'openGallery') {
+    // Open gallery in a new tab or focus existing tab
+    chrome.tabs.create({ url: 'https://' + (isPreviewEnvironment() ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-hub.lovable.app') + '/gallery' });
+    sendResponse({ success: true });
+    return false;
+  }
+  
+  if (message.action === 'openAuthPage') {
+    // Open auth page
+    chrome.tabs.create({ url: 'https://' + (isPreviewEnvironment() ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-hub.lovable.app') + '/auth' });
+    sendResponse({ success: true });
+    return false;
   }
   
   // Default response for unhandled messages
   sendResponse({ success: false, error: 'Unhandled message type' });
   return false;
 });
+
+// Function to determine environment
+function isPreviewEnvironment() {
+  return ${isPreviewBuild};
+}
 
 // Initialize background services
 console.log('MainGallery.AI Background Script loaded successfully');
@@ -318,6 +357,7 @@ export const BASE_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lov
 export const API_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/api' : 'https://main-gallery-hub.lovable.app/api'}";
 export const AUTH_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/auth' : 'https://main-gallery-hub.lovable.app/auth'}";
 export const GALLERY_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/gallery' : 'https://main-gallery-hub.lovable.app/gallery'}";
+export const OAUTH_CLIENT_ID = "288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com";
 `;
 
 // Write environment file to multiple locations for reliable imports
@@ -331,7 +371,7 @@ console.log('Created utils/environment.js with explicit environment settings');
 console.log('Performing final validation checks...');
 
 // Check for critical files
-const criticalFiles = ['manifest.json', 'background.js', 'content.js'];
+const criticalFiles = ['manifest.json', 'background.js', 'content.js', 'popup.js', 'popup.html'];
 let missingFiles = criticalFiles.filter(file => !fs.existsSync(path.join(OUTPUT_DIR, file)));
 
 if (missingFiles.length > 0) {
@@ -393,42 +433,40 @@ try {
   console.warn('Warning: Error checking background.js imports:', e.message);
 }
 
-// Add additional validation specifically for background.js
-console.log('Performing additional validation for background.js...');
+// Ensure auth.js is properly created and copied
 try {
-  const backgroundPath = path.join(OUTPUT_DIR, 'background.js');
-  if (fs.existsSync(backgroundPath)) {
-    console.log('✅ background.js found in output directory');
+  // Check if auth.js exists in the utils directory
+  const authSrcPath = path.join(SOURCE_DIR, 'utils', 'auth.js');
+  const authDestPath = path.join(OUTPUT_DIR, 'utils', 'auth.js');
+  
+  if (fs.existsSync(authSrcPath)) {
+    // Read auth.js and ensure it has proper ES module imports
+    let authContent = fs.readFileSync(authSrcPath, 'utf8');
     
-    // Check if it's a valid module
-    const content = fs.readFileSync(backgroundPath, 'utf8');
+    // Fix imports to include .js extension
+    authContent = authContent.replace(/from ['"]\.\/([^'"]+)['"]/g, (match, p1) => {
+      if (!p1.endsWith('.js')) {
+        return `from './${p1}.js'`;
+      }
+      return match;
+    });
     
-    // Check for problematic import patterns that might cause service worker errors
-    const missingExtensions = [...content.matchAll(/from ['"]\.\/[^'"]+['"]/g)]
-      .filter(match => !match[0].includes('.js'))
-      .map(match => match[0]);
-    
-    if (missingExtensions.length > 0) {
-      console.warn('⚠️ Warning: Found imports in background.js without .js extension:');
-      missingExtensions.forEach(imp => console.warn(`  - ${imp}`));
-      
-      // Auto-fix these issues
-      let fixedContent = content;
-      missingExtensions.forEach(imp => {
-        const fixed = imp.replace(/(['"])\.\/([^'"]+)(['"])/, '$1./$2.js$3');
-        fixedContent = fixedContent.replace(imp, fixed);
-      });
-      
-      fs.writeFileSync(backgroundPath, fixedContent);
-      console.log('🔧 Auto-fixed import extensions in background.js');
-    } else {
-      console.log('✅ No problematic import patterns found in background.js');
+    // Ensure the Preview client ID is used
+    if (!authContent.includes('288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com')) {
+      console.warn('WARNING: auth.js does not contain the correct client ID. Attempting to fix...');
+      authContent = authContent.replace(
+        /const GOOGLE_CLIENT_ID = ['"].*['"]/,
+        `const GOOGLE_CLIENT_ID = '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com'`
+      );
     }
+    
+    fs.writeFileSync(authDestPath, authContent);
+    console.log('✅ Successfully processed auth.js with correct client ID');
   } else {
-    console.error('❌ ERROR: background.js not found in output directory!');
+    console.error('❌ auth.js not found in utils directory. Authentication will not work!');
   }
 } catch (e) {
-  console.error('Error validating background.js:', e.message);
+  console.error('Error processing auth.js:', e.message);
 }
 
 console.log(`Build completed successfully for ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} environment!`);
