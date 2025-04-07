@@ -2,22 +2,33 @@
 {
   "manifest_version": 3,
   "name": "MainGallery.AI",
-  "version": "1.0.3",
-  "description": "Unified AI image gallery for multiple AI art platforms",
+  "version": "1.1.0",
+  "description": "Collect and organize your AI-generated images across platforms",
   "permissions": [
     "storage",
-    "tabs",
-    "scripting",
     "activeTab",
-    "notifications"
+    "scripting",
+    "tabs",
+    "notifications",
+    "identity"
   ],
   "host_permissions": [
-    "https://main-gallery-hub.lovable.app/*",
-    "https://preview-main-gallery-ai.lovable.app/*",
-    "https://*.lovable.app/*"
+    "https://*.midjourney.com/*",
+    "https://*.leonardo.ai/*",
+    "https://*.openai.com/*",
+    "https://*.stability.ai/*",
+    "https://*.dreamstudio.ai/*",
+    "https://*.runwayml.com/*",
+    "https://*.pika.art/*",
+    "https://*.discord.com/*",
+    "https://*.playgroundai.com/*",
+    "https://*.nightcafe.studio/*",
+    "https://*.main-gallery-hub.lovable.app/*",
+    "https://*.preview-main-gallery-ai.lovable.app/*"
   ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
     "default_icon": {
@@ -27,22 +38,33 @@
     },
     "default_popup": "popup.html"
   },
-  "background": {
-    "service_worker": "background.js",
-    "type": "module"
-  },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "https://*.midjourney.com/*",
+        "https://*.leonardo.ai/*",
+        "https://*.openai.com/*",
+        "https://*.stability.ai/*",
+        "https://*.dreamstudio.ai/*",
+        "https://*.runwayml.com/*",
+        "https://*.pika.art/*",
+        "https://*.discord.com/*",
+        "https://*.playgroundai.com/*",
+        "https://*.nightcafe.studio/*"
+      ],
       "js": ["content.js"],
-      "run_at": "document_idle",
-      "type": "module"
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "bridge.js", "utils/*", "environment.js"],
+      "resources": ["bridge.js", "content-injection.js"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }

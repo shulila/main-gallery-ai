@@ -42,6 +42,13 @@ if [ ! -f "dist-extension/popup.html" ]; then
   exit 1
 fi
 
+# Check for identity permission in manifest.json
+if grep -q "\"identity\"" dist-extension/manifest.json; then
+  echo "✅ identity permission found in manifest.json"
+else
+  echo "❌ WARNING: identity permission missing from manifest.json!"
+fi
+
 # Print environment info for verification
 if [[ "$BUILD_ENV" == "preview" ]]; then
   echo ""
