@@ -4,6 +4,9 @@ import { logger } from './logger.js';
 import { handleError, safeFetch } from './errorHandler.js';
 import { isPreviewEnvironment, getBaseUrl, getAuthUrl as getEnvironmentAuthUrl } from './urlUtils.js';
 
+// Extension ID - important for OAuth flow
+const EXTENSION_ID = chrome.runtime.id || 'oapmlmnmepbgiafhbbkjbkbppfdclknlb';
+
 // Get the production auth callback URL - NEVER use localhost
 const getProductionRedirectUrl = () => {
   // Use the production domain
@@ -14,6 +17,11 @@ const getProductionRedirectUrl = () => {
 const getPreviewRedirectUrl = () => {
   // Use the preview domain
   return 'https://preview-main-gallery-ai.lovable.app/auth/callback';
+};
+
+// Get Chrome extension redirect URL for OAuth
+const getExtensionRedirectUrl = () => {
+  return chrome.identity.getRedirectURL();
 };
 
 // Get the auth URL with environment detection
@@ -29,6 +37,20 @@ const getGalleryUrl = () => {
 // API endpoint for authentication
 const getApiUrl = () => {
   return `${getBaseUrl()}/api`;
+};
+
+// Get Google OAuth client ID based on context
+const getGoogleClientId = () => {
+  // Get client ID from manifest if available (Chrome extension flow)
+  const manifest = chrome.runtime.getManifest();
+  if (manifest.oauth2 && manifest.oauth2.client_id) {
+    return manifest.oauth2.client_id;
+  }
+  
+  // Fallback to environment-specific client IDs
+  return isPreviewEnvironment() 
+    ? '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com' 
+    : '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com';
 };
 
 // Supported platforms for extension activation
@@ -67,7 +89,8 @@ function clearAuthStorage(callback = () => {}) {
     // Create a batch of operations to ensure we clean everything
     const storageKeys = [
       'main_gallery_auth_token',
-      'main_gallery_user_email'
+      'main_gallery_user_email',
+      'main_gallery_user_name'
     ];
     
     // Clear both sync and local storage
@@ -101,8 +124,10 @@ function clearAuthStorage(callback = () => {}) {
       // Check if we're in a window context before accessing localStorage
       if (typeof self !== 'undefined' && self.localStorage) {
         self.localStorage.removeItem('access_token');
+        self.localStorage.removeItem('id_token');
         self.localStorage.removeItem('main_gallery_auth_token');
         self.localStorage.removeItem('main_gallery_user_email');
+        self.localStorage.removeItem('main_gallery_user_name');
         logger.info('localStorage cleared');
       }
     } catch (err) {
@@ -272,6 +297,138 @@ function setupAuthCallbackListener() {
   }
 }
 
+// Handle in-popup Google OAuth login using chrome.identity
+async function handleInPopupGoogleLogin() {
+  try {
+    logger.info('Starting in-popup Google login flow with chrome.identity');
+    
+    // Get the OAuth client ID from manifest or fallback
+    const clientId = getGoogleClientId();
+    const redirectURL = getExtensionRedirectUrl();
+    
+    logger.info('Using OAuth client ID:', clientId);
+    logger.info('Using redirect URL:', redirectURL);
+    
+    // Build the OAuth URL with proper scopes for Chrome extension
+    const scopes = encodeURIComponent('openid email profile');
+    const nonce = Math.random().toString(36).substring(2, 15);
+    
+    const authParams = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'token id_token',
+      redirect_uri: redirectURL,
+      scope: 'openid email profile',
+      nonce: nonce,
+      prompt: 'select_account',
+    });
+    
+    const authURL = `https://accounts.google.com/o/oauth2/auth?${authParams.toString()}`;
+    
+    logger.info('Auth URL for chrome.identity:', authURL);
+    
+    // Launch the identity flow and return a promise
+    return new Promise((resolve, reject) => {
+      chrome.identity.launchWebAuthFlow(
+        { 
+          url: authURL, 
+          interactive: true
+        },
+        async (responseUrl) => {
+          if (chrome.runtime.lastError) {
+            logger.error('Auth Error:', chrome.runtime.lastError);
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          
+          if (!responseUrl) {
+            logger.error('Auth response URL is empty or undefined');
+            reject(new Error('No response received from authentication'));
+            return;
+          }
+          
+          logger.info('Auth response URL received');
+          
+          try {
+            // Parse the response URL
+            const url = new URL(responseUrl);
+            
+            // Get tokens from hash fragment
+            const hashParams = new URLSearchParams(url.hash.substring(1));
+            
+            // Extract tokens and user info
+            const accessToken = hashParams.get('access_token');
+            const idToken = hashParams.get('id_token');
+            
+            if (!accessToken) {
+              throw new Error('No access token received');
+            }
+            
+            // Get user info from id_token or fetch it with the access token
+            let userEmail = null;
+            let userName = null;
+            
+            if (idToken) {
+              // Parse the JWT to get user info
+              const payload = JSON.parse(atob(idToken.split('.')[1]));
+              userEmail = payload.email;
+              userName = payload.name;
+              logger.info('User info from ID token:', { email: userEmail, name: userName });
+            } else {
+              // Use access token to fetch user info
+              const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                headers: { Authorization: `Bearer ${accessToken}` }
+              });
+              
+              if (userInfoResponse.ok) {
+                const userInfo = await userInfoResponse.json();
+                userEmail = userInfo.email;
+                userName = userInfo.name;
+                logger.info('User info from userinfo endpoint:', userInfo);
+              } else {
+                logger.error('Failed to fetch user info:', await userInfoResponse.text());
+              }
+            }
+            
+            // Calculate token expiration
+            const expiresIn = parseInt(hashParams.get('expires_in') || '3600', 10);
+            const expiresAt = Date.now() + (expiresIn * 1000);
+            
+            // Store token info and user email for extension usage
+            chrome.storage.sync.set({
+              'main_gallery_auth_token': {
+                access_token: accessToken,
+                id_token: idToken,
+                token_type: hashParams.get('token_type') || 'Bearer',
+                timestamp: Date.now(),
+                expires_at: expiresAt
+              },
+              'main_gallery_user_email': userEmail || 'User',
+              'main_gallery_user_name': userName
+            }, () => {
+              logger.info('Auth tokens and user info stored successfully');
+              
+              resolve({
+                success: true,
+                user: { 
+                  email: userEmail,
+                  name: userName
+                },
+                token: accessToken
+              });
+            });
+          } catch (parseError) {
+            logger.error('Error parsing auth response:', parseError);
+            reject(parseError);
+          }
+        }
+      );
+    });
+  } catch (error) {
+    logger.error('Error initiating in-popup Google login:', error);
+    throw error;
+  }
+}
+
 // Open auth page with improved environment detection
 function openAuthPage(tabId = null, options = {}) {
   try {
@@ -430,7 +587,8 @@ function logout() {
 
 // Export functions
 export { 
-  handleEmailPasswordLogin, 
+  handleEmailPasswordLogin,
+  handleInPopupGoogleLogin, 
   setupAuthCallbackListener, 
   openAuthPage, 
   isLoggedIn, 
@@ -441,5 +599,7 @@ export {
   getAuthUrl, 
   getGalleryUrl, 
   getProductionRedirectUrl,
-  getPreviewRedirectUrl
+  getPreviewRedirectUrl,
+  getExtensionRedirectUrl,
+  getGoogleClientId
 };

@@ -18,6 +18,9 @@ import { handleError } from './utils/errorHandler.js';
 const galleryUrl = getGalleryUrl();
 const authUrl = getAuthUrl();
 
+// Extension ID - important for OAuth flow
+const EXTENSION_ID = chrome.runtime.id || 'oapmlmnmepbgiafhbbkjbkbppfdclknlb';
+
 // DOM elements - verify they exist before using them
 const states = {
   loading: document.getElementById('loading'),
@@ -41,6 +44,7 @@ logger.log('MainGallery.AI popup initialized in', isPreviewEnvironment() ? 'PREV
 logger.log('Base URL:', getBaseUrl());
 logger.log('Auth URL:', authUrl);
 logger.log('Gallery URL:', galleryUrl);
+logger.log('Extension ID:', EXTENSION_ID);
 
 // Helper functions
 function safelyAddClass(element, className) {
@@ -172,117 +176,149 @@ async function checkCurrentTab() {
   }
 }
 
-// Get Google OAuth redirect URL
-function getGoogleOAuthRedirectURL() {
-  const redirectDomain = isPreviewEnvironment() ? 
-    'preview-main-gallery-ai.lovable.app' : 
-    'main-gallery-hub.lovable.app';
-  
-  return `https://${redirectDomain}/auth/callback`;
-}
-
-// Handle in-popup Google OAuth login
+// Handle in-popup Google OAuth login using chrome.identity
 async function handleInPopupGoogleLogin() {
   try {
     if (states.loading) showState(states.loading);
-    logger.log('Starting in-popup Google login flow');
+    logger.log('Starting in-popup Google login flow with chrome.identity');
     
-    // Define Google OAuth details
-    const clientId = isPreviewEnvironment() ? 
-      '733872762484-7trp0odauqv0m5p9unnnl61q0b3j7rjp.apps.googleusercontent.com' : 
-      '733872762484-7trp0odauqv0m5p9unnnl61q0b3j7rjp.apps.googleusercontent.com';
+    // Using the client ID from manifest oauth2 section
+    const clientId = chrome.runtime.getManifest().oauth2?.client_id || 
+                    '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com';
     
-    const redirectURL = encodeURIComponent(getGoogleOAuthRedirectURL());
+    // Get extension redirect URL for Chrome identity API
+    const redirectURL = chrome.identity.getRedirectURL();
+    logger.log('Chrome identity redirect URL:', redirectURL);
     
-    // Build the OAuth URL
+    // Build the OAuth URL with the proper scopes for Chrome extension
     const scopes = encodeURIComponent('openid email profile');
-    const authURL = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&response_type=token&redirect_uri=${redirectURL}&scope=${scopes}`;
+    const nonce = Math.random().toString(36).substring(2, 15);
     
-    logger.log('Auth URL:', authURL);
+    const authParams = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'token id_token',
+      redirect_uri: redirectURL,
+      scope: 'openid email profile',
+      nonce: nonce,
+      prompt: 'select_account',
+    });
+    
+    const authURL = `https://accounts.google.com/o/oauth2/auth?${authParams.toString()}`;
+    
+    logger.log('Auth URL for chrome.identity:', authURL);
     
     // Launch the identity flow
     chrome.identity.launchWebAuthFlow(
       { 
         url: authURL, 
-        interactive: true 
+        interactive: true
       },
-      (responseUrl) => {
+      async (responseUrl) => {
         if (chrome.runtime.lastError) {
           logger.error('Auth Error:', chrome.runtime.lastError);
-          showToast('Authentication failed. Please try again.', 'error');
+          showToast('Authentication failed: ' + chrome.runtime.lastError.message, 'error');
           if (states.loginView) showState(states.loginView);
           return;
         }
         
         if (!responseUrl) {
           logger.error('Auth response URL is empty or undefined');
-          showToast('Authentication failed. Please try again.', 'error');
+          showToast('Authentication failed. No response received.', 'error');
           if (states.loginView) showState(states.loginView);
           return;
         }
         
         logger.log('Auth response URL received:', responseUrl);
         
-        // Parse the response URL
-        const url = new URL(responseUrl);
-        
-        // Get tokens from hash or query parameters
-        const hash = url.hash.substring(1);
-        const query = url.search.substring(1);
-        
-        const hashParams = new URLSearchParams(hash);
-        const queryParams = new URLSearchParams(query);
-        
-        // Try to get token from both locations
-        const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
-        const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
-        const userEmail = hashParams.get('email') || queryParams.get('email');
-        
-        if (!accessToken) {
-          logger.error('No access token found in response');
-          showToast('Authentication failed. No access token received.', 'error');
-          if (states.loginView) showState(states.loginView);
-          return;
-        }
-        
-        logger.log('Access token received');
-        
-        // Calculate token expiration (24 hours from now)
-        const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
-        
-        // Store token info and user email for extension usage
-        chrome.storage.sync.set({
-          'main_gallery_auth_token': {
-            access_token: accessToken,
-            refresh_token: refreshToken,
-            timestamp: Date.now(),
-            expires_at: expiresAt
-          },
-          'main_gallery_user_email': userEmail || 'User'
-        }, () => {
-          logger.log('Auth token and user info stored in extension storage with expiration');
+        try {
+          // Parse the response URL
+          const url = new URL(responseUrl);
           
-          // Show success notification
-          showToast('Successfully signed in!', 'success');
+          // Get tokens from hash fragment
+          const hashParams = new URLSearchParams(url.hash.substring(1));
           
-          // Update UI to show logged-in state
-          if (userEmailElement) {
-            userEmailElement.textContent = userEmail || 'User';
+          // Extract tokens and user info
+          const accessToken = hashParams.get('access_token');
+          const idToken = hashParams.get('id_token');
+          
+          if (!accessToken) {
+            throw new Error('No access token received');
           }
           
-          if (states.mainView) showState(states.mainView);
+          // Get user info from id_token or fetch it with the access token
+          let userEmail = null;
+          let userName = null;
           
-          // Check if current tab is a supported platform
-          checkCurrentTab();
+          if (idToken) {
+            // Parse the JWT to get user info
+            const payload = JSON.parse(atob(idToken.split('.')[1]));
+            userEmail = payload.email;
+            userName = payload.name;
+            logger.log('User info from ID token:', { email: userEmail, name: userName });
+          } else {
+            // Use access token to fetch user info
+            const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+              headers: { Authorization: `Bearer ${accessToken}` }
+            });
+            
+            if (userInfoResponse.ok) {
+              const userInfo = await userInfoResponse.json();
+              userEmail = userInfo.email;
+              userName = userInfo.name;
+              logger.log('User info from userinfo endpoint:', userInfo);
+            } else {
+              logger.error('Failed to fetch user info:', await userInfoResponse.text());
+            }
+          }
           
-          // Send message to update UI in other contexts if needed
-          chrome.runtime.sendMessage({ action: 'updateUI' });
-        });
+          // Calculate token expiration (1 hour from now)
+          const expiresIn = parseInt(hashParams.get('expires_in') || '3600', 10);
+          const expiresAt = Date.now() + (expiresIn * 1000);
+          
+          // Store token info and user email for extension usage
+          chrome.storage.sync.set({
+            'main_gallery_auth_token': {
+              access_token: accessToken,
+              id_token: idToken,
+              token_type: hashParams.get('token_type') || 'Bearer',
+              timestamp: Date.now(),
+              expires_at: expiresAt
+            },
+            'main_gallery_user_email': userEmail || 'User',
+            'main_gallery_user_name': userName
+          }, () => {
+            logger.log('Auth tokens and user info stored successfully');
+            
+            // Show success notification
+            showToast('Successfully signed in!', 'success');
+            
+            // Update UI to show logged-in state
+            if (userEmailElement) {
+              userEmailElement.textContent = userEmail || 'User';
+            }
+            
+            if (states.mainView) showState(states.mainView);
+            
+            // Check if current tab is a supported platform
+            checkCurrentTab();
+            
+            // Send message to background script to update other contexts
+            chrome.runtime.sendMessage({ 
+              action: 'updateUI',
+              userEmail: userEmail,
+              userName: userName 
+            });
+          });
+        } catch (parseError) {
+          logger.error('Error parsing auth response:', parseError);
+          showToast('Authentication error: ' + parseError.message, 'error');
+          if (states.loginView) showState(states.loginView);
+        }
       }
     );
   } catch (error) {
     logger.error('Error initiating in-popup Google login:', error);
-    showToast('Could not start login process. Please try again.', 'error');
+    showToast('Could not start login process: ' + error.message, 'error');
     if (states.loginView) showState(states.loginView);
   }
 }
