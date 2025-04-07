@@ -137,10 +137,18 @@ header h1 {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
 }
 
 .action-btn:hover {
   background-color: var(--bg-secondary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.action-btn:active {
+  transform: translateY(0);
 }
 
 .action-btn.primary {
@@ -153,9 +161,32 @@ header h1 {
   background-color: var(--brand-primary-hover);
 }
 
-.action-btn.disabled {
-  opacity: 0.5;
+.action-btn.disabled, .action-btn[disabled] {
+  opacity: 0.6;
   cursor: not-allowed;
+  pointer-events: none;
+}
+
+.action-btn::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.4) 10%, transparent 10.01%);
+  background-repeat: no-repeat;
+  background-position: 50%;
+  transform: scale(10, 10);
+  opacity: 0;
+  transition: transform 0.5s, opacity 0.8s;
+}
+
+.action-btn:active::after {
+  transform: scale(0, 0);
+  opacity: 0.3;
+  transition: 0s;
 }
 
 .auth-btn {
@@ -176,6 +207,12 @@ header h1 {
 
 .auth-btn:hover {
   background-color: var(--brand-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.auth-btn:active {
+  transform: translateY(0);
 }
 
 .auth-btn.secondary {
@@ -215,10 +252,12 @@ header h1 {
   color: var(--brand-primary);
   font-size: 0.875rem;
   text-decoration: none;
+  transition: all 0.2s;
 }
 
 .auth-links a:hover {
   text-decoration: underline;
+  color: var(--brand-primary-hover);
 }
 
 .status-message {
@@ -291,4 +330,31 @@ footer {
 /* Icon styling */
 .icon {
   flex-shrink: 0;
+}
+
+/* Tooltip styling */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--brand-secondary);
+  color: white;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 10;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
 }

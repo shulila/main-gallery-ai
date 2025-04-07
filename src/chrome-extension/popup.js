@@ -113,13 +113,14 @@ function showError(message) {
   showState(states.errorView);
 }
 
-// Check if current tab is a supported platform and update UI accordingly
+// Update platform detection and UI based on current tab
 async function checkCurrentTab() {
   try {
     // Get the current active tab
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tabs || !tabs[0] || !tabs[0].url) {
-      console.log('No active tab found or missing URL');
+      logger.log('No active tab found or missing URL');
+      updateUIForUnsupportedPlatform();
       return false;
     }
     
@@ -168,48 +169,56 @@ async function checkCurrentTab() {
       
       return true;
     } else {
-      // Hide platform detection info and disable scan button
-      if (platformDetectedDiv) {
-        platformDetectedDiv.style.display = 'none';
-      }
-      
-      if (scanPageBtn) {
-        scanPageBtn.disabled = true;
-        safelyAddClass(scanPageBtn, 'disabled');
-        safelyRemoveClass(scanPageBtn, 'primary');
-      }
-      
+      updateUIForUnsupportedPlatform();
       return false;
     }
   } catch (error) {
     handleError('checkCurrentTab', error);
+    updateUIForUnsupportedPlatform();
     return false;
   }
 }
 
-// Handle in-popup Google OAuth login using chrome.identity
+// Update UI for unsupported platform
+function updateUIForUnsupportedPlatform() {
+  // Hide platform detection info
+  if (platformDetectedDiv) {
+    platformDetectedDiv.style.display = 'none';
+  }
+  
+  // Disable scan button with tooltip
+  if (scanPageBtn) {
+    scanPageBtn.disabled = true;
+    scanPageBtn.setAttribute('data-tooltip', 'Not on a supported AI platform');
+    safelyAddClass(scanPageBtn, 'disabled');
+    safelyRemoveClass(scanPageBtn, 'primary');
+  }
+}
+
+// Improved Google OAuth login using chrome.identity
 async function handleInPopupGoogleLogin() {
   try {
     if (states.loading) showState(states.loading);
-    logger.log('Starting in-popup Google login flow with chrome.identity');
+    logger.log('Starting Google login flow with chrome.identity');
     
-    // Using the client ID from manifest oauth2 section
-    const clientId = chrome.runtime.getManifest().oauth2?.client_id || 
-                    '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
+    // Get client ID from manifest
+    const manifest = chrome.runtime.getManifest();
+    const clientId = manifest.oauth2?.client_id || 
+                  '288496481194-rk8jtjt5vka8j90eofdki6q4fgjp2799.apps.googleusercontent.com';
     
-    // Get extension redirect URL for Chrome identity API
+    // Get extension redirect URL
     const redirectURL = chrome.identity.getRedirectURL();
     logger.log('Chrome identity redirect URL:', redirectURL);
     
-    // Build the OAuth URL with the proper scopes for Chrome extension
-    const scopes = encodeURIComponent('openid email profile');
+    // Build OAuth URL with proper scopes
+    const scopes = ['openid', 'email', 'profile'];
     const nonce = Math.random().toString(36).substring(2, 15);
     
     const authParams = new URLSearchParams({
       client_id: clientId,
       response_type: 'token id_token',
       redirect_uri: redirectURL,
-      scope: 'openid email profile',
+      scope: scopes.join(' '),
       nonce: nonce,
       prompt: 'select_account',
     });
@@ -218,123 +227,145 @@ async function handleInPopupGoogleLogin() {
     
     logger.log('Auth URL for chrome.identity:', authURL);
     
-    // Launch the identity flow
-    chrome.identity.launchWebAuthFlow(
-      { 
-        url: authURL, 
-        interactive: true
-      },
-      async (responseUrl) => {
-        if (chrome.runtime.lastError) {
-          logger.error('Auth Error:', chrome.runtime.lastError);
-          showError(chrome.runtime.lastError.message || 'Authentication failed. Please try again.');
-          return;
-        }
-        
-        if (!responseUrl) {
-          logger.error('Auth response URL is empty or undefined');
-          showError('The user did not approve access.');
-          return;
-        }
-        
-        logger.log('Auth response URL received:', responseUrl);
-        
-        try {
-          // Parse the response URL
-          const url = new URL(responseUrl);
-          
-          // Get tokens from hash fragment
-          const hashParams = new URLSearchParams(url.hash.substring(1));
-          
-          // Extract tokens and user info
-          const accessToken = hashParams.get('access_token');
-          const idToken = hashParams.get('id_token');
-          
-          if (!accessToken) {
-            throw new Error('No access token received');
-          }
-          
-          // Get user info from id_token or fetch it with the access token
-          let userEmail = null;
-          let userName = null;
-          
-          if (idToken) {
-            // Parse the JWT to get user info
-            const payload = JSON.parse(atob(idToken.split('.')[1]));
-            userEmail = payload.email;
-            userName = payload.name;
-            logger.log('User info from ID token:', { email: userEmail, name: userName });
-          } else {
-            // Use access token to fetch user info
-            const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-              headers: { Authorization: `Bearer ${accessToken}` }
-            });
-            
-            if (userInfoResponse.ok) {
-              const userInfo = await userInfoResponse.json();
-              userEmail = userInfo.email;
-              userName = userInfo.name;
-              logger.log('User info from userinfo endpoint:', userInfo);
-            } else {
-              logger.error('Failed to fetch user info:', await userInfoResponse.text());
-            }
-          }
-          
-          // Calculate token expiration (1 hour from now)
-          const expiresIn = parseInt(hashParams.get('expires_in') || '3600', 10);
-          const expiresAt = Date.now() + (expiresIn * 1000);
-          
-          // Store token info and user email for extension usage
-          chrome.storage.sync.set({
-            'main_gallery_auth_token': {
-              access_token: accessToken,
-              id_token: idToken,
-              token_type: hashParams.get('token_type') || 'Bearer',
-              timestamp: Date.now(),
-              expires_at: expiresAt
-            },
-            'main_gallery_user_email': userEmail || 'User',
-            'main_gallery_user_name': userName
-          }, () => {
-            logger.log('Auth tokens and user info stored successfully');
-            
-            // Show success notification
-            showToast('Successfully signed in!', 'success');
-            
-            // Update UI to show logged-in state
-            if (userEmailElement) {
-              userEmailElement.textContent = userEmail || 'User';
+    try {
+      // Launch the identity flow
+      const responseUrl = await new Promise((resolve, reject) => {
+        chrome.identity.launchWebAuthFlow(
+          { 
+            url: authURL, 
+            interactive: true
+          },
+          (responseUrl) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
             }
             
-            if (states.mainView) showState(states.mainView);
+            if (!responseUrl) {
+              reject(new Error('The user did not approve access.'));
+              return;
+            }
             
-            // Check if current tab is a supported platform
-            checkCurrentTab();
-            
-            // Send message to background script to update other contexts
-            chrome.runtime.sendMessage({ 
-              action: 'updateUI',
-              userEmail: userEmail,
-              userName: userName 
-            });
-          });
-        } catch (parseError) {
-          logger.error('Error parsing auth response:', parseError);
-          showError('Authentication error: ' + parseError.message);
-        }
+            resolve(responseUrl);
+          }
+        );
+      });
+      
+      logger.log('Auth response URL received');
+      
+      // Parse the response URL
+      const url = new URL(responseUrl);
+      
+      // Get tokens from hash fragment
+      const hashParams = new URLSearchParams(url.hash.substring(1));
+      
+      // Extract tokens and user info
+      const accessToken = hashParams.get('access_token');
+      const idToken = hashParams.get('id_token');
+      
+      if (!accessToken) {
+        throw new Error('No access token received');
       }
-    );
+      
+      // Get user info from id_token or fetch it with the access token
+      let userEmail = null;
+      let userName = null;
+      
+      try {
+        if (idToken) {
+          // Parse the JWT to get user info
+          const payload = JSON.parse(atob(idToken.split('.')[1]));
+          userEmail = payload.email;
+          userName = payload.name;
+          logger.log('User info from ID token:', { email: userEmail });
+        } else {
+          // Use access token to fetch user info
+          const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          });
+          
+          if (userInfoResponse.ok) {
+            const userInfo = await userInfoResponse.json();
+            userEmail = userInfo.email;
+            userName = userInfo.name;
+            logger.log('User info from userinfo endpoint:', { email: userEmail });
+          } else {
+            throw new Error('Failed to fetch user info');
+          }
+        }
+      } catch (userInfoError) {
+        logger.error('Error getting user info:', userInfoError);
+        // Continue even without email - we still have the token
+        userEmail = 'User';
+      }
+      
+      // Calculate token expiration (1 hour from now)
+      const expiresIn = parseInt(hashParams.get('expires_in') || '3600', 10);
+      const expiresAt = Date.now() + (expiresIn * 1000);
+      
+      // Store token info and user email for extension usage
+      chrome.storage.sync.set({
+        'main_gallery_auth_token': {
+          access_token: accessToken,
+          id_token: idToken,
+          token_type: hashParams.get('token_type') || 'Bearer',
+          timestamp: Date.now(),
+          expires_at: expiresAt
+        },
+        'main_gallery_user_email': userEmail || 'User',
+        'main_gallery_user_name': userName
+      }, () => {
+        logger.log('Auth tokens and user info stored successfully');
+        
+        // Show success notification
+        showToast('Successfully signed in!', 'success');
+        
+        // Update UI to show logged-in state
+        if (userEmailElement) {
+          userEmailElement.textContent = userEmail || 'User';
+        }
+        
+        showState(states.mainView);
+        
+        // Check if current tab is a supported platform
+        checkCurrentTab();
+        
+        // Send message to background script to update other contexts
+        chrome.runtime.sendMessage({ 
+          action: 'updateUI',
+          userEmail: userEmail,
+          userName: userName 
+        });
+      });
+    } catch (oauthError) {
+      logger.error('OAuth error:', oauthError);
+      
+      // Show human-readable error
+      let errorMessage = 'Authentication failed.';
+      
+      if (oauthError.message.includes('did not approve')) {
+        errorMessage = 'You did not approve access to your Google account.';
+      } else if (oauthError.message.includes('invalid_client')) {
+        errorMessage = 'OAuth client configuration error. Please contact support.';
+      } else if (oauthError.message.includes('cancel')) {
+        errorMessage = 'Authentication was canceled.';
+      } else if (oauthError.message.includes('access')) {
+        errorMessage = 'Could not connect to Google. Please try again later.';
+      }
+      
+      showError(errorMessage);
+    }
   } catch (error) {
-    logger.error('Error initiating in-popup Google login:', error);
-    showError('Could not start login process: ' + error.message);
+    logger.error('Error initiating Google login:', error);
+    showError('Could not start login process. Please try again.');
   }
 }
 
 // Enhanced auth check with token validation
 async function checkAuthAndRedirect() {
   try {
-    if (states.loading) showState(states.loading); // Show loading state while checking
-    logger.log('Checking authentication status with validation...');
+    if (states.loading) showState(states.loading);
+    logger.log('Checking authentication status...');
     
     // Check authentication with the background script
     chrome.runtime.sendMessage({ action: 'isLoggedIn' }, async (response) => {
@@ -343,7 +374,7 @@ async function checkAuthAndRedirect() {
         if (!response) {
           logger.error('No response from background script');
           showToast('Connection error. Please try again.', 'error');
-          if (states.loginView) showState(states.loginView);
+          showState(states.loginView);
           return;
         }
         
@@ -352,7 +383,7 @@ async function checkAuthAndRedirect() {
         if (loggedIn) {
           logger.log('User is logged in, showing logged-in state');
           
-          // Get user email to display if available
+          // Get user email to display
           chrome.runtime.sendMessage({ action: 'getUserEmail' }, (emailResponse) => {
             const userEmail = emailResponse && emailResponse.email;
             logger.log('User email:', userEmail);
@@ -361,25 +392,25 @@ async function checkAuthAndRedirect() {
               userEmailElement.textContent = userEmail;
             }
             
-            if (states.mainView) showState(states.mainView);
+            showState(states.mainView);
             
             // Check if current tab is a supported platform
             checkCurrentTab();
           });
         } else {
           logger.log('User is not logged in, showing login options');
-          if (states.loginView) showState(states.loginView);
+          showState(states.loginView);
         }
       } catch (err) {
         logger.error('Error processing auth status:', err);
         showToast('Error checking login status', 'error');
-        if (states.loginView) showState(states.loginView); // Default to login view
+        showState(states.loginView); // Default to login view
       }
     });
   } catch (error) {
     logger.error('Error checking auth status:', error);
     showToast('Connection error', 'error');
-    if (states.loginView) showState(states.loginView); // Default to login view
+    showState(states.loginView); // Default to login view
   }
 }
 
@@ -416,14 +447,14 @@ function openWebLogin() {
   } catch (error) {
     logger.error('Error opening web login:', error);
     showToast('Could not open login page. Please try again.', 'error');
-    if (states.loginView) showState(states.loginView);
+    showState(states.loginView);
   }
 }
 
 // Log out the user
 function logout() {
   chrome.runtime.sendMessage({ action: 'logout' }, response => {
-    if (states.loginView) showState(states.loginView);
+    showState(states.loginView);
     showToast('You have been logged out', 'info');
   });
 }
@@ -457,7 +488,7 @@ function scanCurrentPage() {
 
 // Reset UI and try again
 function resetAndTryAgain() {
-  if (states.loginView) showState(states.loginView);
+  showState(states.loginView);
 }
 
 // Check for auth status immediately when popup opens
@@ -468,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Set up event listeners for Google login
   if (googleLoginBtn) {
     googleLoginBtn.addEventListener('click', handleInPopupGoogleLogin);
-    logger.log('Google login button listener set up using in-popup flow');
+    logger.log('Google login button listener set up');
   }
   
   // Set up event listener for trying again after error
