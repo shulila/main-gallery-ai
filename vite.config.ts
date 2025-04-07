@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => {
         '@': resolve(__dirname, 'src'),
       },
     },
+    server: {
+      port: 8080
+    },
     build: {
       // Special build configuration for Chrome extension
       ...(isExtensionBuild ? {
