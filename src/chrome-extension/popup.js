@@ -9,8 +9,14 @@ const BRAND = {
   }
 };
 
-// Gallery URL with base from brand config
-const GALLERY_URL = `${BRAND.urls.baseUrl}${BRAND.urls.gallery}`;
+// Import required utilities
+import { isPreviewEnvironment, getBaseUrl, getAuthUrl, getGalleryUrl, isSupportedPlatformUrl } from './utils/urlUtils.js';
+import { logger } from './utils/logger.js';
+import { handleError } from './utils/errorHandler.js';
+
+// Update gallery URL based on environment
+const galleryUrl = getGalleryUrl();
+const authUrl = getAuthUrl();
 
 // DOM elements - verify they exist before using them
 const states = {
@@ -20,17 +26,21 @@ const states = {
 };
 
 // Get elements safely with null checks
-const loginForm = document.getElementById('login-form');
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
-const loginBtn = document.getElementById('login-btn');
-const forgotPasswordLink = document.getElementById('forgot-password-link');
-const signupLink = document.getElementById('signup-link');
+const googleLoginBtn = document.getElementById('google-login-btn');
+const openWebLoginLink = document.getElementById('open-web-login-link');
 const logoutBtn = document.getElementById('logout-btn');
 const openGalleryBtn = document.getElementById('open-gallery-btn');
 const scanPageBtn = document.getElementById('scan-page-btn');
 const userEmailElement = document.getElementById('user-email');
 const statusMessage = document.getElementById('status-message');
+const platformDetectedDiv = document.getElementById('platform-detected');
+const platformNameElement = document.getElementById('platform-name');
+
+// Log environment for debugging
+logger.log('MainGallery.AI popup initialized in', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION', 'environment');
+logger.log('Base URL:', getBaseUrl());
+logger.log('Auth URL:', authUrl);
+logger.log('Gallery URL:', galleryUrl);
 
 // Helper functions
 function safelyAddClass(element, className) {
@@ -88,18 +98,92 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
+// Check if current tab is a supported platform and update UI accordingly
+async function checkCurrentTab() {
+  try {
+    // Get the current active tab
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs || !tabs[0] || !tabs[0].url) {
+      console.log('No active tab found or missing URL');
+      return false;
+    }
+    
+    const currentUrl = tabs[0].url;
+    const isSupported = isSupportedPlatformUrl(currentUrl);
+    
+    logger.log('Current tab URL:', currentUrl);
+    logger.log('Is supported platform:', isSupported);
+    
+    // Update UI based on platform support
+    if (isSupported && platformDetectedDiv && platformNameElement) {
+      // Extract platform name from URL
+      const urlObj = new URL(currentUrl);
+      let platformName = "Unknown";
+      
+      // Determine platform name based on hostname
+      if (urlObj.hostname.includes('midjourney.com')) {
+        platformName = "Midjourney";
+      } else if (urlObj.hostname.includes('leonardo.ai')) {
+        platformName = "Leonardo.ai";
+      } else if (urlObj.hostname.includes('pika.art')) {
+        platformName = "Pika Labs";
+      } else if (urlObj.hostname.includes('openai.com')) {
+        platformName = "DALL-E";
+      } else if (urlObj.hostname.includes('stability.ai') || urlObj.hostname.includes('dreamstudio.ai')) {
+        platformName = "Stable Diffusion";
+      } else if (urlObj.hostname.includes('runwayml.com')) {
+        platformName = "Runway";
+      } else if (urlObj.hostname.includes('discord.com') && urlObj.pathname.includes('midjourney')) {
+        platformName = "Midjourney (Discord)";
+      } else if (urlObj.hostname.includes('playgroundai.com')) {
+        platformName = "Playground AI";
+      } else if (urlObj.hostname.includes('nightcafe.studio')) {
+        platformName = "NightCafe";
+      }
+      
+      platformNameElement.textContent = platformName;
+      platformDetectedDiv.style.display = 'block';
+      
+      // Enable "Add to MainGallery" button with active styling
+      if (scanPageBtn) {
+        scanPageBtn.disabled = false;
+        safelyRemoveClass(scanPageBtn, 'disabled');
+        safelyAddClass(scanPageBtn, 'primary');
+      }
+      
+      return true;
+    } else {
+      // Hide platform detection info and disable scan button
+      if (platformDetectedDiv) {
+        platformDetectedDiv.style.display = 'none';
+      }
+      
+      if (scanPageBtn) {
+        scanPageBtn.disabled = true;
+        safelyAddClass(scanPageBtn, 'disabled');
+        safelyRemoveClass(scanPageBtn, 'primary');
+      }
+      
+      return false;
+    }
+  } catch (error) {
+    handleError('checkCurrentTab', error);
+    return false;
+  }
+}
+
 // Enhanced auth check with token validation
 async function checkAuthAndRedirect() {
   try {
     if (states.loading) showState(states.loading); // Show loading state while checking
-    console.log('Checking authentication status with validation...');
+    logger.log('Checking authentication status with validation...');
     
     // Check authentication with the background script
     chrome.runtime.sendMessage({ action: 'isLoggedIn' }, async (response) => {
       try {
         // Handle no response (possible disconnection)
         if (!response) {
-          console.error('No response from background script');
+          logger.error('No response from background script');
           showToast('Connection error. Please try again.', 'error');
           if (states.loginView) showState(states.loginView);
           return;
@@ -108,31 +192,34 @@ async function checkAuthAndRedirect() {
         const loggedIn = response && response.loggedIn;
         
         if (loggedIn) {
-          console.log('User is logged in, showing logged-in state');
+          logger.log('User is logged in, showing logged-in state');
           
           // Get user email to display if available
           chrome.runtime.sendMessage({ action: 'getUserEmail' }, (emailResponse) => {
             const userEmail = emailResponse && emailResponse.email;
-            console.log('User email:', userEmail);
+            logger.log('User email:', userEmail);
             
             if (userEmail && userEmailElement) {
               userEmailElement.textContent = userEmail;
             }
             
             if (states.mainView) showState(states.mainView);
+            
+            // Check if current tab is a supported platform
+            checkCurrentTab();
           });
         } else {
-          console.log('User is not logged in, showing login options');
+          logger.log('User is not logged in, showing login options');
           if (states.loginView) showState(states.loginView);
         }
       } catch (err) {
-        console.error('Error processing auth status:', err);
+        logger.error('Error processing auth status:', err);
         showToast('Error checking login status', 'error');
         if (states.loginView) showState(states.loginView); // Default to login view
       }
     });
   } catch (error) {
-    console.error('Error checking auth status:', error);
+    logger.error('Error checking auth status:', error);
     showToast('Connection error', 'error');
     if (states.loginView) showState(states.loginView); // Default to login view
   }
@@ -141,7 +228,7 @@ async function checkAuthAndRedirect() {
 // Open gallery in new tab or focus existing tab
 function openGallery() {
   try {
-    console.log('Opening gallery at', GALLERY_URL);
+    logger.log('Opening gallery at', galleryUrl);
     
     // Send message to background script to handle opening gallery
     chrome.runtime.sendMessage({ action: 'openGallery' });
@@ -149,82 +236,49 @@ function openGallery() {
     // Close popup after navigation request
     window.close();
   } catch (error) {
-    console.error('Error opening gallery:', error);
+    logger.error('Error opening gallery:', error);
     showToast('Could not open gallery. Please try again.', 'error');
   }
 }
 
-// Handle email/password login
-function handleLogin(e) {
-  if (e) e.preventDefault();
-  
-  const email = emailInput ? emailInput.value.trim() : '';
-  const password = passwordInput ? passwordInput.value.trim() : '';
-  
-  if (!email || !password) {
-    showToast('Please enter both email and password', 'error');
-    return;
-  }
-  
-  if (states.loading) showState(states.loading);
-  console.log('Attempting login with email:', email);
-  
-  // Send login request to background script
-  chrome.runtime.sendMessage({
-    action: 'login',
-    email: email,
-    password: password
-  }, (response) => {
-    // Handle no response case (possible disconnect)
-    if (!response) {
-      console.error('No response from background script');
-      showToast('Server connection error. Please try again later.', 'error');
-      if (states.loginView) showState(states.loginView);
-      return;
-    }
-    
-    if (response && response.success) {
-      showToast('Login successful', 'success');
-      checkAuthAndRedirect(); // This will update UI based on new auth state
-    } else {
-      console.error('Login failed:', response?.error || 'Unknown error');
-      
-      // Show more specific error message based on type
-      let errorMessage = 'Login failed. Please check your credentials.';
-      
-      if (response?.error) {
-        if (response.error.includes('format') || response.error.includes('HTML')) {
-          errorMessage = 'Invalid server response format. Please try again later.';
-        } else if (response.error.includes('network') || response.error.includes('connect')) {
-          errorMessage = 'Network error. Please check your connection.';
-        } else if (response.error.includes('credentials') || response.error.includes('password')) {
-          errorMessage = 'Invalid email or password. Please try again.';
-        }
-      }
-      
-      showToast(errorMessage, 'error');
-      if (states.loginView) showState(states.loginView);
-    }
-  });
-}
-
-// Open auth page for signup or password reset
-function openAuthPage(options = {}) {
+// Handle Google OAuth login
+function handleGoogleLogin() {
   try {
     if (states.loading) showState(states.loading);
-    console.log('Opening auth page with options:', options);
-    showToast('Opening login page...', 'info');
+    logger.log('Starting Google login flow');
     
+    // Open auth page with Google provider
     chrome.runtime.sendMessage({ 
       action: 'openAuthPage',
-      ...options,
-      from: 'extension'
+      provider: 'google',
+      from: 'extension_popup'
     });
     
     // Close popup after a short delay
     setTimeout(() => window.close(), 300);
   } catch (error) {
-    console.error('Error opening auth page:', error);
+    logger.error('Error initiating Google login:', error);
+    showToast('Could not start login process. Please try again.', 'error');
+    if (states.loginView) showState(states.loginView);
+  }
+}
+
+// Open auth page for full login experience
+function openWebLogin() {
+  try {
+    if (states.loading) showState(states.loading);
+    logger.log('Opening full web login page');
+    
+    // Send message to open the auth page
+    chrome.runtime.sendMessage({ 
+      action: 'openAuthPage',
+      from: 'extension_popup'
+    });
+    
+    // Close popup after a short delay
+    setTimeout(() => window.close(), 300);
+  } catch (error) {
+    logger.error('Error opening web login:', error);
     showToast('Could not open login page. Please try again.', 'error');
     if (states.loginView) showState(states.loginView);
   }
@@ -240,16 +294,23 @@ function logout() {
 
 // Scan current page for images
 function scanCurrentPage() {
-  console.log('Starting scan of current page...');
+  logger.log('Starting scan of current page...');
+  
+  // Check if button is disabled (unsupported platform)
+  if (scanPageBtn && scanPageBtn.disabled) {
+    showToast('This platform is not supported for scanning', 'error');
+    return;
+  }
+  
   showToast('Scanning page for AI images...', 'info');
   
   // Request background script to scan the current active tab
   chrome.runtime.sendMessage({ action: 'startAutoScan' }, (response) => {
     if (chrome.runtime.lastError || !response || !response.success) {
-      console.error('Error starting scan:', chrome.runtime.lastError || 'Unknown error');
+      logger.error('Error starting scan:', chrome.runtime.lastError || 'Unknown error');
       showToast('Failed to start scanning. Please try again.', 'error');
     } else {
-      console.log('Scan started successfully');
+      logger.log('Scan started successfully');
       // Status message will be shown by the background script
       
       // Close popup after starting the scan
@@ -260,45 +321,37 @@ function scanCurrentPage() {
 
 // Check for auth status immediately when popup opens
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Popup loaded, checking auth status');
+  logger.log('Popup loaded, checking auth status');
   checkAuthAndRedirect();
   
-  // Set up event listeners for form submission
-  if (loginForm) {
-    loginForm.addEventListener('submit', handleLogin);
-    console.log('Login form submission listener set up');
+  // Set up event listeners for Google login
+  if (googleLoginBtn) {
+    googleLoginBtn.addEventListener('click', handleGoogleLogin);
+    logger.log('Google login button listener set up');
   }
   
-  // Set up event listeners for auth links
-  if (forgotPasswordLink) {
-    forgotPasswordLink.addEventListener('click', (e) => {
+  // Set up event listener for opening full web login
+  if (openWebLoginLink) {
+    openWebLoginLink.addEventListener('click', (e) => {
       e.preventDefault();
-      openAuthPage({ forgotPassword: true });
+      openWebLogin();
     });
-    console.log('Forgot password link listener set up');
-  }
-  
-  if (signupLink) {
-    signupLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      openAuthPage({ signup: true });
-    });
-    console.log('Signup link listener set up');
+    logger.log('Open web login link listener set up');
   }
   
   if (logoutBtn) {
     logoutBtn.addEventListener('click', logout);
-    console.log('Logout button listener set up');
+    logger.log('Logout button listener set up');
   }
   
   if (openGalleryBtn) {
     openGalleryBtn.addEventListener('click', openGallery);
-    console.log('Open gallery button listener set up');
+    logger.log('Open gallery button listener set up');
   }
   
   if (scanPageBtn) {
     scanPageBtn.addEventListener('click', scanCurrentPage);
-    console.log('Scan page button listener set up');
+    logger.log('Scan page button listener set up');
   }
 });
 
@@ -311,6 +364,14 @@ chrome.runtime.onMessage.addListener((message) => {
       showToast(`${message.imageCount || 'Multiple'} images found and synced to gallery`, 'success');
     } else {
       showToast('No images found or error during scan', 'error');
+    }
+  } else if (message.action === 'platformDetected') {
+    // Update platform display if platform was detected by content script
+    if (platformNameElement && message.platformName) {
+      platformNameElement.textContent = message.platformName;
+      if (platformDetectedDiv) {
+        platformDetectedDiv.style.display = 'block';
+      }
     }
   }
 });
