@@ -25,12 +25,14 @@ const EXTENSION_ID = chrome.runtime.id || 'oapmlmnmepbgiafhbbkjbkbppfdclknlb';
 const states = {
   loading: document.getElementById('loading'),
   loginView: document.getElementById('login-view'),
-  mainView: document.getElementById('main-view')
+  mainView: document.getElementById('main-view'),
+  errorView: document.getElementById('error-view')
 };
 
 // Get elements safely with null checks
 const googleLoginBtn = document.getElementById('google-login-btn');
 const openWebLoginLink = document.getElementById('open-web-login-link');
+const tryAgainBtn = document.getElementById('try-again-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const openGalleryBtn = document.getElementById('open-gallery-btn');
 const scanPageBtn = document.getElementById('scan-page-btn');
@@ -38,6 +40,7 @@ const userEmailElement = document.getElementById('user-email');
 const statusMessage = document.getElementById('status-message');
 const platformDetectedDiv = document.getElementById('platform-detected');
 const platformNameElement = document.getElementById('platform-name');
+const errorTextElement = document.getElementById('error-text');
 
 // Log environment for debugging
 logger.log('MainGallery.AI popup initialized in', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION', 'environment');
@@ -100,6 +103,14 @@ function showToast(message, type = 'info') {
     toast.classList.remove('show');
     setTimeout(() => toast.remove(), 300);
   }, 3000);
+}
+
+// Show error state with custom message
+function showError(message) {
+  if (errorTextElement) {
+    errorTextElement.textContent = message || 'Authentication failed. Please try again.';
+  }
+  showState(states.errorView);
 }
 
 // Check if current tab is a supported platform and update UI accordingly
@@ -184,7 +195,7 @@ async function handleInPopupGoogleLogin() {
     
     // Using the client ID from manifest oauth2 section
     const clientId = chrome.runtime.getManifest().oauth2?.client_id || 
-                    '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com';
+                    '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
     
     // Get extension redirect URL for Chrome identity API
     const redirectURL = chrome.identity.getRedirectURL();
@@ -216,15 +227,13 @@ async function handleInPopupGoogleLogin() {
       async (responseUrl) => {
         if (chrome.runtime.lastError) {
           logger.error('Auth Error:', chrome.runtime.lastError);
-          showToast('Authentication failed: ' + chrome.runtime.lastError.message, 'error');
-          if (states.loginView) showState(states.loginView);
+          showError(chrome.runtime.lastError.message || 'Authentication failed. Please try again.');
           return;
         }
         
         if (!responseUrl) {
           logger.error('Auth response URL is empty or undefined');
-          showToast('Authentication failed. No response received.', 'error');
-          if (states.loginView) showState(states.loginView);
+          showError('The user did not approve access.');
           return;
         }
         
@@ -311,15 +320,13 @@ async function handleInPopupGoogleLogin() {
           });
         } catch (parseError) {
           logger.error('Error parsing auth response:', parseError);
-          showToast('Authentication error: ' + parseError.message, 'error');
-          if (states.loginView) showState(states.loginView);
+          showError('Authentication error: ' + parseError.message);
         }
       }
     );
   } catch (error) {
     logger.error('Error initiating in-popup Google login:', error);
-    showToast('Could not start login process: ' + error.message, 'error');
-    if (states.loginView) showState(states.loginView);
+    showError('Could not start login process: ' + error.message);
   }
 }
 
@@ -448,6 +455,11 @@ function scanCurrentPage() {
   });
 }
 
+// Reset UI and try again
+function resetAndTryAgain() {
+  if (states.loginView) showState(states.loginView);
+}
+
 // Check for auth status immediately when popup opens
 document.addEventListener('DOMContentLoaded', () => {
   logger.log('Popup loaded, checking auth status');
@@ -457,6 +469,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (googleLoginBtn) {
     googleLoginBtn.addEventListener('click', handleInPopupGoogleLogin);
     logger.log('Google login button listener set up using in-popup flow');
+  }
+  
+  // Set up event listener for trying again after error
+  if (tryAgainBtn) {
+    tryAgainBtn.addEventListener('click', resetAndTryAgain);
+    logger.log('Try again button listener set up');
   }
   
   // Set up event listener for opening full web login
@@ -502,5 +520,8 @@ chrome.runtime.onMessage.addListener((message) => {
         platformDetectedDiv.style.display = 'block';
       }
     }
+  } else if (message.action === 'authError') {
+    // Handle authentication errors
+    showError(message.error || 'Authentication failed. Please try again.');
   }
 });

@@ -49,8 +49,8 @@ const getGoogleClientId = () => {
   
   // Fallback to environment-specific client IDs
   return isPreviewEnvironment() 
-    ? '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com' 
-    : '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com';
+    ? '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com' 
+    : '288496481194-vj3uii1l1hp8c18sf7jr7s7dt1qcamom.apps.googleusercontent.com';
 };
 
 // Supported platforms for extension activation
@@ -272,6 +272,12 @@ function setupAuthCallbackListener() {
             });
           } else {
             logger.error('Auth callback detected but no access token found');
+            
+            // Send error message to popup if open
+            chrome.runtime.sendMessage({ 
+              action: 'authError', 
+              error: 'Authentication failed. No access token received.' 
+            });
             
             // Show error notification
             try {
