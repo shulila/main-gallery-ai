@@ -93,26 +93,47 @@ console.log('Copying popup files...');
   }
 });
 
-// Step 5: Copy icons
+// Step 5: Copy icons - Now with improved error handling and validation
 console.log('Copying icons...');
-['icon16.png', 'icon48.png', 'icon128.png', 'google-icon.svg', 'facebook-icon.svg'].forEach(iconFile => {
+const requiredIcons = manifest.icons ? Object.keys(manifest.icons).map(size => `icon${size}.png`) : [];
+const actionIcons = manifest.action && manifest.action.default_icon ? 
+  Object.keys(manifest.action.default_icon).map(size => path.basename(manifest.action.default_icon[size])) : [];
+
+// Combine and deduplicate icon files needed
+const allIconPaths = [...new Set([...requiredIcons, ...actionIcons])];
+
+// Check which icons exist in source
+const existingIcons = fs.readdirSync(ICONS_DIR).filter(file => file.endsWith('.png'));
+console.log(`Found ${existingIcons.length} icon files in source directory`);
+
+// Copy existing icons and report on missing ones
+allIconPaths.forEach(iconFile => {
   try {
     const sourcePath = path.join(ICONS_DIR, iconFile);
     const destPath = path.join(OUTPUT_DIR, 'icons', iconFile);
     
     if (fs.existsSync(sourcePath)) {
       fs.copyFileSync(sourcePath, destPath);
-      console.log(`Copied icon: ${iconFile}`);
+      console.log(`✅ Copied icon: ${iconFile}`);
     } else {
-      console.warn(`Warning: Icon file not found: ${iconFile}`);
-      // Create placeholder file if it's a required icon
-      if (['icon16.png', 'icon48.png', 'icon128.png'].includes(iconFile)) {
-        console.log(`Creating empty placeholder for required icon: ${iconFile}`);
+      console.warn(`⚠️ Warning: Icon file not found: ${iconFile}`);
+      
+      // Find a substitute icon to use
+      const substIcon = existingIcons[0]; // Use the first available icon as fallback
+      if (substIcon) {
+        console.log(`Using ${substIcon} as substitute for missing ${iconFile}`);
+        fs.copyFileSync(
+          path.join(ICONS_DIR, substIcon),
+          destPath
+        );
+      } else {
+        // Create an empty placeholder only if we have no other icons
+        console.log(`Creating placeholder for missing icon: ${iconFile}`);
         fs.writeFileSync(destPath, '');
       }
     }
   } catch (e) {
-    console.warn(`Warning: Error copying icon ${iconFile}: ${e.message}`);
+    console.warn(`⚠️ Warning: Error handling icon ${iconFile}: ${e.message}`);
   }
 });
 
