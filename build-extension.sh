@@ -37,6 +37,11 @@ if [ ! -f "dist-extension/utils/urlUtils.js" ]; then
   exit 1
 fi
 
+if [ ! -f "dist-extension/popup.html" ]; then
+  echo "ERROR: popup.html is missing from the build!"
+  exit 1
+fi
+
 # Print environment info for verification
 if [[ "$BUILD_ENV" == "preview" ]]; then
   echo ""
