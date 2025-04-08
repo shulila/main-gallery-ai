@@ -1,3 +1,4 @@
+
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -29,7 +30,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
       console.warn("Detected auth callback on incorrect domain, redirecting to production domain");
       const correctedURL = currentURL.replace(
         "preview-main-gallery-ai.lovable.app",
-        "main-gallery-hub.lovable.app"
+        "main-gallery-ai.lovable.app"
       );
       console.log("Redirecting to:", correctedURL);
       window.location.href = correctedURL;

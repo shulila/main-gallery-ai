@@ -396,7 +396,7 @@ console.log('Created environment.js with explicit environment settings');
 fs.writeFileSync(path.join(OUTPUT_DIR, 'utils', 'environment.js'), environmentJs);
 console.log('Created utils/environment.js with explicit environment settings');
 
-// Process content.js for domain references
+// Processing content.js for domain references
 try {
   const contentPath = path.join(SOURCE_DIR, 'content.js');
   const contentDestPath = path.join(OUTPUT_DIR, 'content.js');

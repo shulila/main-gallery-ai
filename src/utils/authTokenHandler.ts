@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -225,7 +224,7 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
       console.warn('Detected token on preview domain - redirecting to production domain');
       const correctedURL = url.replace(
         'preview-main-gallery-ai.lovable.app',
-        'main-gallery-hub.lovable.app'
+        'main-gallery-ai.lovable.app'
       );
       window.location.href = correctedURL;
       return true;
