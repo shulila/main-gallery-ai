@@ -6,8 +6,8 @@ import { isPreviewEnvironment, getBaseUrl, getAuthUrl as getEnvironmentAuthUrl }
 // Extension ID - important for OAuth flow
 const EXTENSION_ID = chrome.runtime.id || 'oapmlmnmepbgiafhbbkjbkbppfdclknlb';
 
-// Use the correct Preview OAuth client ID
-const GOOGLE_CLIENT_ID = '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com';
+// Use the correct OAuth client ID for MainGalleryAI
+const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
 
 // Get the production auth callback URL
 const getProductionRedirectUrl = () => {
@@ -41,7 +41,7 @@ const getApiUrl = () => {
 
 // Get Google OAuth client ID
 const getGoogleClientId = () => {
-  // Always use the Preview client ID for extension OAuth flow
+  // Always use the correct client ID for MainGalleryAI OAuth flow
   return GOOGLE_CLIENT_ID;
 };
 
@@ -138,7 +138,7 @@ async function handleInPopupGoogleLogin() {
   try {
     logger.info('Starting in-popup Google login flow with chrome.identity');
     
-    // Use the fixed Preview client ID
+    // Use the correct client ID for MainGalleryAI
     const clientId = getGoogleClientId();
     const redirectURL = getProductionRedirectUrl(); // Use the full redirect URL as specified
     
@@ -171,7 +171,14 @@ async function handleInPopupGoogleLogin() {
         async (responseUrl) => {
           if (chrome.runtime.lastError) {
             logger.error('Auth Error:', chrome.runtime.lastError);
-            reject(new Error(chrome.runtime.lastError.message));
+            
+            // Improved error message for invalid client
+            if (chrome.runtime.lastError.message.includes('invalid_client') || 
+                chrome.runtime.lastError.message.includes('OAuth')) {
+              reject(new Error('Authentication configuration error – please contact support'));
+            } else {
+              reject(new Error(chrome.runtime.lastError.message));
+            }
             return;
           }
           
@@ -260,6 +267,13 @@ async function handleInPopupGoogleLogin() {
     });
   } catch (error) {
     logger.error('Error initiating in-popup Google login:', error);
+    
+    // Improved error message for authentication configuration issues
+    if (error.message && (error.message.includes('invalid_client') || 
+                         error.message.includes('OAuth'))) {
+      throw new Error('Authentication configuration error – please contact support');
+    }
+    
     throw error;
   }
 }

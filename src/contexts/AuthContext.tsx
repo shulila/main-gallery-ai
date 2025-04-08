@@ -18,10 +18,10 @@ const getProductionAuthRedirectUrl = () => {
   }
   
   // Always fallback to production URL for all other environments
-  return 'https://main-gallery-hub.lovable.app/auth/callback';
+  return 'https://main-gallery-ai.lovable.app/auth/callback';
 };
 
-// Updated Google OAuth Client ID - use the same one as the extension
+// Updated Google OAuth Client ID for MainGalleryAI
 const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
 
 // Create a single Supabase client instance to be used throughout the app
@@ -314,7 +314,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `https://main-gallery-hub.lovable.app/auth?tab=login`,
+        redirectTo: `https://main-gallery-ai.lovable.app/auth?tab=login`,
       });
       
       if (error) {
