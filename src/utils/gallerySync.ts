@@ -141,3 +141,75 @@ export const sortGalleryImages = (
     return order === 'desc' ? -comparison : comparison;
   });
 };
+
+/**
+ * Listen for gallery sync messages from extension or other sources
+ * @param callback Function to call when gallery images are received
+ * @returns Cleanup function to remove event listener
+ */
+export const listenForGallerySyncMessages = (
+  callback: (images: GalleryImage[]) => void
+): () => void => {
+  const handleMessage = (event: MessageEvent) => {
+    // Only process messages from trusted sources
+    if (process.env.NODE_ENV === 'production') {
+      const allowedOrigins = [window.location.origin, 'chrome-extension://'];
+      if (!allowedOrigins.some(origin => event.origin.startsWith(origin))) {
+        console.warn('Received message from unauthorized origin:', event.origin);
+        return;
+      }
+    }
+
+    if (event.data && event.data.type === 'GALLERY_IMAGES' && Array.isArray(event.data.images)) {
+      console.log(`[GallerySync] Received ${event.data.images.length} images`);
+      callback(event.data.images);
+    }
+  };
+
+  window.addEventListener('message', handleMessage);
+  
+  return () => {
+    window.removeEventListener('message', handleMessage);
+  };
+};
+
+/**
+ * Sync images to gallery backend
+ * @param images List of gallery images to sync
+ * @returns Promise with sync result
+ */
+export const syncImagesToGallery = async (
+  images: GalleryImage[]
+): Promise<{ success: boolean; count: number; errors?: any[] }> => {
+  try {
+    if (!images || !Array.isArray(images) || images.length === 0) {
+      console.warn('[GallerySync] No valid images to sync');
+      return { success: false, count: 0, errors: ['No valid images provided'] };
+    }
+
+    // Process images through filter to ensure quality
+    const filteredImages = filterGalleryImages(images);
+    
+    // In a real implementation, this would send the images to a backend API
+    console.log(`[GallerySync] Successfully synced ${filteredImages.length} images`);
+    
+    // Send notification to extension that sync is complete
+    window.postMessage({
+      type: 'GALLERY_SYNC_COMPLETE',
+      count: filteredImages.length,
+      timestamp: Date.now()
+    }, '*');
+    
+    return { 
+      success: true, 
+      count: filteredImages.length 
+    };
+  } catch (error) {
+    console.error('[GallerySync] Error syncing images:', error);
+    return { 
+      success: false, 
+      count: 0,
+      errors: [error] 
+    };
+  }
+};

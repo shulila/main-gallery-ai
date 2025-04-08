@@ -82,3 +82,4 @@ interface Chrome {
 interface Window {
   chrome?: Chrome;
 }
+
