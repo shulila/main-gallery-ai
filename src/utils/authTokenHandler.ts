@@ -359,7 +359,7 @@ export const handleProductionOAuthToken = (): boolean => {
     const url = window.location.href;
     
     // Detect if we're on preview or production
-    const isProdDomain = currentHostname.includes('main-gallery-hub.lovable.app');
+    const isProdDomain = currentHostname.includes('main-gallery-ai.lovable.app');
     const isPreviewDomain = currentHostname.includes('preview-main-gallery-ai.lovable.app');
     const isCallback = url.includes('/callback') || url.includes('access_token');
     
@@ -380,7 +380,7 @@ export const handleProductionOAuthToken = (): boolean => {
         console.warn('Token found on preview domain, redirecting to production');
         const correctedURL = url.replace(
           'preview-main-gallery-ai.lovable.app',
-          'main-gallery-hub.lovable.app'
+          'main-gallery-ai.lovable.app'
         );
         window.location.href = correctedURL;
         return true;

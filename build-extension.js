@@ -1,4 +1,3 @@
-
 /**
  * MainGallery.AI Chrome Extension Build Script
  * 
