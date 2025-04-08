@@ -35,6 +35,64 @@ const SUPPORTED_DOMAINS = [
   { pattern: /kaiber\.ai/i, name: "Kaiber" },
   // Veed.io
   { pattern: /veed\.io/i, name: "Veed" },
+  // Fluxlabs
+  { pattern: /fluxlabs\.ai/i, name: "Fluxlabs" },
+  // Krea.ai
+  { pattern: /krea\.ai/i, name: "Krea" },
+  // HailuoAI
+  { pattern: /hailuoai\.video/i, name: "HailuoAI" },
+  // LTX Studio
+  { pattern: /app\.ltx\.studio/i, name: "LTX Studio" },
+  // D-ID
+  { pattern: /studio\.d-id\.com/i, name: "D-ID" },
+  // HeyGen
+  { pattern: /app\.heygen\.com/i, name: "HeyGen" },
+  // Reve.art
+  { pattern: /preview\.reve\.art/i, name: "Reve.art" },
+  // Lexica
+  { pattern: /lexica\.art/i, name: "Lexica" },
+  // Looka
+  { pattern: /looka\.com/i, name: "Looka" },
+  // Reroom.ai
+  { pattern: /reroom\.ai/i, name: "Reroom" },
+  // Genmo.ai
+  { pattern: /genmo\.ai/i, name: "Genmo" },
+  // Botika.io
+  { pattern: /app\.botika\.io/i, name: "Botika" },
+  // Playground.com
+  { pattern: /playground\.com/i, name: "Playground" },
+  // Dream.ai
+  { pattern: /dream\.ai/i, name: "Dream AI" },
+  // Pixverse.ai
+  { pattern: /app\.pixverse\.ai/i, name: "Pixverse" },
+  // Starryai
+  { pattern: /starryai\.com/i, name: "Starry AI" },
+  // Fotor
+  { pattern: /fotor\.com/i, name: "Fotor" },
+  // DeviantArt
+  { pattern: /deviantart\.com/i, name: "DeviantArt" },
+  // DeepAI
+  { pattern: /deepai\.org/i, name: "DeepAI" },
+  // Elai.io
+  { pattern: /app\.elai\.io/i, name: "Elai" },
+  // Rundiffusion
+  { pattern: /app\.rundiffusion\.com/i, name: "RunDiffusion" },
+  // Neural.love
+  { pattern: /neural\.love/i, name: "Neural.love" },
+  // Vidu
+  { pattern: /vidu\.com/i, name: "Vidu" },
+  // PromeAI
+  { pattern: /promeai\.pro/i, name: "PromeAI" },
+  // GenSpark
+  { pattern: /genspark\.ai/i, name: "GenSpark" },
+  // FreePik
+  { pattern: /freepik\.com/i, name: "FreePik" },
+  // Sora
+  { pattern: /sora\.com/i, name: "Sora" },
+  // KlingAI
+  { pattern: /app\.klingai\.com/i, name: "KlingAI" },
+  // Lumalabs
+  { pattern: /dream-machine\.lumalabs\.ai/i, name: "Lumalabs" }
 ];
 
 // Import required utilities - ensure proper module paths with .js extensions
@@ -429,8 +487,9 @@ function scanCurrentPage() {
   
   // Request background script to scan the current active tab
   chrome.runtime.sendMessage({ action: 'startAutoScan' }, (response) => {
-    if (chrome.runtime.lastError || !response || !response.success) {
-      logger.error('Error starting scan:', chrome.runtime.lastError || 'Unknown error');
+    const error = chrome.runtime.lastError;
+    if (error || !response || !response.success) {
+      logger.error('Error starting scan:', error?.message || 'Unknown error');
       showToast('Failed to start scanning. Please try again.', 'error');
     } else {
       logger.log('Scan started successfully');
@@ -447,10 +506,45 @@ function resetAndTryAgain() {
   showState(states.loginView);
 }
 
+// Set timeout to prevent infinite loading spinner
+const loadingTimeoutMs = 5000; // 5 seconds
+let loadingTimeout;
+
+function startLoadingTimeout() {
+  if (states.loading && loadingTimeout === undefined) {
+    loadingTimeout = setTimeout(() => {
+      // Check if we're still in loading state
+      if (states.loading.style.display !== 'none') {
+        logger.log('Loading timeout reached, showing error');
+        showError('Loading timed out. Please try again or reload the extension.');
+      }
+    }, loadingTimeoutMs);
+  }
+}
+
+function clearLoadingTimeout() {
+  if (loadingTimeout) {
+    clearTimeout(loadingTimeout);
+    loadingTimeout = undefined;
+  }
+}
+
 // Check for auth status immediately when popup opens
 document.addEventListener('DOMContentLoaded', () => {
   logger.log('Popup loaded, checking auth status');
-  checkAuthAndRedirect();
+  
+  // Start loading timeout
+  startLoadingTimeout();
+  
+  // Check authentication status
+  checkAuthAndRedirect().then(() => {
+    // Clear loading timeout once auth check completes
+    clearLoadingTimeout();
+  }).catch(error => {
+    logger.error('Error during auth check:', error);
+    clearLoadingTimeout();
+    showError('Failed to check login status. Please try again.');
+  });
   
   // Set up event listeners for Google login
   if (googleLoginBtn) {

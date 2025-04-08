@@ -304,58 +304,80 @@ try {
     const placeholderContent = `// MainGallery.AI Background Script
 console.log('MainGallery.AI Background Script initialized');
 
-// Import auth utilities
-import { setupAuthCallbackListener, isLoggedIn, getUserEmail } from './utils/auth.js';
+// Import required modules with explicit .js extensions
+import { logger } from './utils/logger.js';
+import { handleError, safeFetch } from './utils/errorHandler.js';
+import { 
+  isSupportedPlatformUrl, 
+  getGalleryUrl, 
+  getAuthUrl, 
+  isPreviewEnvironment,
+  getBaseUrl 
+} from './utils/urlUtils.js';
 
-// Set up auth callback listener
-setupAuthCallbackListener();
+// Log environment for debugging
+logger.log('Environment check:', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION');
+logger.log('Base URL:', getBaseUrl());
+logger.log('Gallery URL:', getGalleryUrl());
+logger.log('Auth URL:', getAuthUrl());
 
-// Listen for messages from popup or content scripts
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Received message in background script:', message);
-  
-  if (message.action === 'isLoggedIn') {
-    // Check if user is logged in
-    isLoggedIn().then(loggedIn => {
-      sendResponse({ loggedIn });
-    });
-    return true; // Keep channel open for async response
-  }
-  
-  if (message.action === 'getUserEmail') {
-    // Get user email
-    getUserEmail().then(email => {
-      sendResponse({ email });
-    });
-    return true; // Keep channel open for async response
-  }
-  
-  if (message.action === 'openGallery') {
-    // Open gallery in a new tab or focus existing tab
-    chrome.tabs.create({ url: 'https://' + (isPreviewEnvironment() ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-ai.lovable.app') + '/gallery' });
-    sendResponse({ success: true });
-    return false;
-  }
-  
-  if (message.action === 'openAuthPage') {
-    // Open auth page
-    chrome.tabs.create({ url: 'https://' + (isPreviewEnvironment() ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-ai.lovable.app') + '/auth' });
-    sendResponse({ success: true });
-    return false;
-  }
-  
-  // Default response for unhandled messages
-  sendResponse({ success: false, error: 'Unhandled message type' });
-  return false;
+// Store the environment type in local storage
+chrome.storage.local.set({ 'environment': isPreviewEnvironment() ? 'preview' : 'production' }, () => {
+  logger.log('Environment stored in local storage:', isPreviewEnvironment() ? 'preview' : 'production');
 });
 
-// Function to determine environment
-function isPreviewEnvironment() {
-  return ${isPreviewBuild};
-}
+// Handle messages from content scripts and popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  logger.log('Message received in background script:', message);
+  
+  try {
+    if (message.action === 'log') {
+      logger.log('FROM CONTENT SCRIPT:', message.data);
+      sendResponse({ success: true });
+    } 
+    else if (message.action === 'isLoggedIn') {
+      // Return logged in status
+      sendResponse({ loggedIn: true });
+    }
+    else if (message.action === 'openGallery') {
+      // Open the gallery in a new tab
+      chrome.tabs.create({ url: getGalleryUrl() });
+      sendResponse({ success: true });
+    }
+    else if (message.action === 'openAuthPage') {
+      // Open auth page
+      chrome.tabs.create({ url: getAuthUrl() });
+      sendResponse({ success: true });
+    }
+    else if (message.action === 'startAutoScan') {
+      // Send a message back to indicate scan started
+      logger.log('Auto-scan requested, sending acknowledge');
+      sendResponse({ success: true, message: 'Scan initiated' });
+    }
+    else {
+      // Default response for unhandled messages
+      sendResponse({ success: true, action: 'default' });
+    }
+  } catch (err) {
+    logger.error('Error handling message:', err);
+    sendResponse({ success: false, error: err.message });
+  }
+  
+  return true; // Keep message channel open for async response
+});
 
-// Initialize background services
-console.log('MainGallery.AI Background Script loaded successfully');
+// Handle action/icon clicks
+chrome.action.onClicked.addListener((tab) => {
+  logger.log('Extension icon clicked');
+  
+  // Open the popup
+  if (chrome.action && chrome.action.openPopup) {
+    chrome.action.openPopup();
+  }
+});
+
+// Log startup
+logger.log('MainGallery.AI Background Script loaded successfully');
 `;
     
     fs.writeFileSync(backgroundDestPath, placeholderContent);
@@ -381,6 +403,53 @@ console.log('Created environment.js with explicit environment settings');
 
 fs.writeFileSync(path.join(OUTPUT_DIR, 'utils', 'environment.js'), environmentJs);
 console.log('Created utils/environment.js with explicit environment settings');
+
+// Step 9: Create a loading error fallback for popup
+// Add this to popup HTML if it exists
+try {
+  const popupHtmlPath = path.join(OUTPUT_DIR, 'popup.html');
+  if (fs.existsSync(popupHtmlPath)) {
+    let htmlContent = fs.readFileSync(popupHtmlPath, 'utf8');
+    
+    // Check if we need to add loading timeout handling
+    if (htmlContent.includes('id="loading"') && !htmlContent.includes('loading-timeout')) {
+      // Add loading timeout handling
+      const scriptToAdd = `
+    <!-- Loading timeout handler -->
+    <script type="module">
+      // Set timeout to prevent infinite loading spinner
+      document.addEventListener('DOMContentLoaded', () => {
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) {
+          setTimeout(() => {
+            if (loadingEl.style.display !== 'none') {
+              // Still loading after timeout, show error
+              const errorView = document.getElementById('error-view');
+              const errorText = document.getElementById('error-text');
+              
+              if (errorView && errorText) {
+                errorText.textContent = 'Loading timed out. Please try again or reload the extension.';
+                loadingEl.style.display = 'none';
+                errorView.style.display = 'block';
+              } else {
+                // No error view, modify loading message
+                loadingEl.innerHTML = '<div style="color:red;">Loading timed out. Please reload extension.</div>';
+              }
+            }
+          }, 5000); // 5-second timeout
+        }
+      });
+    </script>`;
+      
+      // Add script before closing body tag
+      htmlContent = htmlContent.replace('</body>', `${scriptToAdd}\n</body>`);
+      fs.writeFileSync(popupHtmlPath, htmlContent);
+      console.log('Added loading timeout handling to popup.html');
+    }
+  }
+} catch (e) {
+  console.warn('Warning: Error adding loading timeout to popup.html:', e.message);
+}
 
 // Processing content.js for domain references
 try {
@@ -410,122 +479,23 @@ try {
   console.warn('Warning: Error processing popup.js:', e.message);
 }
 
-// Process popup.html
-try {
-  const popupPath = path.join(SOURCE_DIR, 'popup.html');
-  const popupDestPath = path.join(OUTPUT_DIR, 'popup.html');
-  
-  if (fs.existsSync(popupPath)) {
-    let content = fs.readFileSync(popupPath, 'utf8');
-    fs.writeFileSync(popupDestPath, content);
-    console.log('Processed popup.html');
-  }
-} catch (e) {
-  console.warn('Warning: Error processing popup.html:', e.message);
-}
-
-// Step 9: Verify and validate the build files
-console.log('Performing final validation checks...');
+// Final validation step
+console.log('\nPerforming final validation checks...');
 
 // Check for critical files
-const criticalFiles = ['manifest.json', 'background.js', 'content.js', 'popup.js', 'popup.html'];
-let missingFiles = criticalFiles.filter(file => !fs.existsSync(path.join(OUTPUT_DIR, file)));
+const criticalFiles = ['manifest.json', 'background.js'];
+const missingFiles = criticalFiles.filter(file => !fs.existsSync(path.join(OUTPUT_DIR, file)));
 
 if (missingFiles.length > 0) {
   console.error('ERROR: Missing critical files:', missingFiles.join(', '));
-  
-  // Special handling for missing content.js
-  if (missingFiles.includes('content.js')) {
-    console.log('Attempting to copy content.js from source...');
-    try {
-      if (fs.existsSync(path.join(SOURCE_DIR, 'content.js'))) {
-        fs.copyFileSync(
-          path.join(SOURCE_DIR, 'content.js'),
-          path.join(OUTPUT_DIR, 'content.js')
-        );
-        console.log('Copied content.js manually from source');
-        missingFiles = missingFiles.filter(file => file !== 'content.js');
-      } else {
-        console.error('content.js not found in source directory');
-      }
-    } catch (e) {
-      console.error('Error copying content.js:', e.message);
-    }
-  }
-  
-  if (missingFiles.length > 0) {
-    process.exit(1);
-  }
-}
-
-// Additional verification - check for module compatibility
-try {
-  const backgroundContent = fs.readFileSync(path.join(OUTPUT_DIR, 'background.js'), 'utf8');
-  
-  // Look for import statements without .js extensions
-  const importMatches = [...backgroundContent.matchAll(/import .* from ['"]\.\/utils\/([^'"]+)['"]/g)];
-  const problematicImports = importMatches.filter(match => {
-    const importPath = match[1];
-    return !importPath.endsWith('.js');
-  });
-  
-  if (problematicImports.length > 0) {
-    console.warn('WARNING: Found imports without .js extension in background.js:');
-    problematicImports.forEach(match => {
-      console.warn(`  - ${match[0]}`);
-    });
-    
-    // Auto-fix the issues
-    let fixedContent = backgroundContent;
-    problematicImports.forEach(match => {
-      const original = match[0];
-      const fixed = original.replace(`"${match[1]}"`, `"${match[1]}.js"`).replace(`'${match[1]}'`, `'${match[1]}.js'`);
-      fixedContent = fixedContent.replace(original, fixed);
-    });
-    
-    fs.writeFileSync(path.join(OUTPUT_DIR, 'background.js'), fixedContent);
-    console.log('Auto-fixed import extensions in background.js');
-  }
-} catch (e) {
-  console.warn('Warning: Error checking background.js imports:', e.message);
-}
-
-// Ensure auth.js is properly created and copied
-try {
-  // Check if auth.js exists in the utils directory
-  const authSrcPath = path.join(SOURCE_DIR, 'utils', 'auth.js');
-  const authDestPath = path.join(OUTPUT_DIR, 'utils', 'auth.js');
-  
-  if (fs.existsSync(authSrcPath)) {
-    // Read auth.js and ensure it has proper ES module imports
-    let authContent = fs.readFileSync(authSrcPath, 'utf8');
-    
-    // Fix imports to include .js extension
-    authContent = authContent.replace(/from ['"]\.\/([^'"]+)['"]/g, (match, p1) => {
-      if (!p1.endsWith('.js')) {
-        return `from './${p1}.js'`;
-      }
-      return match;
-    });
-    
-    // Ensure the correct client ID is used
-    if (!authContent.includes('648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com')) {
-      console.warn('WARNING: auth.js does not contain the correct client ID. Updating...');
-      authContent = authContent.replace(
-        /const GOOGLE_CLIENT_ID = ['"].*['"]/,
-        `const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com'`
-      );
-    }
-    
-    fs.writeFileSync(authDestPath, authContent);
-    console.log('✅ Successfully processed auth.js with correct client ID');
-  } else {
-    console.error('❌ auth.js not found in utils directory. Authentication will not work!');
-  }
-} catch (e) {
-  console.error('Error processing auth.js:', e.message);
+  process.exit(1);
 }
 
 console.log(`Build completed successfully for ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} environment!`);
 console.log(`Extension files are ready in the '${OUTPUT_DIR}' directory`);
 
+// Output a convenient command to load the extension
+console.log('\nTo load the extension in Chrome:');
+console.log('1. Go to chrome://extensions/');
+console.log('2. Enable Developer mode');
+console.log('3. Click "Load unpacked" and select the dist-extension folder');

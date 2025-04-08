@@ -196,7 +196,7 @@ export async function ensureContentScriptLoaded(tab) {
       });
       
       // Wait a bit to ensure content script initializes
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 500)); // Increased from 300ms to 500ms
       
       // Verify content script was loaded by sending a ping
       try {

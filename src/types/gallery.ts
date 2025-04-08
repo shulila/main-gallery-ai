@@ -34,20 +34,25 @@ export type GalleryImage = {
   createdAt?: string;
 };
 
-// List of supported domains for auto-sync
+// Updated list of supported domains for auto-sync per the approved list
 export const SUPPORTED_DOMAINS = [
   'midjourney.com',
   'www.midjourney.com',
   'leonardo.ai',
   'app.leonardo.ai',
-  'app.runwayml.com',
-  'dreamstudio.ai',
+  'freepik.com',
+  'www.freepik.com',
+  'app.klingai.com',
+  'dream-machine.lumalabs.ai',
   'pika.art',
   'krea.ai',
+  'www.krea.ai',
   'hailuoai.video',
+  'sora.com',
   'app.ltx.studio',
   'firefly.adobe.com',
   'fluxlabs.ai',
+  'www.fluxlabs.ai',
   'studio.d-id.com',
   'app.heygen.com',
   'preview.reve.art',
@@ -56,33 +61,34 @@ export const SUPPORTED_DOMAINS = [
   'looka.com',
   'reroom.ai',
   'genmo.ai',
+  'www.genmo.ai',
   'app.botika.io',
   'playground.com',
   'dream.ai',
   'app.pixverse.ai',
-  'craiyon.com',
   'starryai.com',
   'fotor.com',
+  'www.fotor.com',
   'deviantart.com',
+  'www.deviantart.com',
   'deepai.org',
   'app.elai.io',
   'app.rundiffusion.com',
   'neural.love',
   'vidu.com',
+  'www.vidu.com',
   'promeai.pro',
+  'www.promeai.pro',
   'genspark.ai',
-  'freepik.com',
-  'app.klingai.com',
-  'dream-machine.lumalabs.ai',
-  'sora.com'
+  'www.genspark.ai'
 ];
 
-// List of supported paths/routes that are gallery or creation pages
+// List of supported paths/routes that are gallery or creation pages - updated per the approved list
 export const SUPPORTED_PATHS = [
   '/imagine',
   '/archive',
   '/library',
-  '/projects',
+  '/pikaso/projects',
   '/global/user-assets/materials',
   '/ideas',
   '/my-library',
@@ -104,10 +110,6 @@ export const SUPPORTED_PATHS = [
   '/asset/video',
   '/asset/album',
   '/asset/character',
-  '/user/account/history',
-  '/cloud/all-creations',
-  '/cloud/all-projects',
-  '/dreamup',
   '/dashboard/images',
   '/dashboard/videos',
   '/dashboard/characters',
@@ -116,7 +118,8 @@ export const SUPPORTED_PATHS = [
   '/orders',
   '/mycreations',
   '/userAssets',
-  '/me'
+  '/me',
+  '/dreamup'
 ];
 
 // Function to check if a URL is from a supported domain and path
