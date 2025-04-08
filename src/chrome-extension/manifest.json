@@ -23,7 +23,7 @@
     "https://*.discord.com/*",
     "https://*.playgroundai.com/*",
     "https://*.nightcafe.studio/*",
-    "https://*.main-gallery-hub.lovable.app/*",
+    "https://*.main-gallery-ai.lovable.app/*",
     "https://*.preview-main-gallery-ai.lovable.app/*"
   ],
   "background": {

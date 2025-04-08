@@ -19,7 +19,7 @@ export const getAuthBaseUrl = (): string => {
   }
   
   // Default to production domain
-  return 'https://main-gallery-hub.lovable.app';
+  return 'https://main-gallery-ai.lovable.app';
 };
 
 /**

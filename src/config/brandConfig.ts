@@ -7,7 +7,7 @@ export const brandConfig = {
   description: "Connect all your AI art platforms in one click and experience your entire creative universe in a beautifully organized gallery without any file transfers.",
   
   // URLs
-  baseUrl: "https://main-gallery-hub.lovable.app",
+  baseUrl: "https://main-gallery-ai.lovable.app",
   
   // Contact info
   email: "contact@maingallery.ai",

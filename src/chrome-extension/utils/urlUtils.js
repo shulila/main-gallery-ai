@@ -95,7 +95,7 @@ export function getBaseUrl() {
   }
   
   // Default to production domain
-  return 'https://main-gallery-hub.lovable.app';
+  return 'https://main-gallery-ai.lovable.app';
 }
 
 /**
@@ -134,7 +134,7 @@ export function isAuthCallbackUrl(url) {
   
   try {
     return (
-      url.includes('main-gallery-hub.lovable.app/auth/callback') || 
+      url.includes('main-gallery-ai.lovable.app/auth/callback') || 
       url.includes('preview-main-gallery-ai.lovable.app/auth/callback') ||
       url.includes('/auth?access_token=')
     );

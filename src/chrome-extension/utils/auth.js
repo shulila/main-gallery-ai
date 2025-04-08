@@ -1,4 +1,3 @@
-
 // Auth utilities for Chrome extension
 import { logger } from './logger.js';
 import { handleError, safeFetch } from './errorHandler.js';
@@ -12,7 +11,7 @@ const GOOGLE_CLIENT_ID = '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.goo
 
 // Get the production auth callback URL
 const getProductionRedirectUrl = () => {
-  return 'https://main-gallery-hub.lovable.app/auth/callback';
+  return 'https://main-gallery-ai.lovable.app/auth/callback';
 };
 
 // Get the preview auth callback URL
@@ -311,7 +310,7 @@ function openAuthPage(tabId = null, options = {}) {
     try {
       const fallbackUrl = isPreviewEnvironment() 
         ? 'https://preview-main-gallery-ai.lovable.app/auth' 
-        : 'https://main-gallery-hub.lovable.app/auth';
+        : 'https://main-gallery-ai.lovable.app/auth';
         
       if (tabId) {
         chrome.tabs.update(tabId, { url: fallbackUrl });
@@ -436,7 +435,7 @@ function setupAuthCallbackListener() {
       chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         // Only process completed loads with our auth callback URL
         if (changeInfo.status === 'complete' && tab.url && 
-            (tab.url.includes('main-gallery-hub.lovable.app/auth/callback') || 
+            (tab.url.includes('main-gallery-ai.lovable.app/auth/callback') || 
              tab.url.includes('preview-main-gallery-ai.lovable.app/auth/callback') ||
              tab.url.includes('/auth?access_token='))) {
           
@@ -481,7 +480,7 @@ function setupAuthCallbackListener() {
                     type: 'basic',
                     iconUrl: 'icons/icon128.png',
                     title: 'Login Successful',
-                    message: 'You are now logged in to MainGallery'
+                    message: 'You are now logged in to MainGallery.AI'
                   });
                 } catch (err) {
                   handleError('showAuthSuccessNotification', err, { silent: true });
@@ -538,5 +537,5 @@ export {
   getPreviewRedirectUrl,
   getExtensionRedirectUrl,
   getGoogleClientId,
-  handleEmailPasswordLogin  // Added the export that was missing
+  handleEmailPasswordLogin
 };

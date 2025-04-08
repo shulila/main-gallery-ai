@@ -210,7 +210,7 @@ try {
           // Also replace any hardcoded URLs
           if (isPreviewBuild) {
             content = content.replace(
-              /'https:\/\/main-gallery-hub\.lovable\.app'/g, 
+              /'https:\/\/main-gallery-ai\.lovable\.app'/g, 
               "'https://preview-main-gallery-ai.lovable.app'"
             );
             console.log('Replaced hardcoded production URLs with preview URLs');
@@ -252,6 +252,9 @@ try {
           }
           return match;
         });
+
+        // Replace all main-gallery-hub with main-gallery-ai
+        content = content.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
         
         // Write the modified file
         fs.writeFileSync(path.join(UTILS_DEST, file), content);
@@ -303,6 +306,9 @@ try {
       console.log('Verifying handleEmailPasswordLogin import is present in background.js');
     }
     
+    // Replace all main-gallery-hub with main-gallery-ai
+    content = content.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
+    
     // Write the modified background.js
     fs.writeFileSync(backgroundDestPath, content);
     console.log('Successfully processed background.js');
@@ -341,14 +347,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   if (message.action === 'openGallery') {
     // Open gallery in a new tab or focus existing tab
-    chrome.tabs.create({ url: 'https://' + (isPreviewEnvironment() ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-hub.lovable.app') + '/gallery' });
+    chrome.tabs.create({ url: 'https://' + (isPreviewEnvironment() ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-ai.lovable.app') + '/gallery' });
     sendResponse({ success: true });
     return false;
   }
   
   if (message.action === 'openAuthPage') {
     // Open auth page
-    chrome.tabs.create({ url: 'https://' + (isPreviewEnvironment() ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-hub.lovable.app') + '/auth' });
+    chrome.tabs.create({ url: 'https://' + (isPreviewEnvironment() ? 'preview-main-gallery-ai.lovable.app' : 'main-gallery-ai.lovable.app') + '/auth' });
     sendResponse({ success: true });
     return false;
   }
@@ -377,10 +383,10 @@ console.log('MainGallery.AI Background Script loaded successfully');
 // Step 8: Create environment.js file to explicitly set the environment
 const environmentJs = `// Environment configuration - Injected during build
 export const ENVIRONMENT = "${isPreviewBuild ? 'preview' : 'production'}";
-export const BASE_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app' : 'https://main-gallery-hub.lovable.app'}";
-export const API_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/api' : 'https://main-gallery-hub.lovable.app/api'}";
-export const AUTH_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/auth' : 'https://main-gallery-hub.lovable.app/auth'}";
-export const GALLERY_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/gallery' : 'https://main-gallery-hub.lovable.app/gallery'}";
+export const BASE_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app' : 'https://main-gallery-ai.lovable.app'}";
+export const API_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/api' : 'https://main-gallery-ai.lovable.app/api'}";
+export const AUTH_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/auth' : 'https://main-gallery-ai.lovable.app/auth'}";
+export const GALLERY_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/gallery' : 'https://main-gallery-ai.lovable.app/gallery'}";
 export const OAUTH_CLIENT_ID = "733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com";
 `;
 
@@ -390,6 +396,66 @@ console.log('Created environment.js with explicit environment settings');
 
 fs.writeFileSync(path.join(OUTPUT_DIR, 'utils', 'environment.js'), environmentJs);
 console.log('Created utils/environment.js with explicit environment settings');
+
+// Process content.js for domain references
+try {
+  const contentPath = path.join(SOURCE_DIR, 'content.js');
+  const contentDestPath = path.join(OUTPUT_DIR, 'content.js');
+  
+  if (fs.existsSync(contentPath)) {
+    let content = fs.readFileSync(contentPath, 'utf8');
+    
+    // Replace all main-gallery-hub with main-gallery-ai
+    content = content.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
+    
+    // Write the modified content.js
+    fs.writeFileSync(contentDestPath, content);
+    console.log('Processed content.js with updated domain references');
+  }
+} catch (e) {
+  console.warn('Warning: Error processing content.js:', e.message);
+}
+
+// Process popup.js for domain references
+try {
+  const popupPath = path.join(SOURCE_DIR, 'popup.js');
+  const popupDestPath = path.join(OUTPUT_DIR, 'popup.js');
+  
+  if (fs.existsSync(popupPath)) {
+    let content = fs.readFileSync(popupPath, 'utf8');
+    
+    // Replace all main-gallery-hub with main-gallery-ai
+    content = content.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
+    
+    // Write the modified popup.js
+    fs.writeFileSync(popupDestPath, content);
+    console.log('Processed popup.js with updated domain references');
+  }
+} catch (e) {
+  console.warn('Warning: Error processing popup.js:', e.message);
+}
+
+// Process popup.html for domain references and branding
+try {
+  const popupPath = path.join(SOURCE_DIR, 'popup.html');
+  const popupDestPath = path.join(OUTPUT_DIR, 'popup.html');
+  
+  if (fs.existsSync(popupPath)) {
+    let content = fs.readFileSync(popupPath, 'utf8');
+    
+    // Replace all main-gallery-hub with main-gallery-ai
+    content = content.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
+    
+    // Replace any text references to Main Gallery Hub with MainGallery.AI
+    content = content.replace(/Main Gallery Hub/g, 'MainGallery.AI');
+    
+    // Write the modified popup.html
+    fs.writeFileSync(popupDestPath, content);
+    console.log('Processed popup.html with updated domain references and branding');
+  }
+} catch (e) {
+  console.warn('Warning: Error processing popup.html:', e.message);
+}
 
 // Step 9: Verify and validate the build files
 console.log('Performing final validation checks...');
@@ -484,8 +550,11 @@ try {
       );
     }
     
+    // Replace all main-gallery-hub with main-gallery-ai
+    authContent = authContent.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
+    
     fs.writeFileSync(authDestPath, authContent);
-    console.log('✅ Successfully processed auth.js with correct client ID');
+    console.log('✅ Successfully processed auth.js with correct client ID and domain references');
   } else {
     console.error('❌ auth.js not found in utils directory. Authentication will not work!');
   }
