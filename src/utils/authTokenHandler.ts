@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -241,8 +242,7 @@ export const handleOAuthTokenFromHash = async (callbackUrl?: string): Promise<bo
         
         if (accessToken) {
           console.log('[MainGallery] Found access token in URL query parameters');
-          processAccessToken(accessToken, params.get('refresh_token') || '', params.get('email') || 'User', isDev);
-          return true;
+          return await processAccessToken(accessToken, params.get('refresh_token') || '', params.get('email') || 'User', isDev);
         }
       }
       

@@ -1,3 +1,4 @@
+
 // Shared type definitions for gallery images
 export type GalleryImage = {
   id: string;
@@ -37,38 +38,85 @@ export type GalleryImage = {
 export const SUPPORTED_DOMAINS = [
   'midjourney.com',
   'www.midjourney.com',
-  'openai.com',
-  'chat.openai.com',
-  'labs.openai.com',
   'leonardo.ai',
-  'www.leonardo.ai',
   'app.leonardo.ai',
-  'runwayml.com',
-  'www.runwayml.com',
-  'runway.com',
-  'pika.art',
-  'www.pika.art',
-  'beta.dreamstudio.ai',
+  'app.runwayml.com',
   'dreamstudio.ai',
-  'stability.ai'
+  'pika.art',
+  'krea.ai',
+  'hailuoai.video',
+  'app.ltx.studio',
+  'firefly.adobe.com',
+  'fluxlabs.ai',
+  'studio.d-id.com',
+  'app.heygen.com',
+  'preview.reve.art',
+  'lexica.art',
+  'creator.nightcafe.studio',
+  'looka.com',
+  'reroom.ai',
+  'genmo.ai',
+  'app.botika.io',
+  'playground.com',
+  'dream.ai',
+  'app.pixverse.ai',
+  'craiyon.com',
+  'starryai.com',
+  'fotor.com',
+  'deviantart.com',
+  'deepai.org',
+  'app.elai.io',
+  'app.rundiffusion.com',
+  'neural.love',
+  'vidu.com',
+  'promeai.pro',
+  'genspark.ai',
+  'freepik.com',
+  'app.klingai.com',
+  'dream-machine.lumalabs.ai',
+  'sora.com'
 ];
 
 // List of supported paths/routes that are gallery or creation pages
 export const SUPPORTED_PATHS = [
   '/imagine',
   '/archive',
-  '/app',
-  '/feed',
-  '/gallery',
-  '/create',
-  '/generations',
+  '/library',
   '/projects',
-  '/dalle',
-  '/playground',
+  '/global/user-assets/materials',
+  '/ideas',
+  '/my-library',
   '/assets',
-  '/workspace',
-  '/dream',
-  '/video'
+  '/mine',
+  '/media-manager',
+  '/files',
+  '/creations',
+  '/video-studio',
+  '/projects',
+  '/app',
+  '/history',
+  '/my-creations',
+  '/dashboard',
+  '/account/history',
+  '/play/creations',
+  '/design/my-designs',
+  '/profile',
+  '/asset/video',
+  '/asset/album',
+  '/asset/character',
+  '/user/account/history',
+  '/cloud/all-creations',
+  '/cloud/all-projects',
+  '/dreamup',
+  '/dashboard/images',
+  '/dashboard/videos',
+  '/dashboard/characters',
+  '/videos',
+  '/runnit/library',
+  '/orders',
+  '/mycreations',
+  '/userAssets',
+  '/me'
 ];
 
 // Function to check if a URL is from a supported domain and path
@@ -79,12 +127,17 @@ export function isSupportedURL(url: string): boolean {
       urlObj.hostname === domain || urlObj.hostname.endsWith(`.${domain}`)
     );
     
-    // Check if the path is supported
+    // Exact matching for paths
     const isPathSupported = SUPPORTED_PATHS.some(path => 
       urlObj.pathname === path || urlObj.pathname.startsWith(path)
     );
-
-    // Special case for OpenAI dalleCreate path
+    
+    // Special cases for specific platforms
+    if (urlObj.hostname.includes('firefly.adobe.com') && urlObj.pathname.includes('/files') && urlObj.search.includes('tab=generationHistory')) {
+      return true;
+    }
+    
+    // Special case for OpenAI
     if (urlObj.hostname.includes('openai.com') && 
         (urlObj.pathname.includes('/image') || urlObj.pathname.includes('/dalle'))) {
       return true;

@@ -30,6 +30,9 @@ const AuthPage = () => {
   
   const [activeTab, setActiveTab] = useState(defaultTabParam);
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(showForgotPassword);
+
+  // Check if redirected with OAuth callback action (Google sign-in)
+  const [authInProgress, setAuthInProgress] = useState(false);
   
   useEffect(() => {
     console.log('[MainGallery] AuthPage loaded with params:', {
@@ -39,6 +42,28 @@ const AuthPage = () => {
       fromExtension,
       redirectPath
     });
+    
+    // Check URL for tokens - direct processing of OAuth callback
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      console.log('[MainGallery] AuthPage detected access token in URL hash, setting authInProgress');
+      setAuthInProgress(true);
+      
+      // Wait for the session to be established by another component
+      const checkSessionInterval = setInterval(() => {
+        if (session) {
+          clearInterval(checkSessionInterval);
+          console.log('[MainGallery] Session detected after OAuth callback, will redirect');
+          handleSessionUpdate();
+        }
+      }, 500);
+      
+      // Safety timeout
+      setTimeout(() => {
+        clearInterval(checkSessionInterval);
+        setAuthInProgress(false);
+      }, 5000);
+    }
 
     // Check for chrome extension messages
     const handleExtensionMessage = (event) => {
@@ -51,10 +76,11 @@ const AuthPage = () => {
     window.addEventListener('message', handleExtensionMessage);
     return () => window.removeEventListener('message', handleExtensionMessage);
   }, [searchParams, defaultTabParam, showForgotPassword, fromExtension, redirectPath]);
-
-  useEffect(() => {
+  
+  // Handle session redirect
+  const handleSessionUpdate = () => {
     if (session) {
-      console.log('[MainGallery] User is already logged in, redirecting to:', redirectPath);
+      console.log('[MainGallery] User is logged in, redirecting to:', redirectPath);
       
       if (fromExtension) {
         console.log('[MainGallery] Logged in from extension, will redirect to gallery and notify extension');
@@ -75,9 +101,8 @@ const AuthPage = () => {
           console.error("[MainGallery] Failed to notify extension about login:", e);
         }
         
-        setTimeout(() => {
-          navigate('/gallery');
-        }, 1000);
+        // Navigate to gallery
+        navigate('/gallery');
       } else if (redirectPath.startsWith('chrome-extension://') || 
                 redirectPath.startsWith('http://') || 
                 redirectPath.startsWith('https://')) {
@@ -86,7 +111,13 @@ const AuthPage = () => {
         navigate(redirectPath);
       }
     }
-  }, [session, navigate, redirectPath, fromExtension, toast]);
+  };
+
+  useEffect(() => {
+    if (!authInProgress) {
+      handleSessionUpdate();
+    }
+  }, [session, navigate, redirectPath, fromExtension, toast, authInProgress]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,6 +225,18 @@ const AuthPage = () => {
       setGoogleLoading(false);
     }
   };
+
+  if (authInProgress) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          <p className="text-lg font-medium">Processing authentication...</p>
+          <p className="text-sm text-muted-foreground">Please wait while we complete your sign-in</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-950">

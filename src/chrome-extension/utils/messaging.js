@@ -37,6 +37,34 @@ async function isTabReadyForMessaging(tabId) {
 }
 
 /**
+ * Verify tab exists before attempting messaging
+ * @param {number} tabId - Chrome tab ID
+ * @returns {Promise<boolean>} Whether tab exists
+ */
+async function doesTabExist(tabId) {
+  if (!tabId || typeof tabId !== 'number') {
+    return false;
+  }
+  
+  try {
+    return new Promise((resolve) => {
+      chrome.tabs.get(tabId, (tab) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          logger.warn(`Tab ${tabId} does not exist: ${error.message}`);
+          resolve(false);
+          return;
+        }
+        resolve(true);
+      });
+    });
+  } catch (error) {
+    handleError('doesTabExist', error, { silent: true });
+    return false;
+  }
+}
+
+/**
  * Send a message to a tab with retry support and error handling
  * @param {number} tabId - ID of tab to send message to
  * @param {object} message - Message data to send
@@ -46,10 +74,18 @@ async function isTabReadyForMessaging(tabId) {
 export async function safeSendMessage(tabId, message, options = {}) {
   const { maxRetries = 1, retryDelay = 300 } = options;
   
-  // First check that tab exists and is ready
+  // First verify tab exists
+  const tabExists = await doesTabExist(tabId);
+  if (!tabExists) {
+    logger.warn(`Cannot send message to non-existent tab ${tabId}`);
+    return { success: false, error: `Tab ${tabId} does not exist` };
+  }
+  
+  // Then check if tab is ready
   const isReady = await isTabReadyForMessaging(tabId);
   if (!isReady) {
-    throw new Error(`Tab ${tabId} is not ready for messaging`);
+    logger.warn(`Tab ${tabId} is not ready for messaging`);
+    return { success: false, error: `Tab ${tabId} is not ready for messaging` };
   }
   
   // Use retry mechanism
@@ -62,6 +98,12 @@ export async function safeSendMessage(tabId, message, options = {}) {
               // Check for runtime error
               const error = chrome.runtime.lastError;
               if (error) {
+                // More detailed error logging
+                logger.error(`Error sending message to tab ${tabId}: ${error.message}`, {
+                  tabId,
+                  message: JSON.stringify(message).substring(0, 100) + '...',
+                  errorDetails: error
+                });
                 reject(new Error(`Error sending message to tab ${tabId}: ${error.message}`));
                 return;
               }
@@ -85,7 +127,12 @@ export async function safeSendMessage(tabId, message, options = {}) {
     handleError('safeSendMessage', error);
     return { 
       success: false, 
-      error: error.message || 'Failed to send message to tab'
+      error: error.message || 'Failed to send message to tab',
+      context: {
+        tabId,
+        messageType: message?.action || 'unknown',
+        timestamp: Date.now()
+      }
     };
   }
 }
@@ -102,10 +149,17 @@ export async function ensureContentScriptLoaded(tab) {
   }
   
   try {
-    // First check if tab is ready for messaging
+    // First verify tab exists
+    const tabExists = await doesTabExist(tab.id);
+    if (!tabExists) {
+      logger.warn(`Cannot inject content script into non-existent tab ${tab.id}`);
+      return false;
+    }
+    
+    // Next check if tab is ready for messaging
     const tabIsReady = await isTabReadyForMessaging(tab.id);
     if (!tabIsReady) {
-      logger.warn(`Tab ${tab.id} not ready for messaging`);
+      logger.warn(`Tab ${tab.id} not ready for content script injection`);
       return false;
     }
     
@@ -135,37 +189,42 @@ export async function ensureContentScriptLoaded(tab) {
     
     // Inject content script
     logger.log('Injecting content script into tab', tab.id);
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
-    
-    // Wait a bit to ensure content script initializes
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    // Verify content script was loaded by sending a ping
     try {
-      const response = await new Promise((resolve) => {
-        chrome.tabs.sendMessage(tab.id, { action: 'ping' }, (response) => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            logger.warn(`Content script still not responsive after injection: ${error.message}`);
-            resolve(null);
-            return;
-          }
-          resolve(response);
-        });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
       });
       
-      if (response && response.action === 'pong') {
-        logger.log('Content script successfully injected and responsive');
-        return true;
-      } else {
-        logger.warn('Content script injected but not responsive');
+      // Wait a bit to ensure content script initializes
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Verify content script was loaded by sending a ping
+      try {
+        const response = await new Promise((resolve) => {
+          chrome.tabs.sendMessage(tab.id, { action: 'ping' }, (response) => {
+            const error = chrome.runtime.lastError;
+            if (error) {
+              logger.warn(`Content script still not responsive after injection: ${error.message}`);
+              resolve(null);
+              return;
+            }
+            resolve(response);
+          });
+        });
+        
+        if (response && response.action === 'pong') {
+          logger.log('Content script successfully injected and responsive');
+          return true;
+        } else {
+          logger.warn('Content script injected but not responsive');
+          return false;
+        }
+      } catch (e) {
+        handleError('verifyContentScriptInjection', e, { silent: true });
         return false;
       }
-    } catch (e) {
-      handleError('verifyContentScriptInjection', e, { silent: true });
+    } catch (injectionError) {
+      logger.error('Failed to inject content script:', injectionError.message);
       return false;
     }
   } catch (error) {
