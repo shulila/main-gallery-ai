@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -6,11 +7,7 @@ import { handleOAuthRedirect, handleOAuthTokenFromHash, getGalleryUrl } from '@/
 
 declare global {
   interface Window {
-    chrome?: {
-      runtime: {
-        sendMessage: (message: any) => void;
-      };
-    };
+    chrome?: Chrome;
   }
 }
 
