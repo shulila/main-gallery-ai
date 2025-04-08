@@ -1,4 +1,3 @@
-
 // Shared type definitions for gallery images
 export type GalleryImage = {
   id: string;
@@ -30,6 +29,8 @@ export type GalleryImage = {
   fromSupportedDomain?: boolean;
   // Deduplication helpers
   imageHash?: string;
+  // Creation timestamp with formatted date
+  createdAt?: string;
 };
 
 // List of supported domains for auto-sync

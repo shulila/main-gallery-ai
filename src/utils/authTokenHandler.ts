@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -190,9 +189,9 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
 /**
  * Handle OAuth token directly from the URL hash
  * @param {string} [callbackUrl] Optional URL to extract token from (defaults to window.location.href)
- * @returns {boolean} Whether token was successfully extracted and processed
+ * @returns {Promise<boolean>} Whether token was successfully extracted and processed
  */
-export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
+export const handleOAuthTokenFromHash = async (callbackUrl?: string): Promise<boolean> => {
   try {
     const url = callbackUrl || window.location.href;
     
@@ -263,7 +262,7 @@ export const handleOAuthTokenFromHash = (callbackUrl?: string): boolean => {
     }
     
     console.log('[MainGallery] Found access token in URL hash');
-    return processAccessToken(accessToken, refreshToken, email, isDev);
+    return await processAccessToken(accessToken, refreshToken, email, isDev);
     
   } catch (err) {
     console.error('[MainGallery] Error handling OAuth token from hash:', err);
