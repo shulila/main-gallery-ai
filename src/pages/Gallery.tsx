@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -10,6 +11,7 @@ import { GalleryImage } from '@/types/gallery';
 import { listenForGallerySyncMessages, syncImagesToGallery } from '@/utils/gallerySync';
 import { Button } from '@/components/ui/button';
 import { ImageIcon, ArrowRight } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Gallery = () => {
   const { user, isLoading } = useAuth();
@@ -20,6 +22,27 @@ const Gallery = () => {
   const [isExtensionSync, setIsExtensionSync] = useState(false);
   const [scanModeActive, setScanModeActive] = useState(false);
   const [forceEmptyState, setForceEmptyState] = useState(false);
+  const [isLoadingImages, setIsLoadingImages] = useState(true);
+  
+  // Check authentication on load
+  useEffect(() => {
+    const checkAuth = async () => {
+      console.log('[MainGallery] Gallery page - checking auth status');
+      
+      // Get current session directly from Supabase
+      const { data } = await supabase.auth.getSession();
+      const isAuthenticated = !!data.session;
+      
+      console.log('[MainGallery] Gallery page - auth status:', isAuthenticated ? 'Authenticated' : 'Not authenticated');
+      
+      if (!isAuthenticated && !isLoading) {
+        console.log('[MainGallery] Gallery page - redirecting to auth page due to no session');
+        navigate('/auth');
+      }
+    };
+    
+    checkAuth();
+  }, []);
   
   useEffect(() => {
     const stateParam = searchParams.get('state');
@@ -37,7 +60,7 @@ const Gallery = () => {
   
   useEffect(() => {
     const processExtensionImages = async (images: GalleryImage[]) => {
-      console.log(`Received ${images.length} images from extension`);
+      console.log(`[MainGallery] Received ${images.length} images from extension`);
       
       if (!images || images.length === 0) return;
       
@@ -48,7 +71,7 @@ const Gallery = () => {
         const unique = combined.filter((item, index, self) => 
           index === self.findIndex(i => i.url === item.url)
         );
-        return unique;
+        return sortGalleryImages(unique);
       });
       
       setForceEmptyState(false);
@@ -56,7 +79,7 @@ const Gallery = () => {
       try {
         await galleryDB.init();
         await galleryDB.addImages(images);
-        console.log(`Stored ${images.length} images in IndexedDB`);
+        console.log(`[MainGallery] Stored ${images.length} images in IndexedDB`);
         
         const syncResult = await syncImagesToGallery(images);
         
@@ -72,7 +95,7 @@ const Gallery = () => {
             hasImages: true
           }, '*');
         } else {
-          console.error('Error syncing to backend:', syncResult.errors);
+          console.error('[MainGallery] Error syncing to backend:', syncResult.errors);
         }
         
         window.postMessage({
@@ -80,7 +103,7 @@ const Gallery = () => {
           count: images.length
         }, '*');
       } catch (error) {
-        console.error('Error processing extension images:', error);
+        console.error('[MainGallery] Error processing extension images:', error);
         toast({
           title: "Sync Error",
           description: "There was an error saving the images",
@@ -97,10 +120,14 @@ const Gallery = () => {
     
     const loadExistingImages = async () => {
       try {
+        setIsLoadingImages(true);
         await galleryDB.init();
         const images = await galleryDB.getAllImages();
-        console.log(`Loaded ${images.length} existing images from IndexedDB`);
-        setSyncedImages(images);
+        console.log(`[MainGallery] Loaded ${images.length} existing images from IndexedDB`);
+        
+        // Sort images by creation date if available, or timestamp
+        const sortedImages = sortGalleryImages(images);
+        setSyncedImages(sortedImages);
         
         if (images.length > 0 && !forceEmptyState) {
           window.postMessage({
@@ -109,7 +136,9 @@ const Gallery = () => {
           }, '*');
         }
       } catch (error) {
-        console.error('Error loading images from IndexedDB:', error);
+        console.error('[MainGallery] Error loading images from IndexedDB:', error);
+      } finally {
+        setIsLoadingImages(false);
       }
     };
     
@@ -119,7 +148,7 @@ const Gallery = () => {
     const syncRequested = urlParams.get('sync') === 'true';
     
     if (syncRequested) {
-      console.log('Sync requested via URL parameter, notifying extension');
+      console.log('[MainGallery] Sync requested via URL parameter, notifying extension');
       window.postMessage({
         type: 'WEB_APP_TO_EXTENSION',
         action: 'readyForSync'
@@ -133,13 +162,13 @@ const Gallery = () => {
     if (pendingSyncStr) {
       try {
         const pendingImages = JSON.parse(pendingSyncStr);
-        console.log('Found pending sync images in session storage:', pendingImages.length);
+        console.log('[MainGallery] Found pending sync images in session storage:', pendingImages.length);
         if (Array.isArray(pendingImages) && pendingImages.length > 0) {
           processExtensionImages(pendingImages);
         }
         sessionStorage.removeItem('maingallery_sync_images');
       } catch (e) {
-        console.error('Error processing pending sync images:', e);
+        console.error('[MainGallery] Error processing pending sync images:', e);
       }
     }
     
@@ -163,6 +192,7 @@ const Gallery = () => {
   
   useEffect(() => {
     if (!isLoading && !user) {
+      console.log('[MainGallery] No user in context, redirecting to auth page');
       navigate('/auth');
     }
   }, [user, isLoading, navigate]);
@@ -170,6 +200,18 @@ const Gallery = () => {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  // Sort gallery images function
+  const sortGalleryImages = (images: GalleryImage[]): GalleryImage[] => {
+    return [...images].sort((a, b) => {
+      // Use createdAt if available, otherwise use timestamp
+      const dateA = a.createdAt ? new Date(a.createdAt) : (a.timestamp ? new Date(a.timestamp) : new Date(0));
+      const dateB = b.createdAt ? new Date(b.createdAt) : (b.timestamp ? new Date(b.timestamp) : new Date(0));
+      
+      // Sort descending (newest first)
+      return dateB.getTime() - dateA.getTime();
+    });
+  };
 
   const handleAddGalleryClick = () => {
     document.body.style.cursor = 'crosshair';
@@ -182,7 +224,7 @@ const Gallery = () => {
     });
   };
 
-  if (isLoading) {
+  if (isLoading || isLoadingImages) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
@@ -195,7 +237,7 @@ const Gallery = () => {
   }
 
   const shouldShowEmptyState = () => {
-    return forceEmptyState || syncedImages.length === 0;
+    return (forceEmptyState || syncedImages.length === 0) && !isLoadingImages;
   };
 
   const EmptyGalleryState = () => (

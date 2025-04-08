@@ -15,6 +15,7 @@ const AuthPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const { signIn, signUp, signInWithGoogle, resetPassword, session } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -31,7 +32,7 @@ const AuthPage = () => {
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(showForgotPassword);
   
   useEffect(() => {
-    console.log('AuthPage loaded with params:', {
+    console.log('[MainGallery] AuthPage loaded with params:', {
       searchParams: Object.fromEntries(searchParams),
       defaultTab: defaultTabParam,
       forgotPassword: showForgotPassword,
@@ -42,7 +43,7 @@ const AuthPage = () => {
     // Check for chrome extension messages
     const handleExtensionMessage = (event) => {
       if (event.data && event.data.type === 'EXTENSION_AUTH_REQUEST') {
-        console.log('Received auth request from extension:', event.data);
+        console.log('[MainGallery] Received auth request from extension:', event.data);
         // Handle any specific auth requests from extension if needed
       }
     };
@@ -53,10 +54,10 @@ const AuthPage = () => {
 
   useEffect(() => {
     if (session) {
-      console.log('User is already logged in, redirecting to:', redirectPath);
+      console.log('[MainGallery] User is already logged in, redirecting to:', redirectPath);
       
       if (fromExtension) {
-        console.log('Logged in from extension, will redirect to gallery and notify extension');
+        console.log('[MainGallery] Logged in from extension, will redirect to gallery and notify extension');
         toast({
           title: "Login successful",
           description: "You are now logged in",
@@ -71,7 +72,7 @@ const AuthPage = () => {
             timestamp: Date.now()
           }, "*");
         } catch (e) {
-          console.error("Failed to notify extension about login:", e);
+          console.error("[MainGallery] Failed to notify extension about login:", e);
         }
         
         setTimeout(() => {
@@ -103,7 +104,7 @@ const AuthPage = () => {
       await signIn(email, password);
       // Auth state change will trigger redirect
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('[MainGallery] Login error:', error);
       toast({
         title: "Login failed",
         description: error.message || "Please check your email and password",
@@ -134,7 +135,7 @@ const AuthPage = () => {
       });
       setActiveTab('signin');
     } catch (error: any) {
-      console.error('Signup error:', error);
+      console.error('[MainGallery] Signup error:', error);
       toast({
         title: "Signup failed",
         description: error.message || "Please check your email and try again",
@@ -166,7 +167,7 @@ const AuthPage = () => {
       });
       setIsForgotPasswordMode(false);
     } catch (error: any) {
-      console.error('Password reset error:', error);
+      console.error('[MainGallery] Password reset error:', error);
       toast({
         title: "Password reset failed",
         description: error.message || "Please check your email and try again",
@@ -178,18 +179,19 @@ const AuthPage = () => {
   };
 
   const handleGoogleSignIn = async () => {
-    setIsSubmitting(true);
+    setGoogleLoading(true);
     try {
+      console.log('[MainGallery] Starting Google sign-in process');
       await signInWithGoogle();
       // The redirect will be handled by the Google OAuth flow
     } catch (error: any) {
-      console.error('Google login error:', error);
+      console.error('[MainGallery] Google login error:', error);
       toast({
         title: "Google login failed",
         description: error.message || "Could not authenticate with Google",
         variant: "destructive",
       });
-      setIsSubmitting(false);
+      setGoogleLoading(false);
     }
   };
 
@@ -246,9 +248,10 @@ const AuthPage = () => {
                   variant="outline" 
                   className="w-full flex items-center justify-center gap-2" 
                   onClick={handleGoogleSignIn}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || googleLoading}
+                  id="google-sign-in-btn"
                 >
-                  {isSubmitting ? (
+                  {googleLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg">

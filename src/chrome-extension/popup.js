@@ -9,8 +9,36 @@ const BRAND = {
   }
 };
 
+// Domain patterns for scanning - only supported platforms
+const SUPPORTED_DOMAINS = [
+  // Midjourney
+  { pattern: /midjourney\.com/i, name: "Midjourney" },
+  // Leonardo.ai
+  { pattern: /leonardo\.ai/i, name: "Leonardo AI" },
+  // Runway
+  { pattern: /runwayml\.com/i, name: "Runway ML" },
+  // DreamStudio
+  { pattern: /dreamstudio\.ai/i, name: "Dream Studio" },
+  // Pika
+  { pattern: /pika\.art/i, name: "Pika" },
+  // DALL-E
+  { pattern: /openai\.com\/dall-e/i, name: "DALL-E" },
+  // Playground AI
+  { pattern: /playgroundai\.com/i, name: "Playground AI" },
+  // NightCafe
+  { pattern: /nightcafe\.studio/i, name: "NightCafe" },
+  // Adobe Firefly
+  { pattern: /firefly\.adobe\.com/i, name: "Adobe Firefly" },
+  // Stability AI
+  { pattern: /stability\.ai/i, name: "Stability AI" },
+  // Kaiber
+  { pattern: /kaiber\.ai/i, name: "Kaiber" },
+  // Veed.io
+  { pattern: /veed\.io/i, name: "Veed" },
+];
+
 // Import required utilities - ensure proper module paths with .js extensions
-import { isPreviewEnvironment, getBaseUrl, getAuthUrl, getGalleryUrl, isSupportedPlatformUrl } from './utils/urlUtils.js';
+import { isPreviewEnvironment, getBaseUrl, getAuthUrl, getGalleryUrl } from './utils/urlUtils.js';
 import { logger } from './utils/logger.js';
 import { handleError, safeFetch } from './utils/errorHandler.js';
 import { 
@@ -18,8 +46,7 @@ import {
   isLoggedIn, 
   getUserEmail, 
   logout, 
-  openAuthPage,
-  isSupportedPlatform
+  openAuthPage
 } from './utils/auth.js';
 
 // Extension ID - important for OAuth flow
@@ -147,6 +174,33 @@ async function tabExists(tabId) {
   }
 }
 
+// Check if URL matches any of our supported platform patterns
+function isSupportedPlatformUrl(url) {
+  if (!url) return false;
+  
+  try {
+    const urlObj = new URL(url);
+    return SUPPORTED_DOMAINS.some(domain => domain.pattern.test(urlObj.hostname));
+  } catch (e) {
+    logger.error('Error parsing URL:', e);
+    return false;
+  }
+}
+
+// Get platform name from URL
+function getPlatformName(url) {
+  if (!url) return "Unknown";
+  
+  try {
+    const urlObj = new URL(url);
+    const matchedDomain = SUPPORTED_DOMAINS.find(domain => domain.pattern.test(urlObj.hostname));
+    return matchedDomain ? matchedDomain.name : "Unknown";
+  } catch (e) {
+    logger.error('Error getting platform name:', e);
+    return "Unknown";
+  }
+}
+
 // Update platform detection and UI based on current tab
 async function checkCurrentTab() {
   try {
@@ -159,72 +213,15 @@ async function checkCurrentTab() {
     }
     
     const currentUrl = tabs[0].url;
-    
-    // List of supported personal gallery URL patterns
-    const supportedPatterns = [
-      // Midjourney
-      /https:\/\/www\.midjourney\.com\/app\/users\/[^\/]+\/creations/i,
-      /https:\/\/www\.midjourney\.com\/app\/users\/[^\/]+\/gallery/i,
-      
-      // Leonardo.ai
-      /https:\/\/app\.leonardo\.ai\/user-generations/i,
-      /https:\/\/app\.leonardo\.ai\/gallery\/[^\/]+/i,
-      
-      // OpenAI (DALL-E)
-      /https:\/\/.*\.openai\.com\/dalle\/history/i,
-      
-      // Stability AI / DreamStudio
-      /https:\/\/dreamstudio\.ai\/generate/i,
-      /https:\/\/.*\.stability\.ai\/user\/account\/generations/i,
-      
-      // Runway
-      /https:\/\/.*\.runwayml\.com\/.*gallery/i,
-      
-      // Pika Labs
-      /https:\/\/.*\.pika\.art\/my-generations/i,
-      
-      // Playground AI
-      /https:\/\/.*\.playgroundai\.com\/collections/i,
-      
-      // NightCafe
-      /https:\/\/.*\.nightcafe\.studio\/my-creations/i
-    ];
-    
-    // Check if URL matches any supported pattern
-    const isSupported = supportedPatterns.some(pattern => pattern.test(currentUrl));
+    const isSupported = isSupportedPlatformUrl(currentUrl);
     
     logger.log('Current tab URL:', currentUrl);
     logger.log('Matches supported platform pattern:', isSupported);
     
-    // Fall back to the general detection if no specific pattern matched
-    const generalSupport = isSupported ? true : isSupportedPlatform(currentUrl);
-    
     // Update UI based on platform support
-    if ((isSupported || generalSupport) && platformDetectedDiv && platformNameElement) {
-      // Extract platform name from URL
-      const urlObj = new URL(currentUrl);
-      let platformName = "Unknown";
-      
-      // Determine platform name based on hostname
-      if (urlObj.hostname.includes('midjourney.com')) {
-        platformName = "Midjourney";
-      } else if (urlObj.hostname.includes('leonardo.ai')) {
-        platformName = "Leonardo.ai";
-      } else if (urlObj.hostname.includes('pika.art')) {
-        platformName = "Pika Labs";
-      } else if (urlObj.hostname.includes('openai.com')) {
-        platformName = "DALL-E";
-      } else if (urlObj.hostname.includes('stability.ai') || urlObj.hostname.includes('dreamstudio.ai')) {
-        platformName = "Stable Diffusion";
-      } else if (urlObj.hostname.includes('runwayml.com')) {
-        platformName = "Runway";
-      } else if (urlObj.hostname.includes('discord.com') && urlObj.pathname.includes('midjourney')) {
-        platformName = "Midjourney (Discord)";
-      } else if (urlObj.hostname.includes('playgroundai.com')) {
-        platformName = "Playground AI";
-      } else if (urlObj.hostname.includes('nightcafe.studio')) {
-        platformName = "NightCafe";
-      }
+    if (isSupported && platformDetectedDiv && platformNameElement) {
+      // Get platform name
+      const platformName = getPlatformName(currentUrl);
       
       // Additional debug logging for platform detection
       console.log(`MainGallery: Platform detected - ${platformName} from URL ${currentUrl}`);
