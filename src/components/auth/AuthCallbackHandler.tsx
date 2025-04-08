@@ -164,6 +164,15 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             description: "You've been logged in successfully!",
           });
           
+          // CRITICAL FIX: Clear any problematic URL fragments/params
+          // This prevents login loops where the token stays in the URL
+          if (window.location.hash || window.location.search.includes('access_token')) {
+            // Use history API to clear hash without triggering reload
+            const cleanUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+            recordDebugInfo('url_cleaned', { from: window.location.href, to: cleanUrl });
+          }
+          
           // Redirect to gallery
           console.log('[MainGallery] Redirecting to gallery');
           setTimeout(() => {

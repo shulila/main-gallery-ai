@@ -66,8 +66,23 @@ const Gallery = () => {
       
       setIsExtensionSync(true);
       
+      // Process each image: ensure each has a valid createdAt field for proper sorting
+      const processedImages = images.map(img => {
+        // If no createdAt field exists, create one based on timestamp or current time
+        if (!img.createdAt) {
+          const date = img.timestamp 
+            ? new Date(img.timestamp) 
+            : new Date();
+          return {
+            ...img,
+            createdAt: date.toISOString()
+          };
+        }
+        return img;
+      });
+      
       setSyncedImages(prev => {
-        const combined = [...images, ...prev];
+        const combined = [...processedImages, ...prev];
         const unique = combined.filter((item, index, self) => 
           index === self.findIndex(i => i.url === item.url)
         );
@@ -78,10 +93,10 @@ const Gallery = () => {
       
       try {
         await galleryDB.init();
-        await galleryDB.addImages(images);
+        await galleryDB.addImages(processedImages);
         console.log(`[MainGallery] Stored ${images.length} images in IndexedDB`);
         
-        const syncResult = await syncImagesToGallery(images);
+        const syncResult = await syncImagesToGallery(processedImages);
         
         if (syncResult.success) {
           toast({
@@ -125,8 +140,22 @@ const Gallery = () => {
         const images = await galleryDB.getAllImages();
         console.log(`[MainGallery] Loaded ${images.length} existing images from IndexedDB`);
         
+        // Ensure all images have a createdAt field
+        const processedImages = images.map(img => {
+          if (!img.createdAt) {
+            const date = img.timestamp 
+              ? new Date(img.timestamp) 
+              : new Date();
+            return {
+              ...img,
+              createdAt: date.toISOString()
+            };
+          }
+          return img;
+        });
+        
         // Sort images by creation date if available, or timestamp
-        const sortedImages = sortGalleryImages(images);
+        const sortedImages = sortGalleryImages(processedImages);
         setSyncedImages(sortedImages);
         
         if (images.length > 0 && !forceEmptyState) {

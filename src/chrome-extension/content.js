@@ -85,8 +85,6 @@ const APPROVED_PLATFORMS = [
   { pattern: /app\.pixverse\.ai\/asset\/video/, name: "Pixverse" },
   { pattern: /app\.pixverse\.ai\/asset\/album/, name: "Pixverse" },
   { pattern: /app\.pixverse\.ai\/asset\/character/, name: "Pixverse" },
-  // Craiyon
-  { pattern: /www\.craiyon\.com\/user\/account\/history/, name: "Craiyon" },
   // StarryAI
   { pattern: /starryai\.com\/app\/my-creations/, name: "StarryAI" },
   // Fotor
@@ -110,9 +108,7 @@ const APPROVED_PLATFORMS = [
   { pattern: /www\.promeai\.pro\/profile/, name: "Prome AI" },
   { pattern: /www\.promeai\.pro\/userAssets/, name: "Prome AI" },
   // GenSpark
-  { pattern: /www\.genspark\.ai\/me/, name: "GenSpark" },
-  // DreamStudio
-  { pattern: /dreamstudio\.ai/, name: "DreamStudio" }
+  { pattern: /www\.genspark\.ai\/me/, name: "GenSpark" }
 ];
 
 // URL Utilities
@@ -148,6 +144,59 @@ function showToast(message, type = 'info') {
       existingToast.remove();
     }
     
+    // Inject CSS if not already present
+    if (!document.getElementById('maingallery-toast-styles')) {
+      const style = document.createElement('style');
+      style.id = 'maingallery-toast-styles';
+      style.textContent = `
+        .maingallery-toast {
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          padding: 10px 15px;
+          background: rgba(0, 0, 0, 0.8);
+          color: white;
+          border-radius: 4px;
+          z-index: 9999;
+          max-width: 300px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          opacity: 0;
+          transform: translateY(10px);
+          transition: opacity 0.3s, transform 0.3s;
+        }
+        .maingallery-toast.show {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .maingallery-toast-info {
+          border-left: 4px solid #3498db;
+        }
+        .maingallery-toast-success {
+          border-left: 4px solid #2ecc71;
+        }
+        .maingallery-toast-error {
+          border-left: 4px solid #e74c3c;
+        }
+        .maingallery-toast button {
+          background: transparent;
+          border: none;
+          color: white;
+          font-size: 16px;
+          cursor: pointer;
+          margin-left: 10px;
+          opacity: 0.7;
+        }
+        .maingallery-toast button:hover {
+          opacity: 1;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
     const toast = document.createElement('div');
     toast.className = `maingallery-toast maingallery-toast-${type}`;
     toast.textContent = message;
@@ -173,14 +222,31 @@ async function autoScrollToBottom(options = {}) {
   
   return new Promise((resolve) => {
     let scrollCount = 0;
+    let lastScrollY = window.scrollY;
+    let samePositionCount = 0;
+    
     const scrollInterval = setInterval(() => {
       window.scrollBy(0, scrollStep);
       scrollCount++;
       
+      // Check if we're at the bottom or haven't moved
+      if (window.scrollY === lastScrollY) {
+        samePositionCount++;
+      } else {
+        samePositionCount = 0;
+      }
+      
+      lastScrollY = window.scrollY;
+      
+      // Stop if:
+      // 1. We've scrolled enough times
+      // 2. We're near the bottom of the page
+      // 3. We haven't moved in a few attempts
       if (scrollCount >= maxScroll || 
-          (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200) {
+          (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200 ||
+          samePositionCount >= 3) {
         clearInterval(scrollInterval);
-        setTimeout(resolve, 500); // Give time for images to load
+        setTimeout(resolve, 800); // Give more time for images to load
       }
     }, scrollDelay);
   });
@@ -218,6 +284,55 @@ function setupMutationObserver(callback) {
   }
 }
 
+// Platform-specific extractors
+function extractMidjourneyMetadata() {
+  // For Midjourney, attempt to extract additional metadata
+  const midjourneyData = {
+    prompts: [],
+    images: []
+  };
+  
+  try {
+    // Prompt cards with image and text data
+    const cards = document.querySelectorAll('[data-testid="JobCard"]');
+    if (cards.length > 0) {
+      cards.forEach(card => {
+        try {
+          const promptText = card.querySelector('[data-testid="JobCardPrompt"]')?.textContent || '';
+          const imageEl = card.querySelector('img[src*="/0_"]');
+          
+          if (imageEl && promptText) {
+            // Get the full-size image URL by replacing thumbnails with originals
+            let fullSizeUrl = imageEl.src;
+            
+            // Transform thumbnail URL to full-size URL for Midjourney
+            if (fullSizeUrl.includes('_32')) {
+              fullSizeUrl = fullSizeUrl.replace('_32', '_N');
+            }
+            
+            midjourneyData.prompts.push(promptText);
+            midjourneyData.images.push({
+              thumbnailSrc: imageEl.src,
+              fullSizeSrc: fullSizeUrl,
+              prompt: promptText,
+              width: imageEl.naturalWidth,
+              height: imageEl.naturalHeight
+            });
+          }
+        } catch (err) {
+          // Skip this card if there's an error
+          console.error("Error processing Midjourney card:", err);
+        }
+      });
+    }
+    
+    return midjourneyData;
+  } catch (err) {
+    logger.error("Error extracting Midjourney metadata:", err);
+    return midjourneyData;
+  }
+}
+
 // Image Extraction
 function extractImages() {
   try {
@@ -238,6 +353,13 @@ function extractImages() {
     const images = [];
     const seenUrls = new Set();
     const platformName = getPlatformNameFromUrl(window.location.href);
+    
+    // Check if this is Midjourney, which needs special handling
+    let platformSpecificData = {};
+    if (platformName === "Midjourney") {
+      platformSpecificData = extractMidjourneyMetadata();
+      logger.log(`Extracted ${platformSpecificData.images.length} images from Midjourney specific data`);
+    }
     
     // Find all images on the page
     const imgElements = document.querySelectorAll('img[src]:not([src^="data:"]):not([src^="blob:"])');
@@ -264,6 +386,45 @@ function extractImages() {
             src.includes('/logo')) {
           logger.log(`Skipping icon/logo: ${src}`);
           return;
+        }
+        
+        // Check for Midjourney specific image first
+        if (platformName === "Midjourney" && platformSpecificData.images.length > 0) {
+          // Try to match with a Midjourney image from our specific extraction
+          const mjImage = platformSpecificData.images.find(mjImg => 
+            mjImg.thumbnailSrc === src || mjImg.fullSizeSrc === src
+          );
+          
+          if (mjImage) {
+            // Use the high-quality image and the correct prompt
+            const now = new Date();
+            const createdAt = now.toISOString();
+            
+            const imageData = {
+              id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              url: mjImage.fullSizeSrc || src,
+              width: mjImage.width || width,
+              height: mjImage.height || height,
+              alt: mjImage.prompt || img.alt || '',
+              title: mjImage.prompt || img.title || '',
+              prompt: mjImage.prompt || '',
+              platform: "midjourney",
+              platformName: "Midjourney",
+              sourceURL: window.location.href,
+              tabUrl: window.location.href,
+              timestamp: Date.now(),
+              createdAt,
+              pageTitle: document.title || '',
+              type: 'image',
+              fromSupportedDomain: true
+            };
+            
+            // Add to our collection and mark as seen
+            images.push(imageData);
+            seenUrls.add(src);
+            seenUrls.add(mjImage.fullSizeSrc);
+            return; // Skip standard processing
+          }
         }
         
         // Try to extract alt text, title, or nearby text as potential prompt
@@ -360,7 +521,8 @@ function notifyBackgroundScriptReady() {
       action: 'CONTENT_SCRIPT_READY',
       location: window.location.href,
       platform: getPlatformNameFromUrl(window.location.href),
-      isSupported: isSupportedPlatformUrl(window.location.href)
+      isSupported: isSupportedPlatformUrl(window.location.href),
+      timestamp: Date.now()
     });
   } catch (err) {
     handleError('notifyBackgroundScriptReady', err);
@@ -412,7 +574,8 @@ async function handleAutoScan(options = {}) {
         platform: platformName,
         success: images.length > 0,
         count: images.length,
-        url: currentUrl
+        url: currentUrl,
+        timestamp: Date.now()
       }).catch(err => {
         handleError('sendScanResults', err);
         showToast('Error syncing images to gallery', 'error');
@@ -434,7 +597,8 @@ async function handleAutoScan(options = {}) {
           images: [],
           success: false,
           error: err.message,
-          url: currentUrl
+          url: currentUrl,
+          timestamp: Date.now()
         }).catch(e => handleError('sendScanError', e, { silent: true }));
       } catch (e) {
         handleError('sendScanErrorFailure', e, { silent: true });
@@ -485,7 +649,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         action: 'pong', 
         from: 'content_script',
         platform: getPlatformNameFromUrl(window.location.href),
-        isSupported: isSupportedPlatformUrl(window.location.href)
+        isSupported: isSupportedPlatformUrl(window.location.href),
+        timestamp: Date.now()
       });
       return true;
     }
@@ -514,7 +679,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         success: true, 
         status: 'scan_started',
         isSupported: isSupportedPlatformUrl(window.location.href),
-        platform: getPlatformNameFromUrl(window.location.href) 
+        platform: getPlatformNameFromUrl(window.location.href),
+        timestamp: Date.now()
       });
       
       // Process the scan asynchronously (we already responded to avoid connection errors)
@@ -533,7 +699,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         success: true,
         isSupported: isSupportedPlatformUrl(window.location.href),
         platform: getPlatformNameFromUrl(window.location.href),
-        url: window.location.href
+        url: window.location.href,
+        timestamp: Date.now()
       });
       return true;
     }
@@ -542,7 +709,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ 
       success: false, 
       error: err.message,
-      action: request?.action || 'unknown' 
+      action: request?.action || 'unknown',
+      timestamp: Date.now()
     });
   }
   

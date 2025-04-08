@@ -27,6 +27,27 @@ async function isTabReadyForMessaging(tabId) {
           return;
         }
         
+        // Additional check to make sure tab URL is actually a supported platform
+        if (tab.url) {
+          // This is a string match to avoid circular imports with the platform detector
+          const isSupportedPlatform = [
+            'midjourney.com',
+            'leonardo.ai',
+            'firefly.adobe.com',
+            'pika.art',
+            'krea.ai',
+            'app.ltx.studio',
+            'lexica.art'
+            // Add more platform checks if needed
+          ].some(domain => tab.url.includes(domain));
+          
+          if (!isSupportedPlatform) {
+            logger.warn(`Tab ${tabId} is not a supported platform: ${tab.url}`);
+            resolve(false);
+            return;
+          }
+        }
+        
         resolve(true);
       });
     });
@@ -42,7 +63,8 @@ async function isTabReadyForMessaging(tabId) {
  * @returns {Promise<boolean>} Whether tab exists
  */
 async function doesTabExist(tabId) {
-  if (!tabId || typeof tabId !== 'number') {
+  if (!tabId || typeof tabId !== 'number' || tabId <= 0) {
+    logger.warn(`Invalid tab ID: ${tabId}`);
     return false;
   }
   
@@ -55,7 +77,7 @@ async function doesTabExist(tabId) {
           resolve(false);
           return;
         }
-        resolve(true);
+        resolve(!!tab);
       });
     });
   } catch (error) {
@@ -94,14 +116,21 @@ export async function safeSendMessage(tabId, message, options = {}) {
       async () => {
         return new Promise((resolve, reject) => {
           try {
+            const timeout = setTimeout(() => {
+              logger.warn(`Message to tab ${tabId} timed out after 5000ms`);
+              reject(new Error(`Message to tab ${tabId} timed out`));
+            }, 5000);
+            
             chrome.tabs.sendMessage(tabId, message, (response) => {
+              clearTimeout(timeout);
+              
               // Check for runtime error
               const error = chrome.runtime.lastError;
               if (error) {
                 // More detailed error logging
                 logger.error(`Error sending message to tab ${tabId}: ${error.message}`, {
                   tabId,
-                  message: JSON.stringify(message).substring(0, 100) + '...',
+                  message: typeof message === 'object' ? JSON.stringify(message).substring(0, 100) + '...' : message,
                   errorDetails: error
                 });
                 reject(new Error(`Error sending message to tab ${tabId}: ${error.message}`));
@@ -124,7 +153,12 @@ export async function safeSendMessage(tabId, message, options = {}) {
     );
   } catch (error) {
     // Handle the error and return a graceful failure response
-    handleError('safeSendMessage', error);
+    handleError('safeSendMessage', error, { 
+      details: {
+        tabId,
+        messageType: message?.action || 'unknown'
+      }
+    });
     return { 
       success: false, 
       error: error.message || 'Failed to send message to tab',
@@ -163,22 +197,28 @@ export async function ensureContentScriptLoaded(tab) {
       return false;
     }
     
-    // Try to ping content script
+    // Try to ping content script with timeout
     try {
-      const response = await new Promise((resolve) => {
-        chrome.tabs.sendMessage(tab.id, { action: 'ping' }, (response) => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            logger.log(`Content script not loaded in tab ${tab.id}: ${error.message}`);
-            resolve(null);
-            return;
-          }
-          resolve(response);
-        });
-      });
+      const pingResponse = await Promise.race([
+        new Promise((resolve) => {
+          chrome.tabs.sendMessage(tab.id, { action: 'ping' }, (response) => {
+            const error = chrome.runtime.lastError;
+            if (error) {
+              logger.log(`Content script not loaded in tab ${tab.id}: ${error.message}`);
+              resolve(null);
+              return;
+            }
+            resolve(response);
+          });
+        }),
+        new Promise((resolve) => setTimeout(() => {
+          logger.log(`Ping to tab ${tab.id} timed out, will try to inject`);
+          resolve(null);
+        }, 1000))
+      ]);
       
       // If we get a pong response, content script is already loaded
-      if (response && response.action === 'pong') {
+      if (pingResponse && pingResponse.action === 'pong') {
         logger.log('Content script already loaded in tab', tab.id);
         return true;
       }
@@ -196,23 +236,29 @@ export async function ensureContentScriptLoaded(tab) {
       });
       
       // Wait a bit to ensure content script initializes
-      await new Promise(resolve => setTimeout(resolve, 500)); // Increased from 300ms to 500ms
+      await new Promise(resolve => setTimeout(resolve, 800));
       
       // Verify content script was loaded by sending a ping
       try {
-        const response = await new Promise((resolve) => {
-          chrome.tabs.sendMessage(tab.id, { action: 'ping' }, (response) => {
-            const error = chrome.runtime.lastError;
-            if (error) {
-              logger.warn(`Content script still not responsive after injection: ${error.message}`);
-              resolve(null);
-              return;
-            }
-            resolve(response);
-          });
-        });
+        const verifyResponse = await Promise.race([
+          new Promise((resolve) => {
+            chrome.tabs.sendMessage(tab.id, { action: 'ping' }, (response) => {
+              const error = chrome.runtime.lastError;
+              if (error) {
+                logger.warn(`Content script still not responsive after injection: ${error.message}`);
+                resolve(null);
+                return;
+              }
+              resolve(response);
+            });
+          }),
+          new Promise((resolve) => setTimeout(() => {
+            logger.warn(`Verification ping to tab ${tab.id} timed out`);
+            resolve(null);
+          }, 2000))
+        ]);
         
-        if (response && response.action === 'pong') {
+        if (verifyResponse && verifyResponse.action === 'pong') {
           logger.log('Content script successfully injected and responsive');
           return true;
         } else {
