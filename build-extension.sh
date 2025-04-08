@@ -87,10 +87,10 @@ if [[ "$BUILD_ENV" == "preview" ]]; then
 else
   echo ""
   echo "VERIFICATION: This is a PRODUCTION build"
-  echo "URLs should point to: https://main-gallery-hub.lovable.app"
+  echo "URLs should point to: https://main-gallery-ai.lovable.app"
   
   # Verify environment.js contains production URLs
-  if grep -q "main-gallery-hub.lovable.app" dist-extension/environment.js; then
+  if grep -q "main-gallery-ai.lovable.app" dist-extension/environment.js; then
     echo "✅ environment.js correctly contains production URLs"
   else
     echo "❌ WARNING: environment.js may not contain production URLs!"
@@ -118,5 +118,6 @@ echo "IMPORTANT: This build will connect to ${BUILD_ENV^^} endpoints:"
 if [[ "$BUILD_ENV" == "preview" ]]; then
   echo "- https://preview-main-gallery-ai.lovable.app"
 else
-  echo "- https://main-gallery-hub.lovable.app"
+  echo "- https://main-gallery-ai.lovable.app"
 fi
+

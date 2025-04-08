@@ -1,3 +1,4 @@
+
 /**
  * MainGallery.AI Chrome Extension Build Script
  * 
@@ -61,7 +62,7 @@ if (isPreviewBuild) {
 
 // Always use the correct OAuth client ID - ensuring the right ID is used
 if (manifest.oauth2 && manifest.oauth2.client_id) {
-  manifest.oauth2.client_id = '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com';
+  manifest.oauth2.client_id = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
   console.log('Using correct OAuth client ID for the extension:', manifest.oauth2.client_id);
 }
 
@@ -205,22 +206,13 @@ try {
               console.log(`Successfully injected environment value (${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'}) into urlUtils.js`);
             }
           }
-          
-          // Also replace any hardcoded URLs
-          if (isPreviewBuild) {
-            content = content.replace(
-              /'https:\/\/main-gallery-ai\.lovable\.app'/g, 
-              "'https://preview-main-gallery-ai.lovable.app'"
-            );
-            console.log('Replaced hardcoded production URLs with preview URLs');
-          }
         }
         
         // If this is auth.js, ensure the client ID is always the correct one
         if (file === 'auth.js') {
           // Replace the Google client ID with the correct one
           const googleClientIdRegex = /const GOOGLE_CLIENT_ID = ['"].*?['"]/;
-          const correctClientId = `const GOOGLE_CLIENT_ID = '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com'`;
+          const correctClientId = `const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com'`;
           
           if (content.match(googleClientIdRegex)) {
             content = content.replace(googleClientIdRegex, correctClientId);
@@ -251,9 +243,6 @@ try {
           }
           return match;
         });
-
-        // Replace all main-gallery-hub with main-gallery-ai
-        content = content.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
         
         // Write the modified file
         fs.writeFileSync(path.join(UTILS_DEST, file), content);
@@ -304,9 +293,6 @@ try {
     if (content.includes('handleEmailPasswordLogin') && !content.includes('handleEmailPasswordLogin }')) {
       console.log('Verifying handleEmailPasswordLogin import is present in background.js');
     }
-    
-    // Replace all main-gallery-hub with main-gallery-ai
-    content = content.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
     
     // Write the modified background.js
     fs.writeFileSync(backgroundDestPath, content);
@@ -386,7 +372,7 @@ export const BASE_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lov
 export const API_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/api' : 'https://main-gallery-ai.lovable.app/api'}";
 export const AUTH_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/auth' : 'https://main-gallery-ai.lovable.app/auth'}";
 export const GALLERY_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/gallery' : 'https://main-gallery-ai.lovable.app/gallery'}";
-export const OAUTH_CLIENT_ID = "733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com";
+export const OAUTH_CLIENT_ID = "648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com";
 `;
 
 // Write environment file to multiple locations for reliable imports
@@ -403,54 +389,36 @@ try {
   
   if (fs.existsSync(contentPath)) {
     let content = fs.readFileSync(contentPath, 'utf8');
-    
-    // Replace all main-gallery-hub with main-gallery-ai
-    content = content.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
-    
-    // Write the modified content.js
     fs.writeFileSync(contentDestPath, content);
-    console.log('Processed content.js with updated domain references');
+    console.log('Processed content.js');
   }
 } catch (e) {
   console.warn('Warning: Error processing content.js:', e.message);
 }
 
-// Process popup.js for domain references
+// Process popup.js
 try {
   const popupPath = path.join(SOURCE_DIR, 'popup.js');
   const popupDestPath = path.join(OUTPUT_DIR, 'popup.js');
   
   if (fs.existsSync(popupPath)) {
     let content = fs.readFileSync(popupPath, 'utf8');
-    
-    // Replace all main-gallery-hub with main-gallery-ai
-    content = content.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
-    
-    // Write the modified popup.js
     fs.writeFileSync(popupDestPath, content);
-    console.log('Processed popup.js with updated domain references');
+    console.log('Processed popup.js');
   }
 } catch (e) {
   console.warn('Warning: Error processing popup.js:', e.message);
 }
 
-// Process popup.html for domain references and branding
+// Process popup.html
 try {
   const popupPath = path.join(SOURCE_DIR, 'popup.html');
   const popupDestPath = path.join(OUTPUT_DIR, 'popup.html');
   
   if (fs.existsSync(popupPath)) {
     let content = fs.readFileSync(popupPath, 'utf8');
-    
-    // Replace all main-gallery-hub with main-gallery-ai
-    content = content.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
-    
-    // Replace any text references to Main Gallery Hub with MainGallery.AI
-    content = content.replace(/Main Gallery Hub/g, 'MainGallery.AI');
-    
-    // Write the modified popup.html
     fs.writeFileSync(popupDestPath, content);
-    console.log('Processed popup.html with updated domain references and branding');
+    console.log('Processed popup.html');
   }
 } catch (e) {
   console.warn('Warning: Error processing popup.html:', e.message);
@@ -541,19 +509,16 @@ try {
     });
     
     // Ensure the correct client ID is used
-    if (!authContent.includes('733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com')) {
+    if (!authContent.includes('648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com')) {
       console.warn('WARNING: auth.js does not contain the correct client ID. Updating...');
       authContent = authContent.replace(
         /const GOOGLE_CLIENT_ID = ['"].*['"]/,
-        `const GOOGLE_CLIENT_ID = '733872762484-ksjvvh9vjrmvr8m72qeec3p9fnp8rgjk.apps.googleusercontent.com'`
+        `const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com'`
       );
     }
     
-    // Replace all main-gallery-hub with main-gallery-ai
-    authContent = authContent.replace(/main-gallery-hub\.lovable\.app/g, 'main-gallery-ai.lovable.app');
-    
     fs.writeFileSync(authDestPath, authContent);
-    console.log('✅ Successfully processed auth.js with correct client ID and domain references');
+    console.log('✅ Successfully processed auth.js with correct client ID');
   } else {
     console.error('❌ auth.js not found in utils directory. Authentication will not work!');
   }
@@ -563,3 +528,4 @@ try {
 
 console.log(`Build completed successfully for ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} environment!`);
 console.log(`Extension files are ready in the '${OUTPUT_DIR}' directory`);
+
