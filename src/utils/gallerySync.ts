@@ -1,146 +1,143 @@
 
-import { supabase } from '@/integrations/supabase/client';
-import { GalleryImage } from '@/types/gallery';
-import { useToast } from '@/hooks/use-toast';
+import { GalleryImage, isSupportedURL } from '@/types/gallery';
 
-/**
- * Syncs images to the gallery via Supabase
- * @param images Array of gallery images to sync
- * @returns Promise with sync results
- */
-export const syncImagesToGallery = async (images: GalleryImage[]) => {
-  try {
-    if (!images || images.length === 0) {
-      return { success: false, count: 0, errors: ['No images to sync'] };
-    }
-    
-    // Get the current user
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      console.error('No authenticated user, cannot sync images');
-      return { success: false, count: 0, errors: ['Not authenticated'] };
-    }
-    
-    // Add user ID to each image
-    const imagesWithUser = images.map(img => ({
-      ...img,
-      user_id: user.id
-    }));
-    
-    // Use type assertion to work around the TypeScript error
-    // In a production environment, you should generate proper types from Supabase
-    const { data, error } = await (supabase as any)
-      .from('gallery_images')
-      .upsert(imagesWithUser, { onConflict: 'url', ignoreDuplicates: true });
-    
-    if (error) {
-      console.error('Error syncing images:', error);
-      return { success: false, count: 0, errors: [error.message] };
-    }
-    
-    return { success: true, count: imagesWithUser.length, data };
-  } catch (error) {
-    console.error('Exception syncing images:', error);
-    return { 
-      success: false, 
-      count: 0, 
-      errors: [(error as Error).message || 'Unknown error syncing images'] 
-    };
-  }
+// Default date formatter 
+const formatDate = (date: Date | string | number) => {
+  const dateObj = typeof date === 'string' || typeof date === 'number' 
+    ? new Date(date) 
+    : date;
+  
+  return dateObj.toLocaleString('en-US', { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 };
 
 /**
- * Process images received from extension
- * @param imagesData Raw image data from extension
- * @returns Processed gallery image objects
+ * Process a batch of images from a platform scanner into GalleryImage objects
+ * @param images Raw image data from platform scanners
+ * @param tabInfo Tab information
+ * @returns Array of formatted GalleryImage objects
  */
-export const processExtensionImages = (imagesData: any[]): GalleryImage[] => {
-  if (!imagesData || !Array.isArray(imagesData)) {
+export const processGalleryImages = (
+  images: any[],
+  tabInfo?: { url: string; title: string; favicon?: string }
+): GalleryImage[] => {
+  if (!images || !Array.isArray(images) || images.length === 0) {
+    console.warn('No valid images to process');
     return [];
   }
-  
-  return imagesData.map(img => ({
-    id: img.id || `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-    url: img.url,
-    prompt: img.prompt || '',
-    platform: img.platform || 'unknown',
-    sourceURL: img.sourceURL || window.location.href,
-    timestamp: img.timestamp || Date.now(),
-    type: img.type || 'image'
-  }));
-};
 
-/**
- * Listen for gallery sync messages from extension
- * @param callback Function to call when images are received
- * @returns Cleanup function
- */
-export const listenForGallerySyncMessages = (
-  callback: (images: GalleryImage[]) => void
-): () => void => {
-  const messageHandler = (event: MessageEvent) => {
-    // Only process messages from this window
-    if (event.source !== window) return;
+  // Set defaults from tab info if available
+  const defaultPlatform = tabInfo?.url 
+    ? new URL(tabInfo.url).hostname.replace('www.', '')
+    : 'unknown';
+
+  // Generate current timestamp for all images
+  const timeNow = Date.now();
+  const currentDate = new Date();
+  
+  // Format the current date string for display
+  const defaultCreatedAt = formatDate(currentDate);
+  
+  return images.map(img => {
+    // Extract all available date information (handle different formats)
+    const creationDate = img.creationDate || img.date || img.created_at || currentDate;
     
-    // Only handle gallery image messages
-    if (event.data && event.data.type === 'GALLERY_IMAGES') {
-      console.log('Received gallery images from extension:', 
-                 event.data.images?.length || 0, 'images');
+    // Format the created date string for display
+    const createdAt = creationDate 
+      ? formatDate(creationDate) 
+      : defaultCreatedAt;
+    
+    // Create the GalleryImage object with ALL required fields
+    const galleryImage: GalleryImage = {
+      id: img.id || `img_${timeNow}_${Math.random().toString(36).substring(2, 12)}`,
+      url: img.src || img.url || '', 
+      prompt: img.prompt || img.alt || img.title || '',
+      platform: img.platform || img.platformName || defaultPlatform,
+      sourceURL: img.sourceURL || img.sourceUrl || tabInfo?.url || '',
+      timestamp: img.timestamp || timeNow,
+      type: img.type || 'image',
+      createdAt // This is the required field that was missing
+    };
+    
+    // Add optional fields if they exist
+    if (img.tabUrl) galleryImage.tabUrl = img.tabUrl;
+    if (img.alt) galleryImage.alt = img.alt;
+    if (img.title) galleryImage.title = img.title;
+    if (img.model) galleryImage.model = img.model;
+    if (img.seed) galleryImage.seed = img.seed;
+    
+    // Add creation date as separate field
+    if (creationDate) galleryImage.creationDate = 
+      typeof creationDate === 'string' ? creationDate : new Date(creationDate).toISOString();
+    
+    // Add tab information
+    if (tabInfo) {
+      galleryImage.tabTitle = tabInfo.title;
+      if (tabInfo.favicon) galleryImage.favicon = tabInfo.favicon;
       
-      if (event.data.images && Array.isArray(event.data.images)) {
-        // Process the images
-        const processedImages = processExtensionImages(event.data.images);
+      // Extract domain information
+      try {
+        const urlObj = new URL(tabInfo.url);
+        galleryImage.domain = urlObj.hostname;
+        galleryImage.path = urlObj.pathname;
         
-        // Call the callback with the processed images
-        callback(processedImages);
-        
-        // Confirm receipt
-        window.postMessage({
-          type: 'GALLERY_IMAGES_RECEIVED',
-          count: processedImages.length,
-          timestamp: Date.now()
-        }, '*');
+        // Check if this domain is in our supported list
+        galleryImage.fromSupportedDomain = isSupportedURL(tabInfo.url);
+      } catch (e) {
+        console.error('Error parsing URL:', e);
       }
     }
     
-    // Handle bridge ready message
-    if (event.data && event.data.type === 'EXTENSION_BRIDGE_READY') {
-      console.log('Extension bridge is ready, sending ready message');
-      
-      // Notify the bridge that the gallery page is ready
-      window.postMessage({
-        type: 'GALLERY_PAGE_READY',
-        url: window.location.href,
-        timestamp: Date.now()
-      }, '*');
-    }
-  };
-  
-  // Add the message listener
-  window.addEventListener('message', messageHandler);
-  
-  // Send ready message in case bridge is already listening
-  setTimeout(() => {
-    window.postMessage({
-      type: 'GALLERY_PAGE_READY',
-      url: window.location.href,
-      timestamp: Date.now()
-    }, '*');
-  }, 1000);
-  
-  // Return a cleanup function
-  return () => {
-    window.removeEventListener('message', messageHandler);
-  };
+    return galleryImage;
+  });
 };
 
 /**
- * Note: To properly fix the TypeScript errors in this file, 
- * you need to create the gallery_images table in Supabase and 
- * generate updated types using the Supabase CLI:
- * 
- * 1. Install Supabase CLI
- * 2. Run: supabase gen types typescript --project-id YOUR_PROJECT_ID > src/types/supabase.ts
- * 3. Import and use the generated types
+ * Filter a list of gallery images to remove duplicates or invalid entries
+ * @param images List of gallery images to filter
+ * @returns Filtered list of images
  */
+export const filterGalleryImages = (images: GalleryImage[]): GalleryImage[] => {
+  if (!images || !Array.isArray(images)) return [];
+  
+  // Filter out images with empty URLs
+  const validImages = images.filter(img => img.url && img.url.trim().length > 0);
+  
+  // Remove exact duplicates by URL
+  const uniqueUrls = new Set();
+  
+  return validImages.filter(img => {
+    if (uniqueUrls.has(img.url)) {
+      return false;
+    }
+    uniqueUrls.add(img.url);
+    return true;
+  });
+};
+
+/**
+ * Sort gallery images by creation date or timestamp
+ * @param images List of gallery images to sort
+ * @param order Sort order ('asc' or 'desc')
+ * @returns Sorted list of images
+ */
+export const sortGalleryImages = (
+  images: GalleryImage[], 
+  order: 'asc' | 'desc' = 'desc'
+): GalleryImage[] => {
+  if (!images || !Array.isArray(images)) return [];
+  
+  return [...images].sort((a, b) => {
+    // First try to use timestamp
+    const aTime = a.timestamp || 0;
+    const bTime = b.timestamp || 0;
+    
+    const comparison = aTime - bTime;
+    return order === 'desc' ? -comparison : comparison;
+  });
+};

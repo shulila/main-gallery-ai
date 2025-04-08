@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ImageCard } from './ImageCard';
@@ -90,15 +91,23 @@ const GalleryView = ({ images: externalImages, isNewSync = false }: GalleryViewP
     try {
       console.log('Processing incoming images:', incomingImages.length);
       
-      const formattedImages: GalleryImage[] = incomingImages.map((img) => ({
-        id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        url: img.src || img.url || '',
-        prompt: img.prompt || img.alt || img.title || '',
-        platform: img.platform || img.platformName || 'unknown',
-        creationDate: img.creationDate || new Date().toISOString(),
-        sourceURL: img.tabUrl || img.sourceUrl || window.location.href,
-        timestamp: Date.now()
-      }));
+      const formattedImages: GalleryImage[] = incomingImages.map((img) => {
+        // Format the creation date or use current date as fallback
+        const creationDate = img.creationDate || new Date().toISOString();
+        // Format for display (createdAt needs to be a string)
+        const createdAt = new Date(creationDate).toLocaleString();
+        
+        return {
+          id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          url: img.src || img.url || '',
+          prompt: img.prompt || img.alt || img.title || '',
+          platform: img.platform || img.platformName || 'unknown',
+          creationDate, // Store the original date
+          sourceURL: img.tabUrl || img.sourceUrl || window.location.href,
+          timestamp: img.timestamp || Date.now(),
+          createdAt // Add the required createdAt field
+        };
+      });
 
       const validImages = formattedImages.filter(img => img.url && img.url.length > 0);
       

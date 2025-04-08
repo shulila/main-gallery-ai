@@ -30,11 +30,11 @@ export type GalleryImage = {
   fromSupportedDomain?: boolean;
   // Deduplication helpers
   imageHash?: string;
-  // Creation timestamp with formatted date - now explicitly part of the type
+  // Creation timestamp with formatted date
   createdAt: string;
 };
 
-// Updated list of supported domains for auto-sync per the approved list
+// Updated list of supported domains for auto-sync using the approved list
 export const SUPPORTED_DOMAINS = [
   'midjourney.com',
   'www.midjourney.com',

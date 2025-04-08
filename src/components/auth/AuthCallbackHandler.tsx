@@ -44,10 +44,14 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
       return;
     }
 
+    // Check for extension origin - important for popup flows
+    const isFromExtension = currentURL.includes('chrome-extension://') || 
+                           window.location.search.includes('from=extension');
+    
     // Function to complete authentication
     const completeAuth = async () => {
       try {
-        recordDebugInfo('auth_process_started', { url: window.location.href });
+        recordDebugInfo('auth_process_started', { url: window.location.href, isFromExtension });
         console.log('[MainGallery] Starting OAuth callback processing with URL:', window.location.href);
         setStatus('Processing login...');
         
@@ -126,6 +130,42 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
                   timestamp: Date.now()
                 }, "*");
                 recordDebugInfo('extension_notified');
+                
+                // If this is an extension popup auth flow, we need to send the message to the extension
+                if (isFromExtension) {
+                  console.log('[MainGallery] Detected auth from extension, sending message to extension');
+                  // Use window.opener if available (popup flow)
+                  if (window.opener) {
+                    window.opener.postMessage({
+                      type: "WEB_APP_TO_EXTENSION",
+                      action: "loginSuccess",
+                      email: data?.user?.email || 'User',
+                      timestamp: Date.now()
+                    }, "*");
+                    
+                    // Close the popup after a brief delay
+                    setTimeout(() => {
+                      window.close();
+                    }, 1000);
+                    return; // Exit early to prevent navigation
+                  }
+                  
+                  // If no opener, this might be a redirect flow
+                  try {
+                    // Try to send message to extension via chrome runtime (if available)
+                    if (typeof chrome !== 'undefined' && chrome.runtime) {
+                      chrome.runtime.sendMessage({
+                        type: "WEB_APP_TO_EXTENSION",
+                        action: "loginSuccess",
+                        email: data?.user?.email || 'User',
+                        token: accessToken,
+                        timestamp: Date.now()
+                      });
+                    }
+                  } catch (e) {
+                    console.error('[MainGallery] Error sending message to extension:', e);
+                  }
+                }
               } catch (e) {
                 console.error('[MainGallery] Error sending message to extension:', e);
               }
@@ -155,6 +195,35 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
           sessionExists,
           user: sessionData.session?.user?.email 
         });
+        
+        // Handle extension flows
+        if (isFromExtension && (success || sessionExists)) {
+          setStatus('Login successful! You can close this tab now.');
+          toast({
+            title: "Login Successful",
+            description: "You can now close this window and return to the extension.",
+          });
+          
+          // Notify extension again as a safeguard
+          if (sessionData.session?.user) {
+            window.postMessage({
+              type: "WEB_APP_TO_EXTENSION",
+              action: "loginSuccess",
+              email: sessionData.session.user.email || 'User',
+              timestamp: Date.now()
+            }, "*");
+          }
+          
+          // If in a popup window and this is the final auth step, close the window
+          if (window.opener) {
+            setTimeout(() => {
+              window.close();
+            }, 2000);
+            return; // Exit to prevent further navigation attempts
+          }
+          
+          return; // Don't redirect for extension flows
+        }
         
         if (success || sessionExists) {
           // Set success status and toast notification

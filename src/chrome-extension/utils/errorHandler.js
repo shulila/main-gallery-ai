@@ -27,7 +27,7 @@ export function handleError(source, error, options = {}) {
       } else if (typeof error === 'object' && error !== null) {
         // Format object errors (like API responses) more clearly
         try {
-          errorOutput = JSON.stringify(error);
+          errorOutput = JSON.stringify(error, null, 2);
         } catch (e) {
           errorOutput = Object.keys(error).reduce((acc, key) => {
             acc[key] = String(error[key]);
@@ -91,7 +91,7 @@ export async function withRetry(fn, options = {}) {
 }
 
 /**
- * Safe fetch utility with built-in error handling and JSON parsing
+ * Safe fetch utility with improved error handling and JSON parsing
  * @param {string} url - URL to fetch
  * @param {object} options - Fetch options
  * @returns {Promise<any>} - Parsed JSON response
@@ -101,7 +101,22 @@ export async function safeFetch(url, options = {}) {
     const response = await fetch(url, options);
     
     if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+      const errorText = await response.text();
+      let errorDetail;
+      
+      try {
+        // Try to parse as JSON if possible
+        errorDetail = JSON.parse(errorText);
+      } catch (e) {
+        // If not JSON, use the first 200 chars of text
+        errorDetail = errorText.substring(0, 200) + (errorText.length > 200 ? '...' : '');
+      }
+      
+      const error = new Error(`HTTP error ${response.status}: ${response.statusText}`);
+      error.status = response.status;
+      error.statusText = response.statusText;
+      error.responseText = errorDetail;
+      throw error;
     }
     
     // Check content type to avoid parsing HTML as JSON
@@ -115,20 +130,26 @@ export async function safeFetch(url, options = {}) {
         try {
           return JSON.parse(text);
         } catch (e) {
-          logger.error("ERROR: Received text that appears to be JSON but failed to parse:", text.substring(0, 100) + "...");
-          throw new Error("ERROR in safeFetch: Received HTML response when expecting JSON");
+          logger.error("ERROR: Received text that appears to be JSON but failed to parse:", text.substring(0, 200) + "...");
+          const error = new Error("ERROR in safeFetch: Received invalid JSON response");
+          error.responseText = text.substring(0, 500);
+          error.parseError = e.message;
+          throw error;
         }
       } else {
-        logger.error("ERROR: Received HTML response instead of JSON:", text.substring(0, 100) + "...");
-        throw new Error("ERROR in safeFetch: Received HTML response when expecting JSON");
+        logger.error("ERROR: Received HTML response instead of JSON:", text.substring(0, 200) + "...");
+        const error = new Error("ERROR in safeFetch: Received HTML response when expecting JSON");
+        error.responseText = text.substring(0, 500);
+        throw error;
       }
     }
   } catch (error) {
     // Enhance with fetch context
     error.fetchUrl = url;
-    error.fetchOptions = { ...options, headers: { ...options.headers } };
+    error.fetchOptions = { ...options };
     // Remove authorization headers from logs
     if (error.fetchOptions?.headers?.Authorization) {
+      error.fetchOptions.headers = { ...error.fetchOptions.headers };
       error.fetchOptions.headers.Authorization = '[REDACTED]';
     }
     
@@ -168,4 +189,90 @@ export function formatError(error) {
       timestamp: Date.now()
     };
   }
+}
+
+/**
+ * Check if a tab exists and content script is loaded
+ * @param {number} tabId - The tab ID to check
+ * @returns {Promise<boolean>} - Whether the tab exists and content script is ready
+ */
+export async function isTabAvailable(tabId) {
+  try {
+    // First check if tab exists
+    const tabs = await chrome.tabs.query({});
+    const tabExists = tabs.some(tab => tab.id === tabId);
+    
+    if (!tabExists) {
+      return false;
+    }
+
+    // Then check if we can ping the content script
+    return new Promise(resolve => {
+      try {
+        chrome.tabs.sendMessage(
+          tabId, 
+          { type: "PING" },
+          response => {
+            if (chrome.runtime.lastError) {
+              resolve(false);
+            } else {
+              resolve(true);
+            }
+          }
+        );
+        
+        // Set a timeout in case the message never returns
+        setTimeout(() => resolve(false), 300);
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Safe wrapper for sending messages to tabs with validation
+ * @param {number} tabId - Tab ID to send message to
+ * @param {object} message - Message to send
+ * @param {object} options - Options for sending
+ * @returns {Promise<any>} - Response from the tab
+ */
+export async function sendTabMessageSafely(tabId, message, options = {}) {
+  const { 
+    retries = 2, 
+    checkTab = true, 
+    timeout = 5000 
+  } = options;
+  
+  // First check if tab exists and content script is loaded
+  if (checkTab) {
+    const isAvailable = await isTabAvailable(tabId);
+    if (!isAvailable) {
+      throw new Error(`Tab ${tabId} is not available or content script not loaded`);
+    }
+  }
+  
+  // Use promise with timeout for better error handling
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`Timeout sending message to tab ${tabId}`));
+    }, timeout);
+    
+    try {
+      chrome.tabs.sendMessage(tabId, message, response => {
+        clearTimeout(timeoutId);
+        
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(response);
+        }
+      });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      reject(error);
+    }
+  });
 }
