@@ -6,7 +6,11 @@ import { handleOAuthRedirect, handleOAuthTokenFromHash, getGalleryUrl } from '@/
 
 declare global {
   interface Window {
-    chrome?: Chrome;
+    chrome?: {
+      runtime: {
+        sendMessage: (message: any) => void;
+      };
+    };
   }
 }
 
