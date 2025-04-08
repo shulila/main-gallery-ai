@@ -1,4 +1,3 @@
-
 // Shared type definitions for gallery images
 export type GalleryImage = {
   id: string;
