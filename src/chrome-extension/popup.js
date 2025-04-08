@@ -3,7 +3,7 @@
 const BRAND = {
   name: "MainGallery.AI",
   urls: {
-    baseUrl: "https://main-gallery-hub.lovable.app",
+    baseUrl: "https://main-gallery-ai.lovable.app",
     auth: "/auth",
     gallery: "/gallery"
   }
@@ -12,7 +12,7 @@ const BRAND = {
 // Import required utilities - ensure proper module paths with .js extensions
 import { isPreviewEnvironment, getBaseUrl, getAuthUrl, getGalleryUrl, isSupportedPlatformUrl } from './utils/urlUtils.js';
 import { logger } from './utils/logger.js';
-import { handleError } from './utils/errorHandler.js';
+import { handleError, safeFetch } from './utils/errorHandler.js';
 import { 
   handleInPopupGoogleLogin, 
   isLoggedIn, 
@@ -42,6 +42,7 @@ const states = {
 
 // Get elements safely with null checks
 const googleLoginBtn = document.getElementById('google-login-btn');
+const emailLoginBtn = document.getElementById('email-login-btn');
 const openWebLoginLink = document.getElementById('open-web-login-link');
 const tryAgainBtn = document.getElementById('try-again-btn');
 const logoutBtn = document.getElementById('logout-btn');
@@ -126,6 +127,26 @@ function showError(message) {
   showState(states.errorView);
 }
 
+// Validate tab exists before attempting to communicate with it
+async function tabExists(tabId) {
+  try {
+    return new Promise((resolve) => {
+      chrome.tabs.get(tabId, (tab) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          logger.log(`Tab ${tabId} doesn't exist:`, error.message);
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+  } catch (error) {
+    logger.error('Error checking if tab exists:', error);
+    return false;
+  }
+}
+
 // Update platform detection and UI based on current tab
 async function checkCurrentTab() {
   try {
@@ -138,13 +159,48 @@ async function checkCurrentTab() {
     }
     
     const currentUrl = tabs[0].url;
-    const isSupported = isSupportedPlatform(currentUrl);
+    
+    // List of supported personal gallery URL patterns
+    const supportedPatterns = [
+      // Midjourney
+      /https:\/\/www\.midjourney\.com\/app\/users\/[^\/]+\/creations/i,
+      /https:\/\/www\.midjourney\.com\/app\/users\/[^\/]+\/gallery/i,
+      
+      // Leonardo.ai
+      /https:\/\/app\.leonardo\.ai\/user-generations/i,
+      /https:\/\/app\.leonardo\.ai\/gallery\/[^\/]+/i,
+      
+      // OpenAI (DALL-E)
+      /https:\/\/.*\.openai\.com\/dalle\/history/i,
+      
+      // Stability AI / DreamStudio
+      /https:\/\/dreamstudio\.ai\/generate/i,
+      /https:\/\/.*\.stability\.ai\/user\/account\/generations/i,
+      
+      // Runway
+      /https:\/\/.*\.runwayml\.com\/.*gallery/i,
+      
+      // Pika Labs
+      /https:\/\/.*\.pika\.art\/my-generations/i,
+      
+      // Playground AI
+      /https:\/\/.*\.playgroundai\.com\/collections/i,
+      
+      // NightCafe
+      /https:\/\/.*\.nightcafe\.studio\/my-creations/i
+    ];
+    
+    // Check if URL matches any supported pattern
+    const isSupported = supportedPatterns.some(pattern => pattern.test(currentUrl));
     
     logger.log('Current tab URL:', currentUrl);
-    logger.log('Is supported platform:', isSupported);
+    logger.log('Matches supported platform pattern:', isSupported);
+    
+    // Fall back to the general detection if no specific pattern matched
+    const generalSupport = isSupported ? true : isSupportedPlatform(currentUrl);
     
     // Update UI based on platform support
-    if (isSupported && platformDetectedDiv && platformNameElement) {
+    if ((isSupported || generalSupport) && platformDetectedDiv && platformNameElement) {
       // Extract platform name from URL
       const urlObj = new URL(currentUrl);
       let platformName = "Unknown";
@@ -271,6 +327,19 @@ async function initiateGoogleLogin() {
   }
 }
 
+// Email login - redirect to web page
+function initiateEmailLogin() {
+  try {
+    logger.log('Redirecting to email login page');
+    openAuthPage(null, { from: 'extension_popup' });
+    // Close popup after redirection
+    setTimeout(() => window.close(), 300);
+  } catch (error) {
+    logger.error('Error redirecting to email login:', error);
+    showToast('Could not open login page. Please try again.', 'error');
+  }
+}
+
 // Enhanced auth check with token validation
 async function checkAuthAndRedirect() {
   try {
@@ -390,6 +459,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (googleLoginBtn) {
     googleLoginBtn.addEventListener('click', initiateGoogleLogin);
     logger.log('Google login button listener set up');
+  }
+  
+  // Set up event listener for email login
+  if (emailLoginBtn) {
+    emailLoginBtn.addEventListener('click', initiateEmailLogin);
+    logger.log('Email login button listener set up');
   }
   
   // Set up event listener for trying again after error

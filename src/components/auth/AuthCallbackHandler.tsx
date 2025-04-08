@@ -55,8 +55,26 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             description: "You've been logged in successfully!",
           });
           
-          // Slight delay before redirect to gallery
+          // Wait a moment to ensure data is synced
           setTimeout(() => {
+            // Check for extension origin
+            const fromExtension = new URLSearchParams(window.location.search).get('from') === 'extension';
+            
+            // Notify extension about successful login
+            if (fromExtension || window.location.href.includes('from=extension')) {
+              try {
+                console.log('Notifying extension about successful login');
+                window.postMessage({
+                  type: "WEB_APP_TO_EXTENSION",
+                  action: "loginSuccess",
+                  timestamp: Date.now()
+                }, "*");
+              } catch (err) {
+                console.error('Error notifying extension:', err);
+              }
+            }
+            
+            // Redirect to gallery
             navigate('/gallery');
           }, 1000);
           return;
@@ -95,6 +113,20 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             
             // Check for extension login
             const fromExtension = new URLSearchParams(window.location.search).get('from') === 'extension';
+            
+            // If from extension, notify it about successful login
+            if (fromExtension) {
+              try {
+                console.log('Notifying extension about successful login');
+                window.postMessage({
+                  type: "WEB_APP_TO_EXTENSION",
+                  action: "loginSuccess",
+                  timestamp: Date.now()
+                }, "*");
+              } catch (err) {
+                console.error('Error notifying extension:', err);
+              }
+            }
             
             // If there's pending sync data, redirect to gallery
             if (syncData && syncData.images && syncData.images.length > 0) {
@@ -210,6 +242,22 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
           }
           
           console.log('Successfully set Supabase session in fallback method');
+          
+          // Check for from=extension parameter to notify extension about login success
+          const fromExtension = new URLSearchParams(window.location.search).get('from') === 'extension';
+          if (fromExtension) {
+            try {
+              window.postMessage({
+                type: "WEB_APP_TO_EXTENSION",
+                action: "loginSuccess",
+                email: userEmail || data?.user?.email,
+                timestamp: Date.now()
+              }, "*");
+              console.log('Sent login success message to extension');
+            } catch (e) {
+              console.error('Error sending message to extension:', e);
+            }
+          }
         } catch (error) {
           console.error('Failed to set Supabase session in fallback method:', error);
           // Continue anyway as we have the token stored in localStorage

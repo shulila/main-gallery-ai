@@ -1,3 +1,4 @@
+
 /**
  * MainGallery.AI background script
  * Responsible for coordinating extension operations and communicating with tabs
@@ -44,6 +45,26 @@ function createNotification(id, title, message) {
   }
 }
 
+// Validate tab exists before attempting to communicate with it
+async function tabExists(tabId) {
+  try {
+    return new Promise((resolve) => {
+      chrome.tabs.get(tabId, (tab) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          logger.log(`Tab ${tabId} doesn't exist:`, error.message);
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+  } catch (error) {
+    logger.error('Error checking if tab exists:', error);
+    return false;
+  }
+}
+
 // Set up the auth callback listener immediately
 setupAuthCallbackListener();
 
@@ -55,6 +76,25 @@ chrome.storage.local.set({ 'environment': isPreviewEnvironment() ? 'preview' : '
   const envDetails = logEnvironmentDetails();
   logger.log('Environment details:', envDetails);
 });
+
+// Check if tab exists and content script can receive messages
+async function verifyTabIsReady(tabId) {
+  if (!tabId) return false;
+  
+  try {
+    const exists = await tabExists(tabId);
+    if (!exists) {
+      logger.log(`Tab ${tabId} no longer exists`);
+      return false;
+    }
+    
+    // Try to check if content script is loaded
+    return await ensureContentScriptLoaded({ id: tabId });
+  } catch (error) {
+    logger.error(`Error verifying tab ${tabId}:`, error);
+    return false;
+  }
+}
 
 // Implement image syncing with improved error handling
 async function syncImagesToGallery(images) {
@@ -82,30 +122,36 @@ async function syncImagesToGallery(images) {
       const tabs = await chrome.tabs.query(galleryTabQuery);
       
       if (tabs.length > 0) {
-        // If gallery is open, try to send messages through bridge
-        logger.log('Gallery tab found, sending images via bridge');
+        // If gallery is open, first verify the tab exists and is ready
+        const isReady = await verifyTabIsReady(tabs[0].id);
         
-        try {
-          // First try sending message to the tab
-          const response = await safeSendMessage(
-            tabs[0].id, 
-            { type: 'GALLERY_IMAGES', images: enrichedImages }
-          );
-          
-          if (response && response.success) {
-            logger.log('Successfully sent images to gallery tab:', response);
-            // Focus the gallery tab
-            chrome.tabs.update(tabs[0].id, { active: true });
-            return true;
-          } else {
-            logger.log('Error sending to gallery tab:', response?.error || 'Unknown error');
+        if (isReady) {
+          // Try sending message to the tab
+          try {
+            const response = await safeSendMessage(
+              tabs[0].id, 
+              { type: 'GALLERY_IMAGES', images: enrichedImages }
+            );
+            
+            if (response && response.success) {
+              logger.log('Successfully sent images to gallery tab:', response);
+              // Focus the gallery tab
+              chrome.tabs.update(tabs[0].id, { active: true });
+              return true;
+            } else {
+              logger.log('Error sending to gallery tab:', response?.error || 'Unknown error');
+              // Fallback to opening a new gallery tab
+              openGalleryWithImages(enrichedImages);
+              return true;
+            }
+          } catch (err) {
+            handleError('syncToGalleryTab', err);
             // Fallback to opening a new gallery tab
             openGalleryWithImages(enrichedImages);
             return true;
           }
-        } catch (err) {
-          handleError('syncToGalleryTab', err);
-          // Fallback to opening a new gallery tab
+        } else {
+          logger.log('Gallery tab found but not ready, opening new tab');
           openGalleryWithImages(enrichedImages);
           return true;
         }
@@ -145,12 +191,24 @@ function openGalleryWithImages(images) {
         logger.log('Gallery tab fully loaded, waiting to ensure bridge is ready');
         
         // Wait a bit to ensure the page is fully loaded and bridge script is injected
-        setTimeout(() => {
+        setTimeout(async () => {
           try {
-            safeSendMessage(
-              tabId,
-              { type: 'GALLERY_IMAGES', images: images }
-            ).then(response => {
+            // First check if tab still exists
+            const tabStillExists = await tabExists(tabId);
+            
+            if (!tabStillExists) {
+              logger.error('Tab no longer exists, cannot send images');
+              chrome.tabs.onUpdated.removeListener(listener);
+              return;
+            }
+            
+            try {
+              const response = await safeSendMessage(
+                tabId,
+                { type: 'GALLERY_IMAGES', images: images },
+                { maxRetries: 2, retryDelay: 500 }
+              );
+              
               if (response && response.success) {
                 logger.log('Successfully sent images to new gallery tab');
               } else {
@@ -179,13 +237,13 @@ function openGalleryWithImages(images) {
                   logger.error('Error executing session storage script:', err);
                 });
               }
-            }).catch(err => {
+            } catch (err) {
               handleError('sendImagesToNewTab', err);
-            });
+            }
           } catch (err) {
             handleError('sendImagesToGalleryTab', err);
           }
-        }, 2000); // Increased delay to ensure page and bridge are ready
+        }, 2500); // Increased delay to ensure page and bridge are ready
         
         chrome.tabs.onUpdated.removeListener(listener);
       }
@@ -236,35 +294,53 @@ chrome.action.onClicked.addListener(async (tab) => {
     logger.log('Current URL supported for scanning:', supported);
     
     if (supported) {
+      // First verify if tab still exists
+      const tabStillExists = await tabExists(tab.id);
+      
+      if (!tabStillExists) {
+        logger.error('Tab no longer exists, cannot scan');
+        return;
+      }
+      
       // If on a supported site, start the auto scan
       const isReady = await ensureContentScriptLoaded(tab);
       
       if (isReady) {
         // Content script is ready, send scan message
-        const response = await safeSendMessage(
-          tab.id, 
-          { 
-            action: 'startAutoScan',
-            options: { scrollDelay: 500, scrollStep: 800 }
-          }
-        );
-        
-        if (response && response.success) {
-          logger.log('Auto-scan initiated on page');
-          
-          createNotification(
-            'maingallery_scan_started', 
-            'Scanning Started', 
-            'MainGallery is scanning the page for AI images. Please keep the tab open.'
+        try {
+          const response = await safeSendMessage(
+            tab.id, 
+            { 
+              action: 'startAutoScan',
+              options: { scrollDelay: 500, scrollStep: 800 }
+            },
+            { maxRetries: 2, retryDelay: 500 }
           );
-        } else {
-          logger.error('Auto-scan could not be started:', response);
           
-          // Show error to user
+          if (response && response.success) {
+            logger.log('Auto-scan initiated on page');
+            
+            createNotification(
+              'maingallery_scan_started', 
+              'Scanning Started', 
+              'MainGallery is scanning the page for AI images. Please keep the tab open.'
+            );
+          } else {
+            logger.error('Auto-scan could not be started:', response);
+            
+            // Show error to user
+            createNotification(
+              'maingallery_error', 
+              'Scan Error', 
+              'Could not scan the current page. Please refresh and try again.'
+            );
+          }
+        } catch (err) {
+          handleError('sendStartAutoScan', err);
           createNotification(
             'maingallery_error', 
-            'Scan Error', 
-            'Could not scan the current page. Please refresh and try again.'
+            'Communication Error', 
+            'Could not communicate with the page. Please refresh and try again.'
           );
         }
       } else {
@@ -453,31 +529,53 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     else if (message.action === 'startAutoScan') {
       // Forward scan request to the active tab
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
         if (!tabs || !tabs[0] || !tabs[0].id) {
           logger.error('No active tab found for scanning');
           sendResponse({ success: false, error: 'No active tab found' });
           return;
         }
         
+        // First verify tab still exists
+        const tabStillExists = await tabExists(tabs[0].id);
+        
+        if (!tabStillExists) {
+          logger.error('Tab no longer exists, cannot scan');
+          sendResponse({ success: false, error: 'Tab no longer exists' });
+          return;
+        }
+        
         // Ensure content script is loaded on the active tab
-        ensureContentScriptLoaded(tabs[0])
-          .then(isReady => {
-            if (isReady) {
-              // Forward the auto-scan request to content script
-              safeSendMessage(tabs[0].id, message)
-                .then(response => {
-                  sendResponse(response);
-                })
-                .catch(err => {
-                  handleError('startAutoScanForward', err);
-                  sendResponse({ success: false, error: err.message });
-                });
-            } else {
-              logger.error('Could not load content script for scanning');
-              sendResponse({ success: false, error: 'Could not initialize scanner' });
+        try {
+          const isReady = await ensureContentScriptLoaded(tabs[0]);
+          
+          if (isReady) {
+            // Forward the auto-scan request to content script
+            try {
+              const response = await safeSendMessage(
+                tabs[0].id, 
+                message, 
+                { maxRetries: 2, retryDelay: 500 }
+              );
+              sendResponse(response);
+            } catch (err) {
+              handleError('startAutoScanForward', err);
+              sendResponse({ 
+                success: false, 
+                error: err.message || 'Communication error with content script' 
+              });
             }
+          } else {
+            logger.error('Could not load content script for scanning');
+            sendResponse({ success: false, error: 'Could not initialize scanner' });
+          }
+        } catch (err) {
+          handleError('ensureContentScriptForScan', err);
+          sendResponse({ 
+            success: false, 
+            error: 'Error initializing scanner: ' + (err.message || 'Unknown error') 
           });
+        }
       });
       
       return true; // Keep message channel open for async response

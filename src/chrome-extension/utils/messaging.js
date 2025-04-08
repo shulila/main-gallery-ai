@@ -1,171 +1,175 @@
 
 /**
- * Chrome extension messaging utilities for MainGallery.AI
+ * Message handling utilities for extension communication
  */
-
 import { logger } from './logger.js';
-import { handleError } from './errorHandler.js';
+import { handleError, withRetry } from './errorHandler.js';
 
 /**
- * Safely send a message to a tab with retry logic
- * @param {number} tabId - Target tab ID
- * @param {Object} message - Message to send
- * @param {Function} [callback] - Optional callback
- * @param {number} [maxRetries=3] - Maximum number of retries
- * @returns {Promise<Object>} Promise resolving to the response
+ * Check if tab is ready for messaging
+ * @param {number} tabId - Chrome tab ID
+ * @returns {Promise<boolean>} Whether tab is ready
  */
-export function safeSendMessage(tabId, message, callback, maxRetries = 3) {
-  let retryCount = 0;
-  
-  return new Promise((resolve) => {
-    function attemptSend() {
-      try {
-        // Check if tab exists first
-        chrome.tabs.get(tabId, (tab) => {
-          if (chrome.runtime.lastError) {
-            logger.error('Tab does not exist:', chrome.runtime.lastError);
-            const response = { success: false, error: 'Tab does not exist' };
-            if (callback) callback(response);
-            resolve(response);
-            return;
-          }
-          
-          // Tab exists, now try to send message
-          chrome.tabs.sendMessage(tabId, message, (response) => {
-            if (chrome.runtime.lastError) {
-              logger.error('Error sending message:', chrome.runtime.lastError);
-              
-              if (retryCount < maxRetries) {
-                logger.log(`Retry attempt ${retryCount + 1}/${maxRetries}...`);
-                retryCount++;
-                setTimeout(attemptSend, 500 * retryCount); // Exponential backoff
-              } else {
-                logger.error('Max retries reached, message could not be delivered');
-                
-                // If this is a scan request and failed, try to inject content script again
-                if (message.action === 'startAutoScan' && retryCount >= maxRetries) {
-                  logger.log('Trying to inject content script before final attempt');
-                  
-                  try {
-                    chrome.scripting.executeScript({
-                      target: { tabId: tabId },
-                      files: ['content.js']
-                    }).then(() => {
-                      logger.log('Content script injected, waiting before final attempt');
-                      setTimeout(() => {
-                        chrome.tabs.sendMessage(tabId, message, (finalResponse) => {
-                          if (chrome.runtime.lastError) {
-                            logger.error('Final attempt failed:', chrome.runtime.lastError);
-                            const response = { 
-                              success: false, 
-                              error: chrome.runtime.lastError.message,
-                              injectionAttempted: true
-                            };
-                            if (callback) callback(response);
-                            resolve(response);
-                          } else {
-                            const response = finalResponse || { success: true };
-                            if (callback) callback(response);
-                            resolve(response);
-                          }
-                        });
-                      }, 1000);
-                    }).catch(err => {
-                      logger.error('Error injecting content script:', err);
-                      const response = { success: false, error: 'Content script injection failed' };
-                      if (callback) callback(response);
-                      resolve(response);
-                    });
-                  } catch (err) {
-                    logger.error('Error in injection logic:', err);
-                    const response = { success: false, error: err.message };
-                    if (callback) callback(response);
-                    resolve(response);
-                  }
-                } else {
-                  const response = { success: false, error: chrome.runtime.lastError.message };
-                  if (callback) callback(response);
-                  resolve(response);
-                }
-              }
-            } else {
-              const result = response || { success: true };
-              if (callback) callback(result);
-              resolve(result);
-            }
-          });
-        });
-      } catch (err) {
-        handleError('safeSendMessage', err);
-        const response = { success: false, error: err.message };
-        if (callback) callback(response);
-        resolve(response);
-      }
-    }
-    
-    attemptSend();
-  });
+async function isTabReadyForMessaging(tabId) {
+  try {
+    return new Promise((resolve) => {
+      chrome.tabs.get(tabId, (tab) => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          logger.warn(`Tab ${tabId} not ready: ${error.message}`);
+          resolve(false);
+          return;
+        }
+        
+        if (!tab || tab.status !== 'complete') {
+          logger.warn(`Tab ${tabId} not in complete state: ${tab?.status || 'unknown'}`);
+          resolve(false);
+          return;
+        }
+        
+        resolve(true);
+      });
+    });
+  } catch (error) {
+    handleError('isTabReadyForMessaging', error, { silent: true });
+    return false;
+  }
 }
 
 /**
- * Ping a tab to check if content script is ready
- * @param {number} tabId - Tab ID to ping
- * @returns {Promise<boolean>} Promise resolving to whether content script is ready
+ * Send a message to a tab with retry support and error handling
+ * @param {number} tabId - ID of tab to send message to
+ * @param {object} message - Message data to send
+ * @param {object} options - Options for sending
+ * @returns {Promise} Response from tab
  */
-export function pingTab(tabId) {
-  return new Promise((resolve) => {
-    try {
-      chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
-        if (chrome.runtime.lastError) {
-          logger.log('Content script not ready:', chrome.runtime.lastError);
-          resolve(false);
-        } else {
-          logger.log('Content script is ready:', response);
-          resolve(true);
-        }
-      });
-    } catch (err) {
-      handleError('pingTab', err, { silent: true });
-      resolve(false);
-    }
-  });
+export async function safeSendMessage(tabId, message, options = {}) {
+  const { maxRetries = 1, retryDelay = 300 } = options;
+  
+  // First check that tab exists and is ready
+  const isReady = await isTabReadyForMessaging(tabId);
+  if (!isReady) {
+    throw new Error(`Tab ${tabId} is not ready for messaging`);
+  }
+  
+  // Use retry mechanism
+  try {
+    return await withRetry(
+      async () => {
+        return new Promise((resolve, reject) => {
+          try {
+            chrome.tabs.sendMessage(tabId, message, (response) => {
+              // Check for runtime error
+              const error = chrome.runtime.lastError;
+              if (error) {
+                reject(new Error(`Error sending message to tab ${tabId}: ${error.message}`));
+                return;
+              }
+              
+              // Resolve with response
+              resolve(response || { success: true });
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+      { 
+        maxRetries, 
+        baseDelay: retryDelay, 
+        source: `sendMessage(${tabId})`
+      }
+    );
+  } catch (error) {
+    // Handle the error and return a graceful failure response
+    handleError('safeSendMessage', error);
+    return { 
+      success: false, 
+      error: error.message || 'Failed to send message to tab'
+    };
+  }
 }
 
 /**
  * Ensure content script is loaded in a tab
- * @param {Object} tab - Tab object
- * @returns {Promise<boolean>} Promise resolving to whether content script is now ready
+ * @param {object} tab - Tab object
+ * @returns {Promise<boolean>} Whether content script is loaded
  */
 export async function ensureContentScriptLoaded(tab) {
   if (!tab || !tab.id) {
-    logger.error('Invalid tab');
+    logger.error('Invalid tab passed to ensureContentScriptLoaded');
     return false;
   }
   
-  // First try pinging to see if content script is already loaded
-  const isReady = await pingTab(tab.id);
-  if (isReady) {
-    return true;
-  }
-  
-  // Content script not loaded, inject it
-  logger.log('Content script not ready, injecting...');
-  
   try {
+    // First check if tab is ready for messaging
+    const tabIsReady = await isTabReadyForMessaging(tab.id);
+    if (!tabIsReady) {
+      logger.warn(`Tab ${tab.id} not ready for messaging`);
+      return false;
+    }
+    
+    // Try to ping content script
+    try {
+      const response = await new Promise((resolve) => {
+        chrome.tabs.sendMessage(tab.id, { action: 'ping' }, (response) => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            logger.log(`Content script not loaded in tab ${tab.id}: ${error.message}`);
+            resolve(null);
+            return;
+          }
+          resolve(response);
+        });
+      });
+      
+      // If we get a pong response, content script is already loaded
+      if (response && response.action === 'pong') {
+        logger.log('Content script already loaded in tab', tab.id);
+        return true;
+      }
+    } catch (e) {
+      // Ignore errors here - just means content script isn't loaded
+      logger.log('Error checking for content script, will try to inject:', e.message);
+    }
+    
+    // Inject content script
+    logger.log('Injecting content script into tab', tab.id);
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       files: ['content.js']
     });
     
-    logger.log('Content script injected, waiting for initialization');
+    // Wait a bit to ensure content script initializes
+    await new Promise(resolve => setTimeout(resolve, 300));
     
-    // Give it time to initialize
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Check if it's ready now
-    return await pingTab(tab.id);
-  } catch (err) {
-    handleError('ensureContentScriptLoaded', err);
+    // Verify content script was loaded by sending a ping
+    try {
+      const response = await new Promise((resolve) => {
+        chrome.tabs.sendMessage(tab.id, { action: 'ping' }, (response) => {
+          const error = chrome.runtime.lastError;
+          if (error) {
+            logger.warn(`Content script still not responsive after injection: ${error.message}`);
+            resolve(null);
+            return;
+          }
+          resolve(response);
+        });
+      });
+      
+      if (response && response.action === 'pong') {
+        logger.log('Content script successfully injected and responsive');
+        return true;
+      } else {
+        logger.warn('Content script injected but not responsive');
+        return false;
+      }
+    } catch (e) {
+      handleError('verifyContentScriptInjection', e, { silent: true });
+      return false;
+    }
+  } catch (error) {
+    handleError('ensureContentScriptLoaded', error);
     return false;
   }
 }

@@ -25,6 +25,11 @@ echo "Making post-build fixes for module support..."
 # This is for any HTML files that might include scripts
 find dist-extension -name "*.html" -exec sed -i 's/<script /<script type="module" /g' {} \;
 
+echo "Adding proper error handling to messaging..."
+# Add better error handling in the messaging code
+# This is a critical fix to avoid "No tab with id" errors
+find dist-extension -name "*.js" -exec sed -i 's/chrome\.tabs\.sendMessage(\([^,]*\),/chrome.tabs.sendMessage(\1, /g' {} \;
+
 echo "Validating build..."
 # Check for expected files
 if [ ! -f "dist-extension/manifest.json" ]; then
@@ -39,6 +44,16 @@ fi
 
 if [ ! -f "dist-extension/background.js" ]; then
   echo "ERROR: background.js is missing from the build!"
+  exit 1
+fi
+
+if [ ! -f "dist-extension/utils/errorHandler.js" ]; then
+  echo "ERROR: errorHandler.js is missing from the build!"
+  exit 1
+fi
+
+if [ ! -f "dist-extension/utils/messaging.js" ]; then
+  echo "ERROR: messaging.js is missing from the build!"
   exit 1
 fi
 
@@ -120,4 +135,3 @@ if [[ "$BUILD_ENV" == "preview" ]]; then
 else
   echo "- https://main-gallery-ai.lovable.app"
 fi
-
