@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 import { Route, Routes, Navigate } from 'react-router-dom';
 
@@ -17,6 +16,7 @@ import AuthCallbackPage from './pages/auth/callback'; // Import the new callback
 
 import './App.css';
 
+// Special handling for auth callbacks with hash fragments
 function App() {
   // Special handling for auth callbacks with hash fragments
   useEffect(() => {
