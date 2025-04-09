@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { handleOAuthRedirect, handleOAuthTokenFromHash, getGalleryUrl } from '@/utils/authTokenHandler';
+import { getGalleryUrl } from '@/utils/authTokenHandler';
 
 type AuthCallbackHandlerProps = {
   setStatus: (status: string) => void;
@@ -53,143 +53,111 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
         
         let success = false;
         
-        if (window.location.hash && window.location.hash.includes('access_token')) {
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const accessToken = hashParams.get('access_token');
-          const refreshToken = hashParams.get('refresh_token') || '';
-          const email = hashParams.get('email') || '';
+        // Use Supabase v2's getSessionFromUrl method to handle the OAuth callback
+        const { data, error } = await supabase.auth.getSessionFromUrl();
+        
+        if (error) {
+          console.error('[MainGallery] Error getting session from URL:', error);
+          recordDebugInfo('session_from_url_error', { error: error.message });
+          throw error;
+        }
+        
+        if (data.session) {
+          recordDebugInfo('session_from_url_success', { 
+            user: data.session.user.email,
+            expiresAt: data.session.expires_at
+          });
           
-          if (accessToken) {
-            recordDebugInfo('token_found_in_hash', { hasToken: true });
-            console.log('[MainGallery] Found access token in URL hash, setting up session');
+          // Store relevant information for the application
+          localStorage.setItem('main_gallery_user_email', data.session.user.email || 'User');
+          localStorage.setItem('main_gallery_user_id', data.session.user.id);
+          
+          // Get detailed user information
+          const { data: userData } = await supabase.auth.getUser();
+          
+          recordDebugInfo('session_verification', { 
+            sessionValid: !!userData?.user,
+            userEmail: userData?.user?.email 
+          });
+          
+          success = true;
+          
+          // Clean URL after successful authentication
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+            recordDebugInfo('url_cleaned', { action: 'hash_removed' });
+          }
+          
+          try {
+            console.log('[MainGallery] Notifying about successful login');
+            window.postMessage({
+              type: "WEB_APP_TO_EXTENSION",
+              action: "loginSuccess",
+              email: data.session.user.email || 'User',
+              timestamp: Date.now()
+            }, "*");
+            recordDebugInfo('extension_notified');
             
-            try {
-              const { data, error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken
-              });
-              
-              if (error) {
-                console.error('[MainGallery] Error setting Supabase session:', error);
-                recordDebugInfo('supabase_session_error', { error: error.message });
-                throw error;
-              }
-              
-              localStorage.setItem('access_token', accessToken);
-              if (refreshToken) {
-                localStorage.setItem('refresh_token', refreshToken);
-              }
-              
-              const expiresAt = Date.now() + (24 * 60 * 60 * 1000);
-              const tokenData = {
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                timestamp: Date.now(),
-                expires_at: expiresAt
-              };
-              
-              localStorage.setItem('main_gallery_auth_token', JSON.stringify(tokenData));
-              
-              if (data?.user) {
-                localStorage.setItem('main_gallery_user_email', data.user.email || 'User');
-                localStorage.setItem('main_gallery_user_id', data.user.id);
-                recordDebugInfo('user_data_stored', { 
-                  email: data.user.email, 
-                  id: data.user.id 
-                });
-              }
-              
-              // Fix: getUser() needs to be called without parameters
-              const { data: userData } = await supabase.auth.getUser();
-              
-              recordDebugInfo('session_verification', { 
-                sessionValid: !!userData?.user,
-                userEmail: userData?.user?.email 
-              });
-              
-              success = true;
-              
-              if (window.history && window.history.replaceState) {
-                window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-                recordDebugInfo('url_cleaned', { action: 'hash_removed' });
-              }
-              
-              try {
-                console.log('[MainGallery] Notifying about successful login');
-                window.postMessage({
+            if (isFromExtension) {
+              console.log('[MainGallery] Detected auth from extension, sending message to extension');
+              if (window.opener) {
+                window.opener.postMessage({
                   type: "WEB_APP_TO_EXTENSION",
                   action: "loginSuccess",
-                  email: data?.user?.email || 'User',
+                  email: data.session.user.email || 'User',
                   timestamp: Date.now()
                 }, "*");
-                recordDebugInfo('extension_notified');
                 
-                if (isFromExtension) {
-                  console.log('[MainGallery] Detected auth from extension, sending message to extension');
-                  if (window.opener) {
-                    window.opener.postMessage({
-                      type: "WEB_APP_TO_EXTENSION",
-                      action: "loginSuccess",
-                      email: data?.user?.email || 'User',
-                      timestamp: Date.now()
-                    }, "*");
-                    
-                    setTimeout(() => {
-                      window.close();
-                    }, 1000);
-                    return;
-                  }
-                  
-                  if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
-                    window.chrome.runtime.sendMessage({
-                      type: "WEB_APP_TO_EXTENSION",
-                      action: "loginSuccess",
-                      email: data?.user?.email || 'User',
-                      token: accessToken,
-                      timestamp: Date.now()
-                    });
-                  }
-                }
-              } catch (e) {
-                console.error('[MainGallery] Error sending message to extension:', e);
+                setTimeout(() => {
+                  window.close();
+                }, 1000);
+                return;
               }
-            } catch (sessionError) {
-              console.error('[MainGallery] Error in direct session setup:', sessionError);
-              recordDebugInfo('direct_session_setup_error', { error: sessionError.message });
+              
+              if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
+                window.chrome.runtime.sendMessage({
+                  type: "WEB_APP_TO_EXTENSION",
+                  action: "loginSuccess",
+                  email: data.session.user.email || 'User',
+                  token: data.session.access_token,
+                  timestamp: Date.now()
+                });
+              }
             }
+          } catch (e) {
+            console.error('[MainGallery] Error sending message to extension:', e);
           }
         }
         
+        // Check the current session state if we don't have success yet
         if (!success) {
-          success = await handleOAuthTokenFromHash(window.location.href);
-          recordDebugInfo('token_from_hash_result', { success });
+          const { data: sessionData } = await supabase.auth.getSession();
+          const sessionExists = !!sessionData.session;
+          recordDebugInfo('final_session_check', { 
+            sessionExists,
+            user: sessionData.session?.user?.email 
+          });
+          
+          if (sessionExists) {
+            success = true;
+          }
         }
         
-        if (!success) {
-          success = await handleOAuthRedirect();
-          recordDebugInfo('oauth_redirect_result', { success });
-        }
-        
-        // Fix: getSession() doesn't take parameters in the current Supabase version
-        const { data: sessionData } = await supabase.auth.getSession();
-        const sessionExists = !!sessionData.session;
-        recordDebugInfo('final_session_check', { 
-          sessionExists,
-          user: sessionData.session?.user?.email 
-        });
-        
-        if (isFromExtension && (success || sessionExists)) {
+        if (isFromExtension && success) {
           setStatus('Login successful! You can close this tab now.');
           toast({
             title: "Login Successful",
             description: "You can now close this window and return to the extension.",
           });
           
-          if (sessionData.session?.user) {
+          // Get the latest session data
+          const { data: latestSession } = await supabase.auth.getSession();
+          
+          if (latestSession.session?.user) {
             window.postMessage({
               type: "WEB_APP_TO_EXTENSION",
               action: "loginSuccess",
-              email: sessionData.session.user.email || 'User',
+              email: latestSession.session.user.email || 'User',
               timestamp: Date.now()
             }, "*");
           }
@@ -204,13 +172,14 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
           return;
         }
         
-        if (success || sessionExists) {
+        if (success) {
           setStatus('Login successful! Redirecting...');
           toast({
             title: "Login Successful",
             description: "You've been logged in successfully!",
           });
           
+          // Clean URL if needed
           if ((window.location.hash || window.location.search.includes('access_token')) && 
               window.history && window.history.replaceState) {
             const cleanUrl = window.location.pathname;
