@@ -52,6 +52,8 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
         setStatus('Processing login...');
         
         let success = false;
+        let accessToken = '';
+        let refreshToken = '';
         
         // Handle redirects with URL parameters containing auth info
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -59,8 +61,8 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
         
         if (hashParams.has('access_token') || searchParams.has('access_token')) {
           // We have tokens in the URL, extract and set them
-          const accessToken = hashParams.get('access_token') || searchParams.get('access_token') || '';
-          const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token') || '';
+          accessToken = hashParams.get('access_token') || searchParams.get('access_token') || '';
+          refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token') || '';
           
           if (accessToken) {
             recordDebugInfo('token_found_in_url', { 
@@ -160,7 +162,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             }
             
             if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
-              // Fixed: Get the token properly from the previously defined variables
+              // Fixed: Use the properly defined accessToken variable from the outer scope
               const currentToken = accessToken;
               
               window.chrome.runtime.sendMessage({
