@@ -157,6 +157,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
               const currentToken = accessToken;
               
+              // Fixed: Use the correct object format for calling window.chrome.runtime.sendMessage
               window.chrome.runtime.sendMessage({
                 type: "WEB_APP_TO_EXTENSION",
                 action: "loginSuccess",
