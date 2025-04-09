@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -63,6 +64,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             console.log('[MainGallery] Found access token in URL hash, setting up session');
             
             try {
+              // Fix here: properly format the arguments for setSession
               const { data, error } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken
