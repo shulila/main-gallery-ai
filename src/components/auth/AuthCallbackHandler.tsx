@@ -99,7 +99,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
                 });
               }
               
-              // Fix: getUser doesn't take parameters in the current Supabase version
+              // Fix: getUser() doesn't need parameters in the current Supabase version
               const { data: userData } = await supabase.auth.getUser();
               
               recordDebugInfo('session_verification', { 
@@ -170,7 +170,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
           recordDebugInfo('oauth_redirect_result', { success });
         }
         
-        // Fix: getUser doesn't take parameters in the current Supabase version
+        // Fix: getSession() doesn't take parameters in the current Supabase version
         const { data: sessionData } = await supabase.auth.getSession();
         const sessionExists = !!sessionData.session;
         recordDebugInfo('final_session_check', { 
