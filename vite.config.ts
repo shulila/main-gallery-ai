@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { componentTagger } from "lovable-tagger"
+import type { Plugin, OutputBundle, OutputChunk } from 'rollup'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -46,25 +47,25 @@ export default defineConfig(({ mode }) => {
         plugins: [
           {
             name: 'convert-alias-paths',
-            generateBundle(_, bundle) {
+            generateBundle(_: unknown, bundle: OutputBundle): void {
               // Process each chunk to replace @/ with relative paths
               Object.keys(bundle).forEach(key => {
-                const chunk = bundle[key];
+                const chunk = bundle[key] as OutputChunk;
                 if (chunk.type === 'chunk') {
                   let code = chunk.code;
                   // Replace @/ imports with relative paths
-                  code = code.replace(/from ['"]@\/(.*?)['"]/g, (match, p1) => {
+                  code = code.replace(/from ['"]@\/(.*?)['"]/g, (match: string, p1: string) => {
                     return `from '../${p1}'`;
                   });
                   // Replace dynamic imports too
-                  code = code.replace(/import\(['"]@\/(.*?)['"]\)/g, (match, p1) => {
+                  code = code.replace(/import\(['"]@\/(.*?)['"]\)/g, (match: string, p1: string) => {
                     return `import('../${p1}')`;
                   });
                   chunk.code = code;
                 }
               });
             }
-          }
+          } as Plugin
         ]
       } : {}),
     },
