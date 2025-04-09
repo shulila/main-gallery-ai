@@ -64,7 +64,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             console.log('[MainGallery] Found access token in URL hash, setting up session');
             
             try {
-              // Fix here: properly format the arguments for setSession
+              // Fixed: Properly format the object passed to setSession
               const { data, error } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken
