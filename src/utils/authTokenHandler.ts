@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -291,6 +290,7 @@ async function processAccessToken(accessToken: string, refreshToken: string, ema
     
     // Explicitly set Supabase session
     try {
+      // Fix: Pass object with access_token and refresh_token properties
       const { data, error } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken
