@@ -1,20 +1,19 @@
 
 :root {
-  --brand-primary: #3b82f6;
-  --brand-primary-hover: #2563eb;
-  --brand-primary-focus: rgb(59 130 246 / 0.5);
-  --brand-secondary: #334155;
-  --brand-secondary-hover: #1e293b;
-  --text-primary: #1e293b;
-  --text-secondary: #64748b;
+  --brand-primary: #9b87f5;
+  --brand-primary-hover: #8b5cf6;
+  --brand-secondary: #7E69AB;
+  --brand-secondary-hover: #6E59A5;
+  --text-primary: #1A1F2C;
+  --text-secondary: #8E9196;
   --text-on-primary: #ffffff;
   --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --border-color: #e2e8f0;
+  --bg-secondary: #F1F0FB;
+  --border-color: #E5DEFF;
   --error-color: #ef4444;
   --success-color: #10b981;
-  --info-color: #3b82f6;
-  --warning-color: #f59e0b;
+  --info-color: #9b87f5;
+  --warning-color: #f97316;
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
@@ -84,7 +83,7 @@ header h1 {
 .spinner {
   width: 24px;
   height: 24px;
-  border: 3px solid var(--brand-primary-focus);
+  border: 3px solid rgba(155, 135, 245, 0.3);
   border-top-color: var(--brand-primary);
   border-radius: 50%;
   animation: spinner 0.8s linear infinite;
@@ -103,17 +102,54 @@ header h1 {
   height: 100%;
 }
 
-.user-info, .platform-info {
+.welcome-text {
+  text-align: center;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.welcome-message {
   padding: 0.75rem;
   border-radius: var(--radius-md);
   background-color: var(--bg-secondary);
   font-size: 0.875rem;
+  margin-bottom: 0.5rem;
 }
 
 .platform-info {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: rgba(155, 135, 245, 0.1);
   color: var(--brand-primary);
   font-weight: 500;
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 0.5rem;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.auth-input {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px rgba(155, 135, 245, 0.2);
 }
 
 .scan-options {
@@ -237,27 +273,14 @@ header h1 {
   color: var(--text-primary);
 }
 
+.email-btn {
+  background-color: var(--brand-primary);
+  color: var(--text-on-primary);
+}
+
 .provider-icon {
   width: 16px;
   height: 16px;
-}
-
-.auth-links {
-  display: flex;
-  justify-content: center;
-  margin-top: 0.75rem;
-}
-
-.auth-links a {
-  color: var(--brand-primary);
-  font-size: 0.875rem;
-  text-decoration: none;
-  transition: all 0.2s;
-}
-
-.auth-links a:hover {
-  text-decoration: underline;
-  color: var(--brand-primary-hover);
 }
 
 .status-message {

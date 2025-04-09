@@ -1,145 +1,128 @@
 
 /**
- * URL utility functions for MainGallery.AI
+ * URL Utilities for the MainGallery.AI extension
+ * Provides consistent URL handling and environment detection
  */
 
-import { logger } from './logger.js';
-
-// Supported platforms for extension activation - same as in auth.js
-const SUPPORTED_PLATFORMS = [
-  'midjourney.com',
-  'leonardo.ai',
-  'openai.ai',
-  'openai.com',
-  'dreamstudio.ai',
-  'stability.ai',
-  'runwayml.com',
-  'pika.art',
-  'discord.com/channels',
-  'playgroundai.com',
-  'creator.nightcafe.studio'
-];
-
-/**
- * Check if a URL is from a supported AI platform
- * @param {string} url - The URL to check
- * @returns {boolean} True if supported, false otherwise
- */
-export function isSupportedPlatformUrl(url) {
-  if (!url) return false;
-  
-  try {
-    const urlObj = new URL(url);
-    return SUPPORTED_PLATFORMS.some(platform => 
-      urlObj.hostname.includes(platform) || 
-      (platform.includes('discord.com') && urlObj.pathname.includes('midjourney'))
-    );
-  } catch (err) {
-    logger.error('Error checking URL support:', err);
-    return false;
-  }
-}
-
-/**
- * Extract platform identifier from URL
- * @param {string} url - The URL to analyze
- * @returns {string|null} Platform identifier or null if not recognized
- */
-export function getPlatformIdFromUrl(url) {
-  if (!url) return null;
-  
-  try {
-    const urlObj = new URL(url);
-    
-    for (const platform of SUPPORTED_PLATFORMS) {
-      if (urlObj.hostname.includes(platform)) {
-        // Return cleaned platform identifier (remove .com etc)
-        return platform.split('.')[0];
-      }
-    }
-    
-    // Special case for Discord + Midjourney
-    if (urlObj.hostname.includes('discord.com') && 
-        urlObj.pathname.includes('midjourney')) {
-      return 'midjourney';
-    }
-    
-    return null;
-  } catch (err) {
-    logger.error('Error getting platform ID from URL:', err);
-    return null;
-  }
-}
-
-/**
- * Determine if the current environment is the preview environment
- * This function is critical for routing to the correct endpoints
- * @returns {boolean} True if in preview environment, false otherwise
- */
+// Detect if running in preview environment
 export function isPreviewEnvironment() {
-  // This value is forced during build time by build-extension.js
-  // DO NOT MODIFY this function as it will be replaced during build
-  
-  // DEFAULT ENVIRONMENT VALUE - Will be replaced during build
-  // When building with --preview flag, this will be set to true
-  return false; // Default to production for safety
+  // First check if we have a stored environment setting
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(['environment'], (result) => {
+        if (result.environment === 'preview') {
+          resolve(true);
+        } else if (result.environment === 'production') {
+          resolve(false);
+        } else {
+          // Fall back to domain detection
+          detectEnvironmentFromDomain().then(resolve);
+        }
+      });
+    } catch (err) {
+      // Fall back to domain detection
+      detectEnvironmentFromDomain().then(resolve);
+    }
+  });
 }
 
-/**
- * Get the correct base URL for the current environment
- * @returns {string} The base URL for the current environment
- */
+// Detect environment by checking the domain
+function detectEnvironmentFromDomain() {
+  return new Promise((resolve) => {
+    try {
+      // Check background page location if available
+      if (typeof self !== 'undefined' && self.location) {
+        const hostname = self.location.hostname;
+        if (hostname.includes('preview-main-gallery-ai') || 
+            hostname.includes('preview--main-gallery-ai')) {
+          resolve(true);
+          return;
+        }
+      }
+      
+      // If we can't detect from location, default to production
+      resolve(false);
+    } catch (err) {
+      // Default to production in case of any error
+      resolve(false);
+    }
+  });
+}
+
+// Get the base URL with environment detection
 export function getBaseUrl() {
-  if (isPreviewEnvironment()) {
-    return 'https://preview-main-gallery-ai.lovable.app';
+  // Use synchronous version for simplicity
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    try {
+      let isPreview = false;
+      chrome.storage.local.get(['environment'], (result) => {
+        isPreview = result.environment === 'preview';
+      });
+      
+      if (isPreview) {
+        return 'https://preview-main-gallery-ai.lovable.app';
+      }
+    } catch (err) {
+      // Ignore errors and default to production
+    }
   }
   
-  // Default to production domain
+  // Default to production
   return 'https://main-gallery-ai.lovable.app';
 }
 
-/**
- * Get the correct gallery URL based on environment
- * @returns {string} The gallery URL
- */
+// Get the gallery URL
 export function getGalleryUrl() {
   return `${getBaseUrl()}/gallery`;
 }
 
-/**
- * Get the correct auth URL based on environment
- * @param {object} options - Additional options for the URL
- * @returns {string} The auth URL with query parameters
- */
+// Get the auth URL with options
 export function getAuthUrl(options = {}) {
-  // Base URL depending on environment
-  const baseUrl = `${getBaseUrl()}/auth`;
+  const baseUrl = getBaseUrl();
+  const authPath = '/auth';
   
-  // Add query parameters if provided
-  const params = new URLSearchParams();
-  if (options.from) params.append('from', options.from);
-  if (options.redirect) params.append('redirect', options.redirect);
+  // Build query string from options
+  const queryParams = new URLSearchParams();
   
-  const queryString = params.toString();
-  return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+  if (options.from) {
+    queryParams.append('from', options.from);
+  }
+  
+  if (options.redirect) {
+    queryParams.append('redirect_to', options.redirect);
+  }
+  
+  // Add extension flag
+  queryParams.append('extension', 'true');
+  
+  const queryString = queryParams.toString();
+  return `${baseUrl}${authPath}${queryString ? '?' + queryString : ''}`;
 }
 
-/**
- * Is URL an authentication callback URL?
- * @param {string} url - The URL to check
- * @returns {boolean} True if it's an auth callback URL
- */
-export function isAuthCallbackUrl(url) {
+// Check if a URL matches any supported platform
+export function isSupportedPlatformUrl(url) {
+  // Import SUPPORTED_DOMAINS from a shared config
   if (!url) return false;
   
+  // Simplified check for common AI platforms
+  const aiPlatforms = [
+    'midjourney.com',
+    'leonardo.ai',
+    'openai.com',
+    'dreamstudio.ai',
+    'stability.ai',
+    'runwayml.com',
+    'pika.art',
+    'playgroundai.com',
+    'nightcafe.studio',
+    'firefly.adobe.com'
+  ];
+  
   try {
-    return (
-      url.includes('main-gallery-ai.lovable.app/auth/callback') || 
-      url.includes('preview-main-gallery-ai.lovable.app/auth/callback') ||
-      url.includes('/auth?access_token=')
-    );
-  } catch (err) {
-    logger.error('Error checking if URL is auth callback:', err);
+    const urlObj = new URL(url);
+    return aiPlatforms.some(domain => urlObj.hostname.includes(domain));
+  } catch (e) {
+    console.error('Error parsing URL:', e);
     return false;
   }
 }

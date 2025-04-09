@@ -21,22 +21,25 @@
       </div>
       
       <div id="login-view" class="view" style="display: none;">
-        <p>Sign in to start collecting your AI images</p>
+        <p class="welcome-text">Sign in to start collecting your AI images</p>
         <button id="google-login-btn" class="auth-btn google-btn">
           <img src="icons/google-icon.svg" alt="Google" class="provider-icon">
           Continue with Google
         </button>
-        <div class="email-login">
+        <div class="login-form">
+          <div class="form-group">
+            <input type="email" id="email-input" placeholder="Email Address" class="auth-input">
+          </div>
+          <div class="form-group">
+            <input type="password" id="password-input" placeholder="Password" class="auth-input">
+          </div>
           <button id="email-login-btn" class="auth-btn email-btn">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="provider-icon">
               <rect x="2" y="4" width="20" height="16" rx="2" />
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
             </svg>
-            Sign in with Email
+            Sign In
           </button>
-        </div>
-        <div class="auth-links">
-          <a href="#" id="open-web-login-link">Open full login page</a>
         </div>
       </div>
       
@@ -48,8 +51,8 @@
       </div>
       
       <div id="main-view" class="view" style="display: none;">
-        <div class="user-info">
-          <p>Signed in as: <span id="user-email">user@example.com</span></p>
+        <div class="welcome-message">
+          <p>Welcome, <span id="user-email">user@example.com</span>!</p>
         </div>
         
         <div id="platform-detected" class="platform-info" style="display: none;">

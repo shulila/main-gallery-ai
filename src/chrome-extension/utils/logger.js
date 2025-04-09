@@ -1,196 +1,74 @@
 
 /**
- * MainGallery.AI Structured Logging Module
- * Provides consistent logging across the extension with improved error handling
+ * Simple logger for the MainGallery.AI extension
+ * Centralizes logging with consistent formatting and level control
  */
 
-// Log levels with DEBUG as highest verbosity
-const LOG_LEVELS = {
-  ERROR: 0,
-  WARN: 1,
-  INFO: 2,
-  DEBUG: 3
-};
+// Set debug level
+// 0 = errors only, 1 = warnings, 2 = info, 3 = debug, 4 = verbose
+const LOG_LEVEL = 2;
 
-// Current log level (can be adjusted via settings)
-let currentLogLevel = LOG_LEVELS.INFO;
-
-// Prefix for all logs
-const LOG_PREFIX = '[MainGallery]';
-
-/**
- * Set the current log level
- * @param {number} level - Log level constant from LOG_LEVELS
- */
-function setLogLevel(level) {
-  if (Object.values(LOG_LEVELS).includes(level)) {
-    currentLogLevel = level;
-  }
+// Format date for log entries
+function getTimestamp() {
+  return new Date().toISOString();
 }
 
-/**
- * Log an error message with improved error object handling
- * @param {string} message - The message to log
- * @param {Error|object|string} [error] - Optional error object or message
- */
-function error(message, error) {
-  if (currentLogLevel >= LOG_LEVELS.ERROR) {
-    // Check if error is an object with response property (fetch API error)
-    if (error && error.response) {
-      try {
-        const contentType = error.response.headers?.get('content-type') || 'unknown';
-        const isHtml = contentType.includes('text/html') || 
-                       (error.isHtmlError === true);
-        
-        if (isHtml) {
-          console.error(`${LOG_PREFIX} ERROR: Received HTML response instead of JSON`);
-        }
-        
-        console.error(`${LOG_PREFIX} ERROR: ${message}`, {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          responseType: contentType,
-          isHtml: isHtml,
-          error: error
-        });
-      } catch (e) {
-        // Fallback if response processing fails
-        console.error(`${LOG_PREFIX} ERROR: ${message}`, error);
-      }
-    } 
-    // Handle regular Error objects
-    else if (error instanceof Error) {
-      console.error(`${LOG_PREFIX} ERROR: ${message}`, {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
-    } 
-    // Handle plain string errors or other types
-    else {
-      console.error(`${LOG_PREFIX} ERROR: ${message}`, error || '');
-    }
-  }
-}
-
-/**
- * Log a warning message
- * @param {string} message - The message to log
- * @param {object} [data] - Optional data to include
- */
-function warn(message, data) {
-  if (currentLogLevel >= LOG_LEVELS.WARN) {
-    console.warn(`${LOG_PREFIX} WARN: ${message}`, data || '');
-  }
-}
-
-/**
- * Log an info message
- * @param {string} message - The message to log
- * @param {object} [data] - Optional data to include
- */
-function info(message, data) {
-  if (currentLogLevel >= LOG_LEVELS.INFO) {
-    console.info(`${LOG_PREFIX} INFO: ${message}`, data || '');
-  }
-}
-
-/**
- * Log a debug message
- * @param {string} message - The message to log
- * @param {object} [data] - Optional data to include
- */
-function debug(message, data) {
-  if (currentLogLevel >= LOG_LEVELS.DEBUG) {
-    console.debug(`${LOG_PREFIX} DEBUG: ${message}`, data || '');
-  }
-}
-
-/**
- * Simple log, equivalent to info level
- * @param {string} message - The message to log
- * @param {object} [data] - Optional data to include
- */
-function log(message, data) {
-  info(message, data);
-}
-
-/**
- * Get the current log level
- * @returns {number} Current log level
- */
-function getLogLevel() {
-  return currentLogLevel;
-}
-
-/**
- * Check if the response is valid JSON
- * This helps identify HTML responses incorrectly sent as JSON
- * @param {Response} response - Fetch API response object
- * @returns {Promise<{isJson: boolean, data: any, contentType: string}>}
- */
-async function validateJsonResponse(response) {
-  const contentType = response.headers.get('content-type') || '';
+// Function to determine if a message should be logged based on level
+function shouldLog(level) {
+  const levelMap = {
+    error: 0,
+    warn: 1,
+    info: 2,
+    debug: 3,
+    verbose: 4
+  };
   
-  // Check if content type contains application/json
-  const isJsonContentType = contentType.includes('application/json');
-  
-  try {
-    // Try to parse as JSON regardless of content-type
-    const text = await response.text();
-    let data;
-    
-    try {
-      data = JSON.parse(text);
-      // Successfully parsed as JSON
-      return { 
-        isJson: true, 
-        data, 
-        contentType 
-      };
-    } catch (e) {
-      // Not valid JSON, could be HTML or other format
-      debug('Response is not valid JSON', { 
-        contentType,
-        textPreview: text.substring(0, 100) + '...',
-        parseError: e.message
-      });
-      
-      // Log a specific error for HTML responses
-      if (text.includes('<!DOCTYPE html>') || text.includes('<html')) {
-        error('Received HTML response instead of JSON', {
-          contentType,
-          textPreview: text.substring(0, 100) + '...'
-        });
-      }
-      
-      return { 
-        isJson: false, 
-        data: text, 
-        contentType,
-        htmlResponse: text.includes('<!DOCTYPE html>') || text.includes('<html')
-      };
-    }
-  } catch (e) {
-    error('Error reading response body', e);
-    return { 
-      isJson: false, 
-      data: null, 
-      contentType,
-      error: e 
-    };
-  }
+  return levelMap[level] <= LOG_LEVEL;
 }
 
-// Export all functions
+// Wrap console methods with formatting and level control
 export const logger = {
-  setLogLevel,
-  getLogLevel,
-  error,
-  warn,
-  info,
-  debug,
-  log,
-  LOG_LEVELS,
-  validateJsonResponse
+  error: (message, ...args) => {
+    if (shouldLog('error')) {
+      console.error(`[${getTimestamp()}] ERROR:`, message, ...args);
+    }
+  },
+  
+  warn: (message, ...args) => {
+    if (shouldLog('warn')) {
+      console.warn(`[${getTimestamp()}] WARN:`, message, ...args);
+    }
+  },
+  
+  info: (message, ...args) => {
+    if (shouldLog('info')) {
+      console.info(`[${getTimestamp()}] INFO:`, message, ...args);
+    }
+  },
+  
+  log: (message, ...args) => {
+    if (shouldLog('info')) {
+      console.log(`[${getTimestamp()}] INFO:`, message, ...args);
+    }
+  },
+  
+  debug: (message, ...args) => {
+    if (shouldLog('debug')) {
+      console.debug(`[${getTimestamp()}] DEBUG:`, message, ...args);
+    }
+  },
+  
+  verbose: (message, ...args) => {
+    if (shouldLog('verbose')) {
+      console.log(`[${getTimestamp()}] VERBOSE:`, message, ...args);
+    }
+  },
+  
+  // Allow setting log level dynamically
+  setLevel: (level) => {
+    if (typeof level === 'number' && level >= 0 && level <= 4) {
+      LOG_LEVEL = level;
+      console.log(`[${getTimestamp()}] Log level set to ${level}`);
+    }
+  }
 };

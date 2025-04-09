@@ -1,325 +1,91 @@
 
-/**
- * Error handling utilities for the extension
- */
 import { logger } from './logger.js';
 
 /**
- * Handles errors in a consistent way
- * @param {string} source - Source of the error
- * @param {Error|any} error - Error object or message
- * @param {object} options - Additional options
- * @returns {void}
+ * Handles errors with consistent logging and optional callbacks
+ * @param {string} source - Where the error occurred
+ * @param {Error} error - The error object
+ * @param {Object} options - Additional options
+ * @param {boolean} [options.silent=false] - Whether to suppress console output
+ * @param {Function} [options.callback] - Optional callback to run after error handling
  */
 export function handleError(source, error, options = {}) {
-  const { silent = false, rethrow = false, details = {} } = options;
+  const { silent = false, callback } = options;
   
+  // Format the error for logging
+  const errorMessage = error?.message || String(error);
+  const errorStack = error?.stack || 'No stack trace available';
+  
+  // Log the error unless silent mode is on
   if (!silent) {
+    logger.error(`Error in ${source}: ${errorMessage}`);
+    logger.error(`Stack trace: ${errorStack}`);
+  }
+  
+  // Run callback if provided
+  if (typeof callback === 'function') {
     try {
-      // If error is an object, format it for better readability
-      let errorOutput;
-      if (error instanceof Error) {
-        errorOutput = {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        };
-      } else if (typeof error === 'object' && error !== null) {
-        // Format object errors (like API responses) more clearly
-        try {
-          errorOutput = JSON.stringify(error, null, 2);
-        } catch (e) {
-          errorOutput = Object.keys(error).reduce((acc, key) => {
-            acc[key] = String(error[key]);
-            return acc;
-          }, {});
-        }
-      } else {
-        errorOutput = String(error);
-      }
-      
-      logger.error(`ERROR in ${source}:`, errorOutput, details);
-    } catch (loggingError) {
-      // Fallback in case of issues with error serialization
-      logger.error(`ERROR in ${source} (logging failed):`, String(error), String(loggingError));
+      callback(error);
+    } catch (callbackError) {
+      logger.error(`Error in error handler callback: ${callbackError?.message}`);
     }
   }
   
-  if (rethrow) {
-    throw error;
-  }
+  // Return the error for further processing
+  return error;
 }
 
 /**
- * Execute a function with retry mechanism
- * @param {Function} fn - Function to retry
- * @param {object} options - Options for retrying
- * @returns {Promise<any>} - Result of the function
- */
-export async function withRetry(fn, options = {}) {
-  const { 
-    maxRetries = 2, 
-    baseDelay = 500, 
-    shouldRetry = () => true,
-    source = 'unknown'
-  } = options;
-  
-  let retries = 0;
-  let lastError;
-  
-  while (retries <= maxRetries) {
-    try {
-      if (retries > 0) {
-        const delay = baseDelay * Math.pow(1.5, retries - 1);
-        logger.warn(`Retry ${retries}/${maxRetries} for ${source} in ${delay}ms: ${lastError?.message || 'Unknown error'}`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-      
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      retries++;
-      
-      if (retries > maxRetries || !shouldRetry(error)) {
-        break;
-      }
-    }
-  }
-  
-  logger.error(`Max retries (${maxRetries}) reached for ${source}:`, lastError?.message);
-  throw lastError;
-}
-
-/**
- * Safe fetch utility with improved error handling and JSON parsing
+ * Enhanced fetch with retry capability and better error handling
  * @param {string} url - URL to fetch
- * @param {object} options - Fetch options
- * @returns {Promise<any>} - Parsed JSON response
+ * @param {Object} options - Fetch options
+ * @param {number} [options.maxRetries=1] - Maximum number of retries
+ * @param {number} [options.retryDelay=500] - Delay between retries in ms
+ * @returns {Promise<Response>} - Fetch response
  */
 export async function safeFetch(url, options = {}) {
-  try {
-    const response = await fetch(url, options);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorDetail;
-      let isHtmlResponse = false;
-      
-      // Check if this is an HTML response (login page, etc.)
-      const contentType = response.headers.get('content-type');
-      isHtmlResponse = contentType && contentType.includes('text/html');
-      
-      try {
-        // Try to parse as JSON if possible
-        errorDetail = JSON.parse(errorText);
-      } catch (e) {
-        // If not JSON, use the first 200 chars of text
-        errorDetail = errorText.substring(0, 200) + (errorText.length > 200 ? '...' : '');
-        
-        // If it looks like HTML, log that specifically
-        if (isHtmlResponse || errorText.trim().startsWith('<!DOCTYPE') || errorText.trim().startsWith('<html')) {
-          logger.error("Received HTML response when expecting JSON. This usually indicates an auth issue or redirect.");
-          isHtmlResponse = true;
-        }
-      }
-      
-      const error = new Error(`HTTP error ${response.status}: ${response.statusText}`);
-      error.status = response.status;
-      error.statusText = response.statusText;
-      error.responseText = errorDetail;
-      error.isHtmlResponse = isHtmlResponse;
-      error.responseUrl = response.url; // Capture the final URL after any redirects
-      
-      // Log additional debugging information for HTML responses
-      if (isHtmlResponse) {
-        logger.error("HTML response detected when expecting JSON. Response URL:", response.url);
-        // Extract title from HTML if possible
-        const titleMatch = errorText.match(/<title>(.*?)<\/title>/i);
-        if (titleMatch && titleMatch[1]) {
-          logger.error("HTML page title:", titleMatch[1].trim());
-          error.htmlPageTitle = titleMatch[1].trim();
-        }
-      }
-      
-      throw error;
-    }
-    
-    // Check content type to avoid parsing HTML as JSON
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return await response.json();
-    } else {
-      const text = await response.text();
-      
-      // If content-type isn't JSON but the text appears to be JSON, try to parse it
-      if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
-        try {
-          return JSON.parse(text);
-        } catch (e) {
-          logger.error("ERROR: Received text that appears to be JSON but failed to parse:", text.substring(0, 200) + "...");
-          const error = new Error("ERROR in safeFetch: Received invalid JSON response");
-          error.responseText = text.substring(0, 500);
-          error.parseError = e.message;
-          error.contentType = contentType;
-          throw error;
-        }
-      } else {
-        // If response is HTML, this is likely a redirect to a login page or error page
-        if (contentType && contentType.includes('text/html') || 
-            text.trim().startsWith('<!DOCTYPE') || 
-            text.trim().startsWith('<html')) {
-          
-          logger.error("ERROR: Received HTML response instead of JSON:", text.substring(0, 200) + "...");
-          const error = new Error("ERROR in safeFetch: Received HTML response when expecting JSON");
-          error.responseText = text.substring(0, 500);
-          error.isHtmlResponse = true;
-          error.responseUrl = response.url; // Capture the final URL after any redirects
-          
-          // Extract title from HTML if possible
-          const titleMatch = text.match(/<title>(.*?)<\/title>/i);
-          if (titleMatch && titleMatch[1]) {
-            logger.error("HTML page title:", titleMatch[1].trim());
-            error.htmlPageTitle = titleMatch[1].trim();
-          }
-          
-          throw error;
-        }
-        
-        // For other non-JSON responses, just return the text
-        logger.warn("WARNING: Response was not JSON. Content-Type:", contentType);
-        return text;
-      }
-    }
-  } catch (error) {
-    // Enhance with fetch context
-    error.fetchUrl = url;
-    error.fetchOptions = { ...options };
-    // Remove authorization headers from logs
-    if (error.fetchOptions?.headers?.Authorization) {
-      error.fetchOptions.headers = { ...error.fetchOptions.headers };
-      error.fetchOptions.headers.Authorization = '[REDACTED]';
-    }
-    
-    handleError('safeFetch', error);
-    throw error;
-  }
-}
-
-/**
- * Convert any error to a standardized format
- * @param {Error|string|any} error - Error to format
- * @returns {object} - Standardized error object
- */
-export function formatError(error) {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      timestamp: Date.now()
-    };
-  } else if (typeof error === 'string') {
-    return {
-      name: 'Error',
-      message: error,
-      timestamp: Date.now()
-    };
-  } else if (typeof error === 'object' && error !== null) {
-    return {
-      ...error,
-      timestamp: Date.now()
-    };
-  } else {
-    return {
-      name: 'Unknown',
-      message: String(error),
-      timestamp: Date.now()
-    };
-  }
-}
-
-/**
- * Check if a tab exists and content script is loaded
- * @param {number} tabId - The tab ID to check
- * @returns {Promise<boolean>} - Whether the tab exists and content script is ready
- */
-export async function isTabAvailable(tabId) {
-  try {
-    // First check if tab exists
-    const tabs = await chrome.tabs.query({});
-    const tabExists = tabs.some(tab => tab.id === tabId);
-    
-    if (!tabExists) {
-      return false;
-    }
-
-    // Then check if we can ping the content script
-    return new Promise(resolve => {
-      try {
-        chrome.tabs.sendMessage(
-          tabId, 
-          { type: "PING" },
-          response => {
-            if (chrome.runtime.lastError) {
-              resolve(false);
-            } else {
-              resolve(true);
-            }
-          }
-        );
-        
-        // Set a timeout in case the message never returns
-        setTimeout(() => resolve(false), 300);
-      } catch (e) {
-        resolve(false);
-      }
-    });
-  } catch (e) {
-    return false;
-  }
-}
-
-/**
- * Safe wrapper for sending messages to tabs with validation
- * @param {number} tabId - Tab ID to send message to
- * @param {object} message - Message to send
- * @param {object} options - Options for sending
- * @returns {Promise<any>} - Response from the tab
- */
-export async function sendTabMessageSafely(tabId, message, options = {}) {
-  const { 
-    retries = 2, 
-    checkTab = true, 
-    timeout = 5000 
-  } = options;
+  const { maxRetries = 1, retryDelay = 500, ...fetchOptions } = options;
   
-  // First check if tab exists and content script is loaded
-  if (checkTab) {
-    const isAvailable = await isTabAvailable(tabId);
-    if (!isAvailable) {
-      throw new Error(`Tab ${tabId} is not available or content script not loaded`);
-    }
-  }
+  let lastError;
   
-  // Use promise with timeout for better error handling
-  return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      reject(new Error(`Timeout sending message to tab ${tabId}`));
-    }, timeout);
-    
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      chrome.tabs.sendMessage(tabId, message, response => {
+      // Add timeout if not already specified
+      if (!fetchOptions.signal) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        fetchOptions.signal = controller.signal;
+        
+        const response = await fetch(url, fetchOptions);
         clearTimeout(timeoutId);
         
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve(response);
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
         }
-      });
+        
+        return response;
+      } else {
+        const response = await fetch(url, fetchOptions);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+        }
+        
+        return response;
+      }
     } catch (error) {
-      clearTimeout(timeoutId);
-      reject(error);
+      lastError = error;
+      
+      // Log retry attempts (except for the last one)
+      if (attempt < maxRetries) {
+        logger.warn(`Fetch attempt ${attempt + 1}/${maxRetries + 1} failed: ${error.message}`);
+        logger.warn(`Retrying in ${retryDelay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
     }
-  });
+  }
+  
+  // If we get here, all attempts failed
+  throw lastError;
 }

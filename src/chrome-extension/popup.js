@@ -101,21 +101,17 @@ import { logger } from './utils/logger.js';
 import { handleError, safeFetch } from './utils/errorHandler.js';
 import { 
   handleInPopupGoogleLogin, 
+  handleEmailPasswordLogin,
   isLoggedIn, 
   getUserEmail, 
-  logout, 
-  openAuthPage
+  logout
 } from './utils/auth.js';
-
-// Extension ID - important for OAuth flow
-const EXTENSION_ID = chrome.runtime.id || 'oapmlmnmepbgiafhbbkjbkbppfdclknlb';
 
 // Log environment for debugging
 logger.log('MainGallery.AI popup initialized in', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION', 'environment');
 logger.log('Base URL:', getBaseUrl());
 logger.log('Auth URL:', getAuthUrl());
 logger.log('Gallery URL:', getGalleryUrl());
-logger.log('Extension ID:', EXTENSION_ID);
 
 // DOM elements - verify they exist before using them
 const states = {
@@ -128,7 +124,8 @@ const states = {
 // Get elements safely with null checks
 const googleLoginBtn = document.getElementById('google-login-btn');
 const emailLoginBtn = document.getElementById('email-login-btn');
-const openWebLoginLink = document.getElementById('open-web-login-link');
+const emailInput = document.getElementById('email-input');
+const passwordInput = document.getElementById('password-input');
 const tryAgainBtn = document.getElementById('try-again-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const openGalleryBtn = document.getElementById('open-gallery-btn');
@@ -139,7 +136,7 @@ const platformDetectedDiv = document.getElementById('platform-detected');
 const platformNameElement = document.getElementById('platform-name');
 const errorTextElement = document.getElementById('error-text');
 
-// Helper functions
+// Helper functions for UI management
 function safelyAddClass(element, className) {
   if (element && element.classList) {
     element.classList.add(className);
@@ -204,7 +201,7 @@ function showError(message) {
     if (typeof displayMessage === 'object') {
       displayMessage = 'An error occurred during authentication. Please try again.';
     } else if (displayMessage.includes('invalid_client')) {
-      displayMessage = 'Google authentication failed. Please try the full login page instead.';
+      displayMessage = 'Google authentication failed. Please try again.';
     }
     
     errorTextElement.textContent = displayMessage;
@@ -324,14 +321,14 @@ function updateUIForUnsupportedPlatform() {
   }
 }
 
-// Google OAuth login
+// Google OAuth login - improved for direct in-popup login
 async function initiateGoogleLogin() {
   try {
     if (states.loading) showState(states.loading);
     logger.log('Starting Google login flow with chrome.identity');
     
     try {
-      // Use the handleInPopupGoogleLogin from auth.js
+      // Use the handleInPopupGoogleLogin from auth.js with improved error handling
       const response = await handleInPopupGoogleLogin();
       
       if (response.success) {
@@ -356,7 +353,7 @@ async function initiateGoogleLogin() {
           userEmail: response.user?.email
         });
       } else {
-        throw new Error('Login failed');
+        throw new Error(response.error || 'Login failed');
       }
     } catch (oauthError) {
       logger.error('OAuth error:', oauthError);
@@ -364,13 +361,13 @@ async function initiateGoogleLogin() {
       // Show human-readable error
       let errorMessage = 'Authentication failed.';
       
-      if (oauthError.message.includes('did not approve')) {
+      if (oauthError.message && oauthError.message.includes('did not approve')) {
         errorMessage = 'You did not approve access to your Google account.';
-      } else if (oauthError.message.includes('invalid_client')) {
-        errorMessage = 'OAuth client configuration error. Please try opening the full login page instead.';
-      } else if (oauthError.message.includes('cancel')) {
+      } else if (oauthError.message && oauthError.message.includes('invalid_client')) {
+        errorMessage = 'Authentication configuration error. Please try again later.';
+      } else if (oauthError.message && oauthError.message.includes('cancel')) {
         errorMessage = 'Authentication was canceled.';
-      } else if (oauthError.message.includes('access')) {
+      } else if (oauthError.message && oauthError.message.includes('access')) {
         errorMessage = 'Could not connect to Google. Please try again later.';
       }
       
@@ -378,30 +375,72 @@ async function initiateGoogleLogin() {
     }
   } catch (error) {
     logger.error('Error initiating Google login:', error);
-    showError('Could not start login process. Please try again or use the full login page option.');
+    showError('Could not start login process. Please try again.');
   }
 }
 
-// Email login - redirect to web page
-function initiateEmailLogin() {
+// Improved direct email login within popup
+async function handleEmailLogin() {
   try {
-    logger.log('Redirecting to email login page');
-    openAuthPage(null, { from: 'extension_popup' });
-    // Close popup after redirection
-    setTimeout(() => window.close(), 300);
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!email || !password) {
+      showToast('Please enter both email and password', 'error');
+      return;
+    }
+    
+    if (states.loading) showState(states.loading);
+    
+    logger.log('Attempting email login for:', email);
+    
+    try {
+      // Use the enhanced email login with better error handling
+      const response = await handleEmailPasswordLogin(email, password);
+      
+      if (response.success) {
+        logger.log('Email login successful for:', email);
+        
+        // Show success notification
+        showToast('Successfully signed in!', 'success');
+        
+        // Update UI to show logged-in state
+        if (userEmailElement) {
+          userEmailElement.textContent = email;
+        }
+        
+        showState(states.mainView);
+        
+        // Check if current tab is a supported platform
+        checkCurrentTab();
+        
+        // Send message to background script to update other contexts
+        chrome.runtime.sendMessage({ 
+          action: 'updateUI',
+          userEmail: email
+        });
+      } else {
+        const errorMessage = response.error || 'Login failed. Please check your credentials.';
+        logger.error('Email login failed:', errorMessage);
+        showError(errorMessage);
+      }
+    } catch (error) {
+      logger.error('Email login error:', error);
+      showError(error.message || 'Login failed. Please try again.');
+    }
   } catch (error) {
-    logger.error('Error redirecting to email login:', error);
-    showToast('Could not open login page. Please try again.', 'error');
+    logger.error('Error in email login handler:', error);
+    showError('An unexpected error occurred. Please try again.');
   }
 }
 
-// Enhanced auth check with token validation
+// Enhanced auth check with token validation and refresh
 async function checkAuthAndRedirect() {
   try {
     if (states.loading) showState(states.loading);
     logger.log('Checking authentication status...');
     
-    // Use isLoggedIn from auth.js
+    // Use isLoggedIn from auth.js with improved token validation
     const loggedIn = await isLoggedIn();
     
     if (loggedIn) {
@@ -447,33 +486,32 @@ function openGallery() {
   }
 }
 
-// Open auth page for full login experience
-function openWebLogin() {
+// Log out the user with improved session cleanup
+function handleLogout() {
   try {
     if (states.loading) showState(states.loading);
-    logger.log('Opening full web login page');
     
-    // Use openAuthPage from auth.js
-    openAuthPage(null, { from: 'extension_popup' });
-    
-    // Close popup after a short delay
-    setTimeout(() => window.close(), 300);
+    logout().then(success => {
+      showState(states.loginView);
+      showToast('You have been logged out', 'info');
+      
+      // Reset input fields for fresh login
+      if (emailInput) emailInput.value = '';
+      if (passwordInput) passwordInput.value = '';
+      
+      // Send message to background script to update other contexts
+      chrome.runtime.sendMessage({ action: 'updateUI' });
+    }).catch(error => {
+      logger.error('Error during logout:', error);
+      showToast('Error during logout, please try again', 'error');
+    });
   } catch (error) {
-    logger.error('Error opening web login:', error);
-    showToast('Could not open login page. Please try again.', 'error');
-    showState(states.loginView);
+    logger.error('Error in logout handler:', error);
+    showToast('An unexpected error occurred', 'error');
   }
 }
 
-// Log out the user
-function handleLogout() {
-  logout().then(success => {
-    showState(states.loginView);
-    showToast('You have been logged out', 'info');
-  });
-}
-
-// Scan current page for images
+// Enhanced scan current page with better token validation
 function scanCurrentPage() {
   logger.log('Starting scan of current page...');
   
@@ -483,21 +521,34 @@ function scanCurrentPage() {
     return;
   }
   
-  showToast('Scanning page for AI images...', 'info');
-  
-  // Request background script to scan the current active tab
-  chrome.runtime.sendMessage({ action: 'startAutoScan' }, (response) => {
-    const error = chrome.runtime.lastError;
-    if (error || !response || !response.success) {
-      logger.error('Error starting scan:', error?.message || 'Unknown error');
-      showToast('Failed to start scanning. Please try again.', 'error');
-    } else {
-      logger.log('Scan started successfully');
-      // Status message will be shown by the background script
-      
-      // Close popup after starting the scan
-      setTimeout(() => window.close(), 500);
+  // First verify that user is logged in
+  isLoggedIn().then(loggedIn => {
+    if (!loggedIn) {
+      showToast('You need to be logged in to scan for images', 'error');
+      showState(states.loginView);
+      return;
     }
+    
+    showToast('Scanning page for AI images...', 'info');
+    
+    // Request background script to scan the current active tab
+    chrome.runtime.sendMessage({ action: 'startAutoScan' }, (response) => {
+      const error = chrome.runtime.lastError;
+      if (error || !response || !response.success) {
+        logger.error('Error starting scan:', error?.message || 'Unknown error');
+        showToast('Failed to start scanning. Please try again.', 'error');
+      } else {
+        logger.log('Scan started successfully');
+        // Status message will be shown by the background script
+        
+        // Close popup after starting the scan
+        setTimeout(() => window.close(), 500);
+      }
+    });
+  }).catch(error => {
+    logger.error('Error checking login before scan:', error);
+    showToast('Authentication error. Please log in again.', 'error');
+    showState(states.loginView);
   });
 }
 
@@ -554,23 +605,23 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Set up event listener for email login
   if (emailLoginBtn) {
-    emailLoginBtn.addEventListener('click', initiateEmailLogin);
+    emailLoginBtn.addEventListener('click', handleEmailLogin);
     logger.log('Email login button listener set up');
+  }
+  
+  // Add keyboard support for email login form
+  if (passwordInput) {
+    passwordInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        handleEmailLogin();
+      }
+    });
   }
   
   // Set up event listener for trying again after error
   if (tryAgainBtn) {
     tryAgainBtn.addEventListener('click', resetAndTryAgain);
     logger.log('Try again button listener set up');
-  }
-  
-  // Set up event listener for opening full web login
-  if (openWebLoginLink) {
-    openWebLoginLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      openWebLogin();
-    });
-    logger.log('Open web login link listener set up');
   }
   
   if (logoutBtn) {

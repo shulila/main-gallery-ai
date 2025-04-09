@@ -1,7 +1,9 @@
+
 // Auth utilities for Chrome extension
 import { logger } from './logger.js';
 import { handleError, safeFetch } from './errorHandler.js';
 import { isPreviewEnvironment, getBaseUrl, getAuthUrl as getEnvironmentAuthUrl } from './urlUtils.js';
+import { supabase } from '@/integrations/supabase/client';
 
 // Extension ID - important for OAuth flow
 const EXTENSION_ID = chrome.runtime.id || 'oapmlmnmepbgiafhbbkjbkbppfdclknlb';
@@ -12,11 +14,6 @@ const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.goo
 // Get the production auth callback URL
 const getProductionRedirectUrl = () => {
   return 'https://main-gallery-ai.lovable.app/auth/callback';
-};
-
-// Get the preview auth callback URL
-const getPreviewRedirectUrl = () => {
-  return 'https://preview-main-gallery-ai.lovable.app/auth/callback';
 };
 
 // Get Chrome extension redirect URL for OAuth
@@ -44,36 +41,6 @@ const getGoogleClientId = () => {
   // Always use the correct client ID for MainGalleryAI OAuth flow
   return GOOGLE_CLIENT_ID;
 };
-
-// Supported platforms for extension activation
-const SUPPORTED_PLATFORMS = [
-  'midjourney.com',
-  'leonardo.ai',
-  'openai.com',
-  'dreamstudio.ai',
-  'stability.ai',
-  'runwayml.com',
-  'pika.art',
-  'discord.com/channels',
-  'playgroundai.com',
-  'creator.nightcafe.studio'
-];
-
-// Check if URL is supported for extension activation
-function isSupportedPlatform(url) {
-  if (!url) return false;
-  
-  try {
-    const urlObj = new URL(url);
-    // Add additional debugging
-    console.log(`MainGallery: Checking if platform is supported: ${urlObj.hostname}`);
-    return SUPPORTED_PLATFORMS.some(platform => urlObj.hostname.includes(platform) || 
-      (platform.includes('discord.com') && urlObj.pathname.includes('midjourney')));
-  } catch (e) {
-    logger.error('Invalid URL:', url, e);
-    return false;
-  }
-}
 
 // Clean up all storage data related to authentication
 function clearAuthStorage(callback = () => {}) {
@@ -133,26 +100,26 @@ function clearAuthStorage(callback = () => {}) {
   }
 }
 
-// Handle in-popup Google OAuth login using chrome.identity
+// Enhanced Google OAuth login for in-popup authentication
 async function handleInPopupGoogleLogin() {
   try {
     logger.info('Starting in-popup Google login flow with chrome.identity');
     
     // Use the correct client ID for MainGalleryAI
     const clientId = getGoogleClientId();
-    const redirectURL = getProductionRedirectUrl(); // Use the full redirect URL as specified
+    const redirectURL = getExtensionRedirectUrl(); // Use extension callback URL
     
     logger.info('Using OAuth client ID:', clientId);
-    logger.info('Using redirect URL:', redirectURL);
+    logger.info('Using extension redirect URL:', redirectURL);
     
     // Build the OAuth URL with proper scopes for Chrome extension
     const nonce = Math.random().toString(36).substring(2, 15);
     
     const authParams = new URLSearchParams({
       client_id: clientId,
-      response_type: 'token id_token',
+      response_type: 'token',
       redirect_uri: redirectURL,
-      scope: 'openid email profile',
+      scope: 'email profile openid',
       nonce: nonce,
       prompt: 'select_account',
     });
@@ -171,14 +138,7 @@ async function handleInPopupGoogleLogin() {
         async (responseUrl) => {
           if (chrome.runtime.lastError) {
             logger.error('Auth Error:', chrome.runtime.lastError);
-            
-            // Improved error message for invalid client
-            if (chrome.runtime.lastError.message.includes('invalid_client') || 
-                chrome.runtime.lastError.message.includes('OAuth')) {
-              reject(new Error('Authentication configuration error – please contact support'));
-            } else {
-              reject(new Error(chrome.runtime.lastError.message));
-            }
+            reject(new Error(chrome.runtime.lastError.message));
             return;
           }
           
@@ -235,28 +195,56 @@ async function handleInPopupGoogleLogin() {
             const expiresIn = parseInt(hashParams.get('expires_in') || '3600', 10);
             const expiresAt = Date.now() + (expiresIn * 1000);
             
-            // Store token info and user email for extension usage
-            chrome.storage.sync.set({
-              'main_gallery_auth_token': {
+            // Store token info and user email for extension usage in both sync and local storage
+            const tokenData = {
+              access_token: accessToken,
+              id_token: idToken,
+              token_type: hashParams.get('token_type') || 'Bearer',
+              timestamp: Date.now(),
+              expires_at: expiresAt
+            };
+            
+            // Set up Supabase session with the token to enable API access
+            try {
+              const { data, error } = await supabase.auth.setSession({
                 access_token: accessToken,
-                id_token: idToken,
-                token_type: hashParams.get('token_type') || 'Bearer',
-                timestamp: Date.now(),
-                expires_at: expiresAt
-              },
+                refresh_token: '' // Google OAuth doesn't provide refresh token in this flow
+              });
+              
+              if (error) {
+                logger.error('Error setting Supabase session:', error);
+                // Continue anyway as we'll store the token in extension storage
+              } else {
+                logger.info('Successfully set Supabase session');
+              }
+            } catch (err) {
+              logger.error('Error calling Supabase setSession:', err);
+              // Continue anyway as we'll store the token in extension storage
+            }
+            
+            // Store data in chrome.storage.sync
+            chrome.storage.sync.set({
+              'main_gallery_auth_token': tokenData,
               'main_gallery_user_email': userEmail || 'User',
               'main_gallery_user_name': userName
-            }, () => {
-              logger.info('Auth tokens and user info stored successfully');
-              
-              resolve({
-                success: true,
-                user: { 
-                  email: userEmail,
-                  name: userName
-                },
-                token: accessToken
-              });
+            });
+            
+            // Also store in chrome.storage.local for background script access
+            chrome.storage.local.set({
+              'main_gallery_auth_token': tokenData,
+              'main_gallery_user_email': userEmail || 'User',
+              'main_gallery_user_name': userName
+            });
+            
+            logger.info('Auth tokens and user info stored successfully');
+            
+            resolve({
+              success: true,
+              user: { 
+                email: userEmail,
+                name: userName
+              },
+              token: accessToken
             });
           } catch (parseError) {
             logger.error('Error parsing auth response:', parseError);
@@ -267,82 +255,95 @@ async function handleInPopupGoogleLogin() {
     });
   } catch (error) {
     logger.error('Error initiating in-popup Google login:', error);
-    
-    // Improved error message for authentication configuration issues
-    if (error.message && (error.message.includes('invalid_client') || 
-                         error.message.includes('OAuth'))) {
-      throw new Error('Authentication configuration error – please contact support');
-    }
-    
     throw error;
   }
 }
 
-// Handle email/password login - adding this to fix the missing export error
+// Improved email/password login with error handling
 async function handleEmailPasswordLogin(email, password) {
   logger.info('Email/password login requested for:', email);
   
   try {
-    // This is a stub implementation that provides the required export
-    // Email/password login is not currently used in the extension
-    // but we need this export to satisfy background.js imports
+    if (!email || !password) {
+      return {
+        success: false,
+        error: 'Email and password are required'
+      };
+    }
     
-    logger.info('Note: Email/password login is not fully implemented in this extension');
+    // Use Supabase directly for email/password authentication
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password
+    });
     
-    // Let the caller know this is a stub implementation
+    if (error) {
+      logger.error('Supabase login error:', error);
+      
+      // Handle specific error cases
+      let errorMessage = error.message;
+      if (error.message.includes('credentials')) {
+        errorMessage = 'Invalid email or password. Please try again.';
+      } else if (error.message.includes('confirmed')) {
+        errorMessage = 'Please confirm your email address before logging in.';
+      }
+      
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+    
+    if (!data.session) {
+      logger.error('Login succeeded but no session returned');
+      return {
+        success: false,
+        error: 'Authentication successful but session creation failed.'
+      };
+    }
+    
+    // Store token info and user email for extension usage
+    const tokenData = {
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      timestamp: Date.now(),
+      expires_at: data.session.expires_at * 1000 // Supabase returns seconds, convert to ms
+    };
+    
+    // Store data in chrome.storage.sync
+    chrome.storage.sync.set({
+      'main_gallery_auth_token': tokenData,
+      'main_gallery_user_email': data.user?.email || email
+    });
+    
+    // Also store in chrome.storage.local for background script access
+    chrome.storage.local.set({
+      'main_gallery_auth_token': tokenData,
+      'main_gallery_user_email': data.user?.email || email
+    });
+    
+    logger.info('Login successful for:', email);
+    
     return {
-      success: false,
-      error: 'Email/password login is not implemented in the extension. Please use Google login.'
+      success: true,
+      user: data.user,
+      session: data.session
     };
   } catch (error) {
     logger.error('Error in handleEmailPasswordLogin:', error);
-    throw error;
+    return {
+      success: false,
+      error: 'An unexpected error occurred during login. Please try again.'
+    };
   }
 }
 
-// Open auth page with improved environment detection
-function openAuthPage(tabId = null, options = {}) {
-  try {
-    // Get the full auth URL with options
-    const fullAuthUrl = getAuthUrl(options);
-    
-    // Log the URL we're opening for debugging
-    logger.info('Opening auth URL:', fullAuthUrl);
-    
-    // Open the URL
-    if (tabId) {
-      chrome.tabs.update(tabId, { url: fullAuthUrl });
-    } else {
-      chrome.tabs.create({ url: fullAuthUrl });
-    }
-    
-    logger.info('Opened auth URL:', fullAuthUrl);
-  } catch (error) {
-    handleError('openAuthPage', error);
-    
-    // Fallback to opening a simple URL if something went wrong
-    try {
-      const fallbackUrl = isPreviewEnvironment() 
-        ? 'https://preview-main-gallery-ai.lovable.app/auth' 
-        : 'https://main-gallery-ai.lovable.app/auth';
-        
-      if (tabId) {
-        chrome.tabs.update(tabId, { url: fallbackUrl });
-      } else {
-        chrome.tabs.create({ url: fallbackUrl });
-      }
-    } catch (fallbackError) {
-      handleError('openAuthPageFallback', fallbackError, { silent: true });
-    }
-  }
-}
-
-// Improved isLoggedIn to check expiration
+// Improved isLoggedIn to check expiration and validate token
 function isLoggedIn() {
   return new Promise((resolve) => {
     try {
       // Check for token in chrome.storage.sync with expiration validation
-      chrome.storage.sync.get(['main_gallery_auth_token'], (result) => {
+      chrome.storage.sync.get(['main_gallery_auth_token'], async (result) => {
         const token = result.main_gallery_auth_token;
         
         if (token && token.access_token) {
@@ -355,9 +356,50 @@ function isLoggedIn() {
                      isExpired ? 'EXPIRED' : 'VALID');
           
           if (!isExpired) {
-            // Token exists and is not expired
-            resolve(true);
-            return;
+            // Token exists and is not expired, validate with Supabase
+            try {
+              // Set the session in Supabase to validate
+              const { data, error } = await supabase.auth.setSession({
+                access_token: token.access_token,
+                refresh_token: token.refresh_token || ''
+              });
+              
+              if (error) {
+                logger.error('Supabase session validation failed:', error);
+                
+                // Clear invalid tokens and resolve as not logged in
+                clearAuthStorage(() => {
+                  resolve(false);
+                });
+                return;
+              }
+              
+              // Get user to verify session is valid
+              const { data: userData, error: userError } = await supabase.auth.getUser();
+              
+              if (userError || !userData.user) {
+                logger.error('Failed to validate user with token:', userError);
+                
+                // Clear invalid tokens and resolve as not logged in
+                clearAuthStorage(() => {
+                  resolve(false);
+                });
+                return;
+              }
+              
+              // Token is valid and user exists
+              logger.info('Token validated successfully with Supabase');
+              resolve(true);
+              return;
+            } catch (validationError) {
+              logger.error('Error validating token with Supabase:', validationError);
+              
+              // Clear tokens that fail validation
+              clearAuthStorage(() => {
+                resolve(false);
+              });
+              return;
+            }
           } else {
             logger.info('Token expired, will remove it');
             // Token exists but is expired, clean it up
@@ -400,24 +442,17 @@ function logout() {
         // Try API logout only if we have a token
         if (token && token.access_token) {
           try {
-            // Call the API to invalidate the token
-            const apiUrl = `${getApiUrl()}/auth/logout`;
-            await safeFetch(apiUrl, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token.access_token}`,
-                'Content-Type': 'application/json',
-              },
-              // Add timeout to prevent hanging
-              maxRetries: 0, // Don't retry logout
-              signal: AbortSignal.timeout(5000) // 5 second timeout
-            }).catch(err => {
-              // Log but continue even if API call fails
-              logger.error('API logout failed:', err);
-            });
+            // Sign out from Supabase
+            const { error } = await supabase.auth.signOut();
+            
+            if (error) {
+              logger.error('Supabase signOut error:', error);
+            } else {
+              logger.info('Successfully signed out from Supabase');
+            }
           } catch (apiError) {
             // Log but continue with local logout even if API call fails
-            logger.error('Error during API logout:', apiError);
+            logger.error('Error during Supabase signOut:', apiError);
           }
         }
         
@@ -439,117 +474,17 @@ function logout() {
   });
 }
 
-// Setup auth callback listener
-function setupAuthCallbackListener() {
-  try {
-    logger.info('Setting up auth callback listener');
-    
-    // Use tabs.onUpdated to detect auth callbacks
-    if (chrome.tabs && chrome.tabs.onUpdated) {
-      chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-        // Only process completed loads with our auth callback URL
-        if (changeInfo.status === 'complete' && tab.url && 
-            (tab.url.includes('main-gallery-ai.lovable.app/auth/callback') || 
-             tab.url.includes('preview-main-gallery-ai.lovable.app/auth/callback') ||
-             tab.url.includes('/auth?access_token='))) {
-          
-          logger.info('Auth callback detected:', tab.url);
-          
-          // Process the callback and update extension state
-          try {
-            // Get auth token from the URL - handle both hash and query params
-            const url = new URL(tab.url);
-            
-            // Check for token in hash first (fragment identifier)
-            const hashParams = new URLSearchParams(url.hash ? url.hash.substring(1) : '');
-            const queryParams = new URLSearchParams(url.search);
-            
-            // Try to get token from both locations
-            const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
-            const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
-            const userEmail = hashParams.get('email') || queryParams.get('email');
-            
-            // If we have tokens, validate and store them
-            if (accessToken) {
-              logger.info('Auth tokens detected, will store session');
-              
-              // Calculate token expiration (24 hours from now)
-              const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
-              
-              // Store token info and user email for extension usage
-              chrome.storage.sync.set({
-                'main_gallery_auth_token': {
-                  access_token: accessToken,
-                  refresh_token: refreshToken,
-                  timestamp: Date.now(),
-                  expires_at: expiresAt
-                },
-                'main_gallery_user_email': userEmail || 'User'
-              }, () => {
-                logger.info('Auth token and user info stored in extension storage with expiration');
-                
-                // Show success notification
-                try {
-                  chrome.notifications.create('auth_success', {
-                    type: 'basic',
-                    iconUrl: 'icons/icon128.png',
-                    title: 'Login Successful',
-                    message: 'You are now logged in to MainGallery.AI'
-                  });
-                } catch (err) {
-                  handleError('showAuthSuccessNotification', err, { silent: true });
-                }
-                
-                // Close the auth tab after successful login
-                setTimeout(() => {
-                  chrome.tabs.remove(tabId);
-                  
-                  // Open gallery in a new tab
-                  chrome.tabs.create({ url: getGalleryUrl() });
-                  
-                  // Send message to update UI in popup if open
-                  chrome.runtime.sendMessage({ action: 'updateUI' });
-                }, 1000);
-              });
-            } else {
-              logger.error('Auth callback detected but no access token found');
-              
-              // Send error message to popup if open
-              chrome.runtime.sendMessage({ 
-                action: 'authError', 
-                error: 'Authentication failed. No access token received.' 
-              });
-            }
-          } catch (e) {
-            logger.error('Error processing auth callback:', e);
-          }
-        }
-      });
-      
-      logger.info('Auth callback listener set up using tabs API');
-    } else {
-      logger.error('Chrome tabs API not available, cannot set up auth callback listener');
-    }
-  } catch (error) {
-    handleError('setupAuthCallbackListener', error);
-  }
-}
-
 // Export functions
 export { 
   handleInPopupGoogleLogin, 
-  setupAuthCallbackListener, 
-  openAuthPage, 
+  handleEmailPasswordLogin,
   isLoggedIn, 
   getUserEmail, 
   logout,
   clearAuthStorage,
-  isSupportedPlatform, 
   getAuthUrl, 
   getGalleryUrl, 
   getProductionRedirectUrl,
-  getPreviewRedirectUrl,
   getExtensionRedirectUrl,
-  getGoogleClientId,
-  handleEmailPasswordLogin
+  getGoogleClientId
 };
