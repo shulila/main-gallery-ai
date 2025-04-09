@@ -70,11 +70,8 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             });
             
             try {
-              // Fixed: Using the proper object structure for setSession
-              const { data, error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken
-              });
+              // Fixed: Using the correct argument format for setSession in Supabase v2
+              const { data, error } = await supabase.auth.setSession(accessToken, refreshToken);
               
               if (error) {
                 recordDebugInfo('set_session_error', { error: error.message });
@@ -162,7 +159,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             }
             
             if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
-              // Use the properly defined accessToken variable from the outer scope
+              // Use the accessToken variable defined earlier in the function
               const currentToken = accessToken;
               
               window.chrome.runtime.sendMessage({
