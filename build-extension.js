@@ -1,4 +1,3 @@
-
 /**
  * MainGallery.AI Chrome Extension Build Script
  * 
@@ -100,8 +99,6 @@ const backgroundDestPath = path.join(OUTPUT_DIR, 'background.js');
 
 if (!fs.existsSync(backgroundSrcPath)) {
   console.error('❌ CRITICAL ERROR: background.js is missing from source directory!');
-  console.error(`Could not find ${backgroundSrcPath}`);
-  
   // Create a minimal fallback background.js to prevent complete failure
   console.log('Creating minimal fallback background.js...');
   const fallbackContent = `// MainGallery.AI Fallback Background Script
@@ -156,9 +153,34 @@ console.log('MainGallery.AI Fallback Background Script loaded');
     return match;
   });
   
+  // Fix @/ imports to use relative paths
+  backgroundContent = backgroundContent.replace(/from ['"]@\/([^'"]+)['"]/g, (match, p1) => {
+    return `from '../${p1}.js'`;
+  });
+  
+  // Fix dynamic @/ imports
+  backgroundContent = backgroundContent.replace(/import\(['"]@\/([^'"]+)['"]\)/g, (match, p1) => {
+    return `import('../${p1}.js')`;
+  });
+  
   // Write the modified background.js
   fs.writeFileSync(backgroundDestPath, backgroundContent);
   console.log('✅ Successfully copied and processed background.js');
+}
+
+// Add a specific check for @/ imports
+console.log('\nChecking for problematic @/ imports in background.js...');
+if (fs.existsSync(path.join(OUTPUT_DIR, 'background.js'))) {
+  const bgContent = fs.readFileSync(path.join(OUTPUT_DIR, 'background.js'), 'utf8');
+  const invalidImports = bgContent.match(/from ['"]@\/[^'"]+['"]/g) || [];
+  
+  if (invalidImports.length > 0) {
+    console.error('❌ WARNING: Found potentially problematic @/ imports in background.js:');
+    invalidImports.forEach(imp => console.error(`  - ${imp}`));
+    console.error('These may cause the service worker to fail loading.');
+  } else {
+    console.log('✅ No problematic @/ imports found in background.js');
+  }
 }
 
 // Step 5: Copy popup files with validation

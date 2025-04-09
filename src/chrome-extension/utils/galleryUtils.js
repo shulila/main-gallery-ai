@@ -1,3 +1,4 @@
+
 import { logger } from './logger.js';
 
 /**
@@ -59,5 +60,6 @@ export function logEnvironmentDetails() {
     buildTimestamp: Date.now()
   };
   
+  logger.debug('Environment details:', details);
   return details;
 }

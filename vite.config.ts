@@ -42,6 +42,30 @@ export default defineConfig(({ mode }) => {
             format: 'esm', // Important: Use ESM format for Chrome extensions
           },
         },
+        // Add this to convert @/ imports to relative paths
+        plugins: [
+          {
+            name: 'convert-alias-paths',
+            generateBundle(_, bundle) {
+              // Process each chunk to replace @/ with relative paths
+              Object.keys(bundle).forEach(key => {
+                const chunk = bundle[key];
+                if (chunk.type === 'chunk') {
+                  let code = chunk.code;
+                  // Replace @/ imports with relative paths
+                  code = code.replace(/from ['"]@\/(.*?)['"]/g, (match, p1) => {
+                    return `from '../${p1}'`;
+                  });
+                  // Replace dynamic imports too
+                  code = code.replace(/import\(['"]@\/(.*?)['"]\)/g, (match, p1) => {
+                    return `import('../${p1}')`;
+                  });
+                  chunk.code = code;
+                }
+              });
+            }
+          }
+        ]
       } : {}),
     },
   }

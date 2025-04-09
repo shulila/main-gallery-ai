@@ -1,4 +1,3 @@
-
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
@@ -96,7 +95,7 @@ async function copyStaticAssets() {
   }
 }
 
-// Build the extension files using esbuild
+// Modified function to handle import path resolution
 async function buildExtension() {
   console.log('Building extension scripts...');
   
@@ -110,6 +109,10 @@ async function buildExtension() {
       target: 'es2020',
       minify: false,
       sourcemap: 'linked',
+      // Add alias resolution for @/ paths
+      alias: {
+        '@': path.resolve(__dirname, '..'),
+      },
     });
     console.log('Built content script');
     
@@ -122,6 +125,10 @@ async function buildExtension() {
       target: 'es2020',
       minify: false,
       sourcemap: 'linked',
+      // Add alias resolution for @/ paths
+      alias: {
+        '@': path.resolve(__dirname, '..'),
+      },
     });
     console.log('Built background script');
     
