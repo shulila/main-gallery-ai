@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -55,12 +54,10 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
         let accessToken = '';
         let refreshToken = '';
         
-        // Handle redirects with URL parameters containing auth info
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const searchParams = new URLSearchParams(window.location.search);
         
         if (hashParams.has('access_token') || searchParams.has('access_token')) {
-          // We have tokens in the URL, extract and set them
           accessToken = hashParams.get('access_token') || searchParams.get('access_token') || '';
           refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token') || '';
           
@@ -70,11 +67,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             });
             
             try {
-              // Fixed: Using the correct object format for setSession in Supabase v2
-              const { data, error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken
-              });
+              const { data, error } = await supabase.auth.setSession(accessToken, refreshToken);
               
               if (error) {
                 recordDebugInfo('set_session_error', { error: error.message });
@@ -88,7 +81,6 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
                   expiresAt: data.session.expires_at
                 });
                 
-                // Store relevant information
                 localStorage.setItem('main_gallery_user_email', data.session.user.email || 'User');
                 localStorage.setItem('main_gallery_user_id', data.session.user.id);
                 
@@ -100,7 +92,6 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             }
           }
         } else {
-          // Try to get existing session if no tokens in URL
           const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
           
           if (sessionError) {
@@ -114,7 +105,6 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
           }
         }
         
-        // Verify the current session state
         const { data: userData, error: userError } = await supabase.auth.getUser();
         
         if (userError) {
@@ -127,7 +117,6 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
           success = true;
         }
         
-        // Clean URL after successful authentication
         if (success && (window.location.hash || window.location.search.includes('access_token'))) {
           if (window.history && window.history.replaceState) {
             window.history.replaceState({}, document.title, window.location.pathname);
@@ -135,7 +124,6 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
           }
         }
         
-        // Handle extension-specific logic
         if (isFromExtension && success) {
           try {
             console.log('[MainGallery] Notifying about successful login');
@@ -162,7 +150,6 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             }
             
             if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
-              // Using the accessToken variable that was defined earlier in the function
               const currentToken = accessToken;
               
               window.chrome.runtime.sendMessage({
@@ -192,7 +179,6 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
           }
         }
         
-        // Handle final redirect for web app
         if (success) {
           setStatus('Login successful! Redirecting...');
           toast({
