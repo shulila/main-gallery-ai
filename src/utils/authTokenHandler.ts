@@ -85,7 +85,7 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
       if (accessToken) {
         console.log('[MainGallery] Setting session with token from hash');
         
-        // Update Supabase session
+        // Update Supabase session with object format
         const { data, error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken
@@ -137,7 +137,7 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
       if (accessToken) {
         console.log('[MainGallery] Setting session with token from search params');
         
-        // Update Supabase session
+        // Update Supabase session with object format
         const { data, error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken
