@@ -99,7 +99,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
                 });
               }
               
-              // Fix: getUser() doesn't need parameters in the current Supabase version
+              // Fix: getUser() needs to be called without parameters
               const { data: userData } = await supabase.auth.getUser();
               
               recordDebugInfo('session_verification', { 
