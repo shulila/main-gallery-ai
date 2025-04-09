@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -64,7 +63,6 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             console.log('[MainGallery] Found access token in URL hash, setting up session');
             
             try {
-              // Fix: Pass the access_token and refresh_token as an object to setSession
               const { data, error } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken
@@ -100,8 +98,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
                 });
               }
               
-              // getUser doesn't require any parameters, it uses the session automatically
-              const { data: userData } = await supabase.auth.getUser();
+              const { data: userData } = await supabase.auth.getUser(accessToken);
               recordDebugInfo('session_verification', { 
                 sessionValid: !!userData?.user,
                 userEmail: userData?.user?.email 
