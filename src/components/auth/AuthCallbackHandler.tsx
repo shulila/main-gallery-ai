@@ -68,7 +68,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             });
             
             try {
-              // Fixed: Use the correct structure for setSession in Supabase v2
+              // Use the correct structure for setSession in Supabase v2
               const { data, error } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken
