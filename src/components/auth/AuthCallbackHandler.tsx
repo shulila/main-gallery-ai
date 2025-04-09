@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -42,7 +41,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
       return;
     }
 
-    const isFromExtension = currentURL.includes('chrome-extension://') || 
+    const isFromExtension = window.location.href.includes('chrome-extension://') || 
                            window.location.search.includes('from=extension');
     
     const completeAuth = async () => {
@@ -68,7 +67,6 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             });
             
             try {
-              // Fixed: Use the correct object format for supabase.auth.setSession in v2
               const { data, error } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken
@@ -141,30 +139,25 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             recordDebugInfo('extension_notified');
             
             if (window.opener) {
-              window.opener.postMessage({
-                type: "WEB_APP_TO_EXTENSION",
-                action: "loginSuccess",
-                email: userData.user?.email || 'User',
-                timestamp: Date.now()
-              }, "*");
-              
-              setTimeout(() => {
-                window.close();
-              }, 1000);
               return;
             }
             
             if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
               const currentToken = accessToken;
               
-              // Fixed: Use the correct object format for calling window.chrome.runtime.sendMessage
-              window.chrome.runtime.sendMessage({
-                type: "WEB_APP_TO_EXTENSION",
-                action: "loginSuccess",
-                email: userData.user?.email || 'User',
-                token: currentToken,
-                timestamp: Date.now()
-              });
+              window.chrome.runtime.sendMessage(
+                undefined,
+                {
+                  type: "WEB_APP_TO_EXTENSION",
+                  action: "loginSuccess",
+                  email: userData.user?.email || 'User',
+                  token: currentToken,
+                  timestamp: Date.now()
+                },
+                () => {
+                  console.log('[MainGallery] Message sent to extension');
+                }
+              );
             }
             
             setStatus('Login successful! You can close this tab now.');
