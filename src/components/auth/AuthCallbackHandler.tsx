@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { getGalleryUrl } from '@/utils/authTokenHandler';
+import { supabase } from '@/integrations/supabase/client';
 
 type AuthCallbackHandlerProps = {
   setStatus: (status: string) => void;
