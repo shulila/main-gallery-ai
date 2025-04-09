@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
@@ -11,7 +10,7 @@ import { GalleryImage } from '@/types/gallery';
 import { listenForGallerySyncMessages, syncImagesToGallery } from '@/utils/gallerySync';
 import { Button } from '@/components/ui/button';
 import { ImageIcon, ArrowRight } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../chrome-extension/utils/supabaseClient.js';
 
 const Gallery = () => {
   const { user, isLoading } = useAuth();
@@ -24,12 +23,10 @@ const Gallery = () => {
   const [forceEmptyState, setForceEmptyState] = useState(false);
   const [isLoadingImages, setIsLoadingImages] = useState(true);
   
-  // Check authentication on load
   useEffect(() => {
     const checkAuth = async () => {
       console.log('[MainGallery] Gallery page - checking auth status');
       
-      // Get current session directly from Supabase
       const { data } = await supabase.auth.getSession();
       const isAuthenticated = !!data.session;
       
@@ -66,9 +63,7 @@ const Gallery = () => {
       
       setIsExtensionSync(true);
       
-      // Process each image: ensure each has a valid createdAt field for proper sorting
       const processedImages = images.map(img => {
-        // If no createdAt field exists, create one based on timestamp or current time
         if (!img.createdAt) {
           const date = img.timestamp 
             ? new Date(img.timestamp) 
@@ -140,7 +135,6 @@ const Gallery = () => {
         const images = await galleryDB.getAllImages();
         console.log(`[MainGallery] Loaded ${images.length} existing images from IndexedDB`);
         
-        // Ensure all images have a createdAt field
         const processedImages = images.map(img => {
           if (!img.createdAt) {
             const date = img.timestamp 
@@ -154,7 +148,6 @@ const Gallery = () => {
           return img;
         });
         
-        // Sort images by creation date if available, or timestamp
         const sortedImages = sortGalleryImages(processedImages);
         setSyncedImages(sortedImages);
         
@@ -230,14 +223,11 @@ const Gallery = () => {
     window.scrollTo(0, 0);
   }, []);
 
-  // Sort gallery images function
   const sortGalleryImages = (images: GalleryImage[]): GalleryImage[] => {
     return [...images].sort((a, b) => {
-      // Use createdAt if available, otherwise use timestamp
       const dateA = a.createdAt ? new Date(a.createdAt) : (a.timestamp ? new Date(a.timestamp) : new Date(0));
       const dateB = b.createdAt ? new Date(b.createdAt) : (b.timestamp ? new Date(b.timestamp) : new Date(0));
       
-      // Sort descending (newest first)
       return dateB.getTime() - dateA.getTime();
     });
   };

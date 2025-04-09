@@ -1,8 +1,9 @@
-
 /**
  * MainGallery.AI background script
  * Responsible for coordinating extension operations and communicating with tabs
  */
+
+console.log("[MainGallery] background.js is alive");
 
 // Import required modules
 import { logger } from './utils/logger.js';

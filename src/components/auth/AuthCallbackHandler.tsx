@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { getGalleryUrl } from '@/utils/authTokenHandler';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../../chrome-extension/utils/supabaseClient.js';
 
 type AuthCallbackHandlerProps = {
   setStatus: (status: string) => void;

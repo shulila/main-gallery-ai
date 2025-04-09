@@ -58,6 +58,16 @@ else
   echo "✅ supabaseClient.js is present in utils directory"
 fi
 
+# Look for any remaining @/ imports in JavaScript files
+echo "Checking for remaining @/ alias imports in built files..."
+if grep -r --include="*.js" "@/integrations/supabase/client" dist/; then
+  echo "❌ ERROR: Found @/ alias imports in built files that will cause runtime errors!"
+  echo "Please check all source files to ensure they're using relative imports."
+  exit 1
+else
+  echo "✅ No problematic @/ imports found in built JavaScript files"
+fi
+
 echo "✅ Build completed successfully! Extension files are in the dist folder."
 echo ""
 echo "To load the extension in Chrome:"

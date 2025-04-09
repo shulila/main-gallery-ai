@@ -1,5 +1,4 @@
-
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '../chrome-extension/utils/supabaseClient.js';
 
 /**
  * Get the production URL for auth redirects

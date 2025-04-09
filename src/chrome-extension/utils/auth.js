@@ -3,7 +3,7 @@
 import { logger } from './logger.js';
 import { handleError, safeFetch } from './errorHandler.js';
 import { isPreviewEnvironment, getBaseUrl, getAuthUrl as getEnvironmentAuthUrl } from './urlUtils.js';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from './supabaseClient.js';
 
 // Extension ID - important for OAuth flow
 const EXTENSION_ID = chrome.runtime.id || 'oapmlmnmepbgiafhbbkjbkbppfdclknlb';
