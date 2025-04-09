@@ -19,6 +19,15 @@ if [ ! -f "dist/background.js" ]; then
   exit 1
 else
   echo "✅ background.js is present"
+  
+  # Check content of background.js for any remaining @/ imports
+  if grep -q "@/integrations/supabase/client" dist/background.js; then
+    echo "❌ ERROR: background.js still contains @/ imports that will cause it to fail!"
+    echo "Please check vite.config.ts to ensure all imports are being properly converted."
+    exit 1
+  else
+    echo "✅ No problematic @/ imports found in background.js"
+  fi
 fi
 
 if [ ! -f "dist/manifest.json" ]; then
@@ -26,6 +35,13 @@ if [ ! -f "dist/manifest.json" ]; then
   exit 1
 else
   echo "✅ manifest.json is present"
+  
+  # Validate manifest content
+  if grep -q "\"type\": \"module\"" dist/manifest.json; then
+    echo "✅ background.type is correctly set to 'module' in manifest.json"
+  else
+    echo "⚠️ Warning: background.type may not be correctly set to 'module' in manifest.json"
+  fi
 fi
 
 if [ ! -d "dist/utils" ]; then
@@ -33,6 +49,13 @@ if [ ! -d "dist/utils" ]; then
   exit 1
 else
   echo "✅ utils directory is present"
+fi
+
+# Check for supabaseClient.js utility
+if [ ! -f "dist/utils/supabaseClient.js" ]; then
+  echo "⚠️ Warning: supabaseClient.js is missing from utils directory"
+else
+  echo "✅ supabaseClient.js is present in utils directory"
 fi
 
 echo "✅ Build completed successfully! Extension files are in the dist folder."

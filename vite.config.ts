@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
             let content = fs.readFileSync(backgroundSrc, 'utf8');
             
             // Fix imports to ensure .js extensions and proper paths
-            content = content.replace(/from ['"]\.\/utils\/([^'"]+)['"]/g, (match, p1) => {
+            content = content.replace(/from ['"]\.\/utils\/([^'"]+)['"]/g, (match: string, p1: string) => {
               if (!p1.endsWith('.js')) {
                 return `from './utils/${p1}.js'`;
               }
@@ -44,19 +44,28 @@ export default defineConfig(({ mode }) => {
             });
             
             // Replace @/ imports with relative paths
-            content = content.replace(/from ['"]@\/([^'"]+)['"]/g, (match, p1) => {
-              return `from '../${p1}.js'`;
+            content = content.replace(/from ['"]@\/([^'"]+)['"]/g, (match: string, p1: string) => {
+              return `from './${p1}.js'`;
             });
             
             // Replace dynamic imports too
-            content = content.replace(/import\(['"]@\/([^'"]+)['"]\)/g, (match, p1) => {
-              return `import('../${p1}.js')`;
+            content = content.replace(/import\(['"]@\/([^'"]+)['"]\)/g, (match: string, p1: string) => {
+              return `import('./${p1}.js')`;
             });
             
             // Fix relative imports without extensions
-            content = content.replace(/from ['"]\.\.\/([^'"\.]+)['"]/g, (match, p1) => {
+            content = content.replace(/from ['"]\.\.\/([^'"\.]+)['"]/g, (match: string, p1: string) => {
               return `from '../${p1}.js'`;
             });
+            
+            // Specifically handle supabase client import - CRITICAL FIX
+            content = content.replace(/from ['"]@\/integrations\/supabase\/client['"]/g, 
+              `from './utils/supabaseClient.js'`);
+            
+            // Add diagnostic log
+            if (!content.includes('[MainGallery] background.js is alive')) {
+              content = `console.log("[MainGallery] background.js is alive");\n${content}`;
+            }
             
             // Write the modified content
             fs.writeFileSync(backgroundDest, content);
@@ -84,12 +93,21 @@ export default defineConfig(({ mode }) => {
                 let content = fs.readFileSync(srcPath, 'utf8');
                 
                 // Fix imports within utils
-                content = content.replace(/from ['"]\.\/([^'"]+)['"]/g, (match, p1) => {
+                content = content.replace(/from ['"]\.\/([^'"]+)['"]/g, (match: string, p1: string) => {
                   if (!p1.endsWith('.js')) {
                     return `from './${p1}.js'`;
                   }
                   return match;
                 });
+                
+                // Handle any @/ imports that might be in utils
+                content = content.replace(/from ['"]@\/([^'"]+)['"]/g, (match: string, p1: string) => {
+                  return `from '../../${p1}.js'`;
+                });
+                
+                // Specifically handle supabase client import
+                content = content.replace(/from ['"]@\/integrations\/supabase\/client['"]/g, 
+                  `from '../../integrations/supabase/client.js'`);
                 
                 fs.writeFileSync(destPath, content);
                 console.log(`✅ Copied and processed utils/${file}`);

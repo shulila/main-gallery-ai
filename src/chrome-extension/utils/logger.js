@@ -26,6 +26,9 @@ function shouldLog(level) {
   return levelMap[level] <= LOG_LEVEL;
 }
 
+// Log that this module has loaded successfully
+console.log("[MainGallery] logger.js loaded successfully");
+
 // Wrap console methods with formatting and level control
 export const logger = {
   error: (message, ...args) => {
