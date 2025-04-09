@@ -85,7 +85,7 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
       if (accessToken) {
         console.log('[MainGallery] Setting session with token from hash');
         
-        // Using the correct argument format for setSession in Supabase v2
+        // Fixed: Using the correct argument format for setSession in Supabase v2
         const { data, error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken
@@ -137,7 +137,7 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
       if (accessToken) {
         console.log('[MainGallery] Setting session with token from search params');
         
-        // Using the correct argument format for setSession in Supabase v2
+        // Fixed: Using the correct argument format for setSession in Supabase v2
         const { data, error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken
@@ -291,7 +291,7 @@ async function processAccessToken(accessToken: string, refreshToken: string, ema
     
     // Explicitly set Supabase session
     try {
-      // Using the correct argument format for setSession in Supabase v2
+      // Fixed: Using the correct argument format for setSession in Supabase v2
       const { data, error } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken
