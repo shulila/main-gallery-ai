@@ -68,6 +68,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             });
             
             try {
+              // Fixed: Use the correct object format for supabase.auth.setSession in v2
               const { data, error } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken
