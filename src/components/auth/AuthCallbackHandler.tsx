@@ -53,139 +53,147 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
         
         let success = false;
         
-        // Use Supabase v2's getSessionFromUrl method to handle the OAuth callback
-        const { data, error } = await supabase.auth.getSessionFromUrl();
+        // Handle redirects with URL parameters containing auth info
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const searchParams = new URLSearchParams(window.location.search);
         
-        if (error) {
-          console.error('[MainGallery] Error getting session from URL:', error);
-          recordDebugInfo('session_from_url_error', { error: error.message });
-          throw error;
+        if (hashParams.has('access_token') || searchParams.has('access_token')) {
+          // We have tokens in the URL, extract and set them
+          const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token') || '';
+          
+          if (accessToken) {
+            recordDebugInfo('token_found_in_url', { 
+              source: hashParams.has('access_token') ? 'hash' : 'search' 
+            });
+            
+            try {
+              // Use setSession properly with an object containing access_token and refresh_token
+              const { data, error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken
+              });
+              
+              if (error) {
+                recordDebugInfo('set_session_error', { error: error.message });
+                console.error('[MainGallery] Error setting session:', error);
+                throw error;
+              }
+              
+              if (data.session) {
+                recordDebugInfo('session_set_success', { 
+                  user: data.session.user.email,
+                  expiresAt: data.session.expires_at
+                });
+                
+                // Store relevant information
+                localStorage.setItem('main_gallery_user_email', data.session.user.email || 'User');
+                localStorage.setItem('main_gallery_user_id', data.session.user.id);
+                
+                success = true;
+              }
+            } catch (err) {
+              console.error('[MainGallery] Error processing tokens:', err);
+              recordDebugInfo('token_processing_error', { error: err.message });
+            }
+          }
+        } else {
+          // Try to get existing session if no tokens in URL
+          const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError) {
+            recordDebugInfo('get_session_error', { error: sessionError.message });
+            console.error('[MainGallery] Error getting session:', sessionError);
+          } else if (sessionData.session) {
+            recordDebugInfo('existing_session_found', { 
+              user: sessionData.session.user.email 
+            });
+            success = true;
+          }
         }
         
-        if (data.session) {
-          recordDebugInfo('session_from_url_success', { 
-            user: data.session.user.email,
-            expiresAt: data.session.expires_at
+        // Verify the current session state
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        
+        if (userError) {
+          recordDebugInfo('get_user_error', { error: userError.message });
+          console.error('[MainGallery] Error getting user:', userError);
+        } else if (userData.user) {
+          recordDebugInfo('user_verified', { 
+            user: userData.user.email 
           });
-          
-          // Store relevant information for the application
-          localStorage.setItem('main_gallery_user_email', data.session.user.email || 'User');
-          localStorage.setItem('main_gallery_user_id', data.session.user.id);
-          
-          // Get detailed user information
-          const { data: userData } = await supabase.auth.getUser();
-          
-          recordDebugInfo('session_verification', { 
-            sessionValid: !!userData?.user,
-            userEmail: userData?.user?.email 
-          });
-          
           success = true;
-          
-          // Clean URL after successful authentication
+        }
+        
+        // Clean URL after successful authentication
+        if (success && (window.location.hash || window.location.search.includes('access_token'))) {
           if (window.history && window.history.replaceState) {
             window.history.replaceState({}, document.title, window.location.pathname);
             recordDebugInfo('url_cleaned', { action: 'hash_removed' });
           }
-          
+        }
+        
+        // Handle extension-specific logic
+        if (isFromExtension && success) {
           try {
             console.log('[MainGallery] Notifying about successful login');
             window.postMessage({
               type: "WEB_APP_TO_EXTENSION",
               action: "loginSuccess",
-              email: data.session.user.email || 'User',
+              email: userData.user?.email || 'User',
               timestamp: Date.now()
             }, "*");
             recordDebugInfo('extension_notified');
             
-            if (isFromExtension) {
-              console.log('[MainGallery] Detected auth from extension, sending message to extension');
-              if (window.opener) {
-                window.opener.postMessage({
-                  type: "WEB_APP_TO_EXTENSION",
-                  action: "loginSuccess",
-                  email: data.session.user.email || 'User',
-                  timestamp: Date.now()
-                }, "*");
-                
-                setTimeout(() => {
-                  window.close();
-                }, 1000);
-                return;
-              }
+            if (window.opener) {
+              window.opener.postMessage({
+                type: "WEB_APP_TO_EXTENSION",
+                action: "loginSuccess",
+                email: userData.user?.email || 'User',
+                timestamp: Date.now()
+              }, "*");
               
-              if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
-                window.chrome.runtime.sendMessage({
-                  type: "WEB_APP_TO_EXTENSION",
-                  action: "loginSuccess",
-                  email: data.session.user.email || 'User',
-                  token: data.session.access_token,
-                  timestamp: Date.now()
-                });
-              }
+              setTimeout(() => {
+                window.close();
+              }, 1000);
+              return;
             }
+            
+            if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
+              window.chrome.runtime.sendMessage({
+                type: "WEB_APP_TO_EXTENSION",
+                action: "loginSuccess",
+                email: userData.user?.email || 'User',
+                token: accessToken,
+                timestamp: Date.now()
+              });
+            }
+            
+            setStatus('Login successful! You can close this tab now.');
+            toast({
+              title: "Login Successful",
+              description: "You can now close this window and return to the extension.",
+            });
+            
+            setTimeout(() => {
+              if (window.opener) {
+                window.close();
+              }
+            }, 2000);
+            
+            return;
           } catch (e) {
             console.error('[MainGallery] Error sending message to extension:', e);
           }
         }
         
-        // Check the current session state if we don't have success yet
-        if (!success) {
-          const { data: sessionData } = await supabase.auth.getSession();
-          const sessionExists = !!sessionData.session;
-          recordDebugInfo('final_session_check', { 
-            sessionExists,
-            user: sessionData.session?.user?.email 
-          });
-          
-          if (sessionExists) {
-            success = true;
-          }
-        }
-        
-        if (isFromExtension && success) {
-          setStatus('Login successful! You can close this tab now.');
-          toast({
-            title: "Login Successful",
-            description: "You can now close this window and return to the extension.",
-          });
-          
-          // Get the latest session data
-          const { data: latestSession } = await supabase.auth.getSession();
-          
-          if (latestSession.session?.user) {
-            window.postMessage({
-              type: "WEB_APP_TO_EXTENSION",
-              action: "loginSuccess",
-              email: latestSession.session.user.email || 'User',
-              timestamp: Date.now()
-            }, "*");
-          }
-          
-          if (window.opener) {
-            setTimeout(() => {
-              window.close();
-            }, 2000);
-            return;
-          }
-          
-          return;
-        }
-        
+        // Handle final redirect for web app
         if (success) {
           setStatus('Login successful! Redirecting...');
           toast({
             title: "Login Successful",
             description: "You've been logged in successfully!",
           });
-          
-          // Clean URL if needed
-          if ((window.location.hash || window.location.search.includes('access_token')) && 
-              window.history && window.history.replaceState) {
-            const cleanUrl = window.location.pathname;
-            window.history.replaceState({}, document.title, cleanUrl);
-            recordDebugInfo('url_cleaned', { from: window.location.href, to: cleanUrl });
-          }
           
           setTimeout(() => {
             navigate('/gallery');
