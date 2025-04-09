@@ -4,12 +4,6 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { handleOAuthRedirect, handleOAuthTokenFromHash, getGalleryUrl } from '@/utils/authTokenHandler';
 
-declare global {
-  interface Window {
-    chrome?: Chrome;
-  }
-}
-
 type AuthCallbackHandlerProps = {
   setStatus: (status: string) => void;
   setError: (error: string | null) => void;
@@ -112,6 +106,11 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
               
               success = true;
               
+              if (window.history && window.history.replaceState) {
+                window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+                recordDebugInfo('url_cleaned', { action: 'hash_removed' });
+              }
+              
               try {
                 console.log('[MainGallery] Notifying about successful login');
                 window.postMessage({
@@ -208,7 +207,8 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             description: "You've been logged in successfully!",
           });
           
-          if (window.location.hash || window.location.search.includes('access_token')) {
+          if ((window.location.hash || window.location.search.includes('access_token')) && 
+              window.history && window.history.replaceState) {
             const cleanUrl = window.location.pathname;
             window.history.replaceState({}, document.title, cleanUrl);
             recordDebugInfo('url_cleaned', { from: window.location.href, to: cleanUrl });

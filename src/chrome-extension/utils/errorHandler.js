@@ -103,6 +103,11 @@ export async function safeFetch(url, options = {}) {
     if (!response.ok) {
       const errorText = await response.text();
       let errorDetail;
+      let isHtmlResponse = false;
+      
+      // Check if this is an HTML response (login page, etc.)
+      const contentType = response.headers.get('content-type');
+      isHtmlResponse = contentType && contentType.includes('text/html');
       
       try {
         // Try to parse as JSON if possible
@@ -110,12 +115,32 @@ export async function safeFetch(url, options = {}) {
       } catch (e) {
         // If not JSON, use the first 200 chars of text
         errorDetail = errorText.substring(0, 200) + (errorText.length > 200 ? '...' : '');
+        
+        // If it looks like HTML, log that specifically
+        if (isHtmlResponse || errorText.trim().startsWith('<!DOCTYPE') || errorText.trim().startsWith('<html')) {
+          logger.error("Received HTML response when expecting JSON. This usually indicates an auth issue or redirect.");
+          isHtmlResponse = true;
+        }
       }
       
       const error = new Error(`HTTP error ${response.status}: ${response.statusText}`);
       error.status = response.status;
       error.statusText = response.statusText;
       error.responseText = errorDetail;
+      error.isHtmlResponse = isHtmlResponse;
+      error.responseUrl = response.url; // Capture the final URL after any redirects
+      
+      // Log additional debugging information for HTML responses
+      if (isHtmlResponse) {
+        logger.error("HTML response detected when expecting JSON. Response URL:", response.url);
+        // Extract title from HTML if possible
+        const titleMatch = errorText.match(/<title>(.*?)<\/title>/i);
+        if (titleMatch && titleMatch[1]) {
+          logger.error("HTML page title:", titleMatch[1].trim());
+          error.htmlPageTitle = titleMatch[1].trim();
+        }
+      }
+      
       throw error;
     }
     
@@ -125,7 +150,8 @@ export async function safeFetch(url, options = {}) {
       return await response.json();
     } else {
       const text = await response.text();
-      // Check if it looks like JSON anyway
+      
+      // If content-type isn't JSON but the text appears to be JSON, try to parse it
       if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
         try {
           return JSON.parse(text);
@@ -134,13 +160,34 @@ export async function safeFetch(url, options = {}) {
           const error = new Error("ERROR in safeFetch: Received invalid JSON response");
           error.responseText = text.substring(0, 500);
           error.parseError = e.message;
+          error.contentType = contentType;
           throw error;
         }
       } else {
-        logger.error("ERROR: Received HTML response instead of JSON:", text.substring(0, 200) + "...");
-        const error = new Error("ERROR in safeFetch: Received HTML response when expecting JSON");
-        error.responseText = text.substring(0, 500);
-        throw error;
+        // If response is HTML, this is likely a redirect to a login page or error page
+        if (contentType && contentType.includes('text/html') || 
+            text.trim().startsWith('<!DOCTYPE') || 
+            text.trim().startsWith('<html')) {
+          
+          logger.error("ERROR: Received HTML response instead of JSON:", text.substring(0, 200) + "...");
+          const error = new Error("ERROR in safeFetch: Received HTML response when expecting JSON");
+          error.responseText = text.substring(0, 500);
+          error.isHtmlResponse = true;
+          error.responseUrl = response.url; // Capture the final URL after any redirects
+          
+          // Extract title from HTML if possible
+          const titleMatch = text.match(/<title>(.*?)<\/title>/i);
+          if (titleMatch && titleMatch[1]) {
+            logger.error("HTML page title:", titleMatch[1].trim());
+            error.htmlPageTitle = titleMatch[1].trim();
+          }
+          
+          throw error;
+        }
+        
+        // For other non-JSON responses, just return the text
+        logger.warn("WARNING: Response was not JSON. Content-Type:", contentType);
+        return text;
       }
     }
   } catch (error) {

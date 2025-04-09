@@ -1,4 +1,3 @@
-
 /**
  * MainGallery.AI content script
  * Responsible for scanning and extracting images from supported AI platforms
@@ -217,8 +216,139 @@ function showToast(message, type = 'info') {
   }
 }
 
+// Ensure content script can respond to ping messages
+function setupPingHandler() {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Handle ping messages to verify content script is loaded
+    if (message.type === "PING") {
+      sendResponse({ success: true, status: "content_script_ready" });
+      return true;
+    }
+    return false; // Let other listeners handle other message types
+  });
+  
+  logger.log("Ping handler registered");
+}
+
+// Set up message listeners and notify background script that content script is loaded
+function setupMessageListeners() {
+  logger.log("Setting up message listeners for content script");
+  
+  // Handle messages from the background script
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    logger.log("Message received in content script:", message);
+    
+    try {
+      // Handle different message types
+      if (message.type === "PING") {
+        // Already handled by the ping handler
+        return false;
+      }
+      else if (message.action === "startAutoScan") {
+        logger.log("Starting auto-scan of the page");
+        
+        // Extract scan options
+        const options = message.options || {};
+        
+        // Start the scanning process
+        startScanning(options)
+          .then(result => {
+            logger.log("Scan completed with results:", result);
+            sendResponse({ success: true, result });
+          })
+          .catch(err => {
+            handleError("autoScan", err);
+            sendResponse({ success: false, error: err.message });
+          });
+        
+        return true; // Keep message channel open for async response
+      }
+      
+      // Default response
+      sendResponse({ success: false, error: "Unhandled message type" });
+    } catch (err) {
+      handleError("messageHandler", err);
+      sendResponse({ success: false, error: err.message });
+    }
+    
+    return true; // Keep message channel open for async response
+  });
+  
+  // Notify the background script that the content script is loaded
+  try {
+    chrome.runtime.sendMessage({
+      action: "CONTENT_SCRIPT_READY",
+      location: window.location.href,
+      timestamp: Date.now()
+    }, response => {
+      if (chrome.runtime.lastError) {
+        logger.warn("Could not notify background script: ", chrome.runtime.lastError.message);
+      } else {
+        logger.log("Background script notified of content script loading");
+      }
+    });
+  } catch (err) {
+    handleError("notifyBackgroundScript", err, { silent: true });
+  }
+}
+
+// Main scanning functionality
+async function startScanning(options = {}) {
+  const { scrollDelay = 300, scrollStep = 500, maxScroll = 30 } = options;
+  
+  logger.log("Starting scan with options:", options);
+  showToast("MainGallery.AI is scanning this page for AI images...", "info");
+  
+  try {
+    // Scroll the page to load all content
+    await autoScrollToBottom({ scrollDelay, scrollStep, maxScroll });
+    
+    // Extract images from the page
+    const images = await extractImagesFromPage();
+    
+    // If images were found, send them to background
+    if (images && images.length > 0) {
+      logger.log("Found", images.length, "images on the page");
+      showToast(`Found ${images.length} AI images! Adding to your gallery...`, "success");
+      
+      // Send images to background script
+      try {
+        chrome.runtime.sendMessage({
+          action: "scanComplete",
+          images: images,
+          location: window.location.href,
+          platform: getPlatformNameFromUrl(window.location.href),
+          timestamp: Date.now()
+        }, response => {
+          if (chrome.runtime.lastError) {
+            logger.error("Error sending images to background:", chrome.runtime.lastError.message);
+            showToast("Error syncing images. Please try again.", "error");
+          } else {
+            logger.log("Images sent to background script successfully");
+            showToast("Images added to your gallery!", "success");
+          }
+        });
+      } catch (err) {
+        handleError("sendImagesToBackground", err);
+        showToast("Error syncing images. Please try again.", "error");
+      }
+      
+      return { success: true, count: images.length };
+    } else {
+      logger.log("No images found on the page");
+      showToast("No AI images found on this page.", "info");
+      return { success: true, count: 0 };
+    }
+  } catch (err) {
+    handleError("startScanning", err);
+    showToast("Error scanning the page. Please try again.", "error");
+    return { success: false, error: err.message };
+  }
+}
+
+// Implement the auto scroll function that was referenced earlier
 async function autoScrollToBottom(options = {}) {
-  const { scrollDelay = 300, scrollStep = 500, maxScroll = 50 } = options;
+  const { scrollDelay = 300, scrollStep = 500, maxScroll = 30 } = options;
   
   return new Promise((resolve) => {
     let scrollCount = 0;
@@ -246,477 +376,102 @@ async function autoScrollToBottom(options = {}) {
           (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200 ||
           samePositionCount >= 3) {
         clearInterval(scrollInterval);
-        setTimeout(resolve, 800); // Give more time for images to load
+        
+        // Scroll back to top
+        window.scrollTo(0, 0);
+        
+        // Wait a bit for any lazy-loaded content to appear
+        setTimeout(resolve, 500);
       }
     }, scrollDelay);
   });
 }
 
-function setupMutationObserver(callback) {
-  try {
-    const observer = new MutationObserver((mutations) => {
-      const hasNewImages = mutations.some(mutation => {
-        return Array.from(mutation.addedNodes).some(node => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            const element = node;
-            return element.tagName === 'IMG' || element.querySelector('img');
-          }
-          return false;
-        });
-      });
-      
-      if (typeof callback === 'function') {
-        callback(mutations, hasNewImages);
-      }
-    });
-    
-    observer.observe(document.body, { 
-      childList: true, 
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['src']
-    });
-    
-    return observer;
-  } catch (err) {
-    handleError('setupMutationObserver', err);
-    return null;
-  }
-}
-
-// Platform-specific extractors
-function extractMidjourneyMetadata() {
-  // For Midjourney, attempt to extract additional metadata
-  const midjourneyData = {
-    prompts: [],
-    images: []
-  };
+// Function to extract images from the page
+async function extractImagesFromPage() {
+  logger.log("Extracting images from page");
   
   try {
-    // Prompt cards with image and text data
-    const cards = document.querySelectorAll('[data-testid="JobCard"]');
-    if (cards.length > 0) {
-      cards.forEach(card => {
-        try {
-          const promptText = card.querySelector('[data-testid="JobCardPrompt"]')?.textContent || '';
-          const imageEl = card.querySelector('img[src*="/0_"]');
-          
-          if (imageEl && promptText) {
-            // Get the full-size image URL by replacing thumbnails with originals
-            let fullSizeUrl = imageEl.src;
-            
-            // Transform thumbnail URL to full-size URL for Midjourney
-            if (fullSizeUrl.includes('_32')) {
-              fullSizeUrl = fullSizeUrl.replace('_32', '_N');
-            }
-            
-            midjourneyData.prompts.push(promptText);
-            midjourneyData.images.push({
-              thumbnailSrc: imageEl.src,
-              fullSizeSrc: fullSizeUrl,
-              prompt: promptText,
-              width: imageEl.naturalWidth,
-              height: imageEl.naturalHeight
-            });
-          }
-        } catch (err) {
-          // Skip this card if there's an error
-          console.error("Error processing Midjourney card:", err);
-        }
-      });
-    }
+    // Get all image elements on the page
+    const imgElements = Array.from(document.querySelectorAll('img'));
     
-    return midjourneyData;
-  } catch (err) {
-    logger.error("Error extracting Midjourney metadata:", err);
-    return midjourneyData;
-  }
-}
-
-// Image Extraction
-function extractImages() {
-  try {
-    // First check if we're even on a supported platform
-    const currentUrl = window.location.href;
-    if (!isSupportedPlatformUrl(currentUrl)) {
-      logger.warn('Not on a supported platform URL:', currentUrl);
-      return { 
-        images: [], 
-        success: false, 
-        error: 'Not a supported platform gallery page',
-        url: currentUrl 
-      };
-    }
-    
-    logger.log(`Scanning for images on supported platform: ${getPlatformNameFromUrl(currentUrl)}`);
-    
-    const images = [];
-    const seenUrls = new Set();
+    // Filter and process images
     const platformName = getPlatformNameFromUrl(window.location.href);
     
-    // Check if this is Midjourney, which needs special handling
-    let platformSpecificData = {};
-    if (platformName === "Midjourney") {
-      platformSpecificData = extractMidjourneyMetadata();
-      logger.log(`Extracted ${platformSpecificData.images.length} images from Midjourney specific data`);
-    }
-    
-    // Find all images on the page
-    const imgElements = document.querySelectorAll('img[src]:not([src^="data:"]):not([src^="blob:"])');
-    
-    logger.log(`Found ${imgElements.length} potential image elements`);
-    
-    imgElements.forEach(img => {
-      try {
+    // Basic extraction (this would be more complex in the real extension)
+    const extractedImages = imgElements
+      .filter(img => {
+        // Filter by size (ignore tiny images)
+        return img.naturalWidth > 200 && img.naturalHeight > 200;
+      })
+      .map((img, index) => {
+        // Get image information
         const src = img.src;
-        if (!src || seenUrls.has(src)) return;
+        const alt = img.alt || '';
+        const title = img.title || '';
+        const width = img.naturalWidth;
+        const height = img.naturalHeight;
         
-        // Skip very small images (likely icons or thumbnails)
-        const width = img.naturalWidth || img.width;
-        const height = img.naturalHeight || img.height;
+        // Extract any prompt data from the image or surrounding elements
+        let prompt = alt || title;
         
-        if (width < 150 || height < 150) {
-          logger.log(`Skipping small image: ${width}x${height}`);
-          return;
-        }
-        
-        // Skip certain icon patterns
-        if (src.includes('favicon') || 
-            src.includes('/icons/') || 
-            src.includes('/logo')) {
-          logger.log(`Skipping icon/logo: ${src}`);
-          return;
-        }
-        
-        // Check for Midjourney specific image first
-        if (platformName === "Midjourney" && platformSpecificData.images.length > 0) {
-          // Try to match with a Midjourney image from our specific extraction
-          const mjImage = platformSpecificData.images.find(mjImg => 
-            mjImg.thumbnailSrc === src || mjImg.fullSizeSrc === src
-          );
-          
-          if (mjImage) {
-            // Use the high-quality image and the correct prompt
-            const now = new Date();
-            const createdAt = now.toISOString();
-            
-            const imageData = {
-              id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-              url: mjImage.fullSizeSrc || src,
-              width: mjImage.width || width,
-              height: mjImage.height || height,
-              alt: mjImage.prompt || img.alt || '',
-              title: mjImage.prompt || img.title || '',
-              prompt: mjImage.prompt || '',
-              platform: "midjourney",
-              platformName: "Midjourney",
-              sourceURL: window.location.href,
-              tabUrl: window.location.href,
-              timestamp: Date.now(),
-              createdAt,
-              pageTitle: document.title || '',
-              type: 'image',
-              fromSupportedDomain: true
-            };
-            
-            // Add to our collection and mark as seen
-            images.push(imageData);
-            seenUrls.add(src);
-            seenUrls.add(mjImage.fullSizeSrc);
-            return; // Skip standard processing
+        // Try to find prompt in parent elements
+        let currentEl = img.parentElement;
+        for (let i = 0; i < 3 && currentEl && !prompt; i++) {
+          const textContent = currentEl.textContent?.trim();
+          if (textContent && textContent.length > 10 && textContent.length < 1000) {
+            prompt = textContent;
           }
+          currentEl = currentEl.parentElement;
         }
         
-        // Try to extract alt text, title, or nearby text as potential prompt
-        let prompt = '';
-        let title = '';
+        // Create timestamp (now or use data attribute if available)
+        const timestamp = img.dataset.timestamp ? parseInt(img.dataset.timestamp) : Date.now();
         
-        // Check for alt or title attributes
-        if (img.alt && img.alt.length > 5) {
-          prompt = img.alt;
-        } else if (img.title && img.title.length > 5) {
-          title = img.title;
-        }
-        
-        // Look for nearby text that might be a prompt
-        if (!prompt) {
-          // Try to find parent container
-          const parent = img.closest('div') || img.parentElement;
-          if (parent) {
-            // Look for nearby text elements
-            const textElements = parent.querySelectorAll('p, h1, h2, h3, h4, h5, span, div');
-            for (const el of textElements) {
-              const text = el.textContent?.trim();
-              if (text && text.length > 10 && text.length < 1000) {
-                prompt = text;
-                break;
-              }
-            }
-          }
-        }
-        
-        // Determine file type from extension or MIME type
-        let type = 'image';
-        if (src.endsWith('.png')) type = 'png';
-        else if (src.endsWith('.jpg') || src.endsWith('.jpeg')) type = 'jpeg';
-        else if (src.endsWith('.webp')) type = 'webp';
-        else if (src.endsWith('.gif')) type = 'gif';
-        
-        // Generate a created date timestamp (current if not available)
-        const now = new Date();
-        const createdAt = now.toISOString();
-        
-        // Collect necessary metadata
-        const imageData = {
-          id: `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        // Return image data
+        return {
+          id: `${platformName}_${timestamp}_${index}`,
           url: src,
+          thumbnail: src,
+          prompt: prompt || 'No prompt available',
+          platform: platformName,
           width,
           height,
-          alt: img.alt || '',
-          title: title || img.title || '',
-          prompt: prompt || '',
-          platform: platformName.toLowerCase().replace(/\s+/g, '_'),
-          platformName,
-          sourceURL: window.location.href,
-          tabUrl: window.location.href,
-          timestamp: Date.now(),
-          createdAt,
-          pageTitle: document.title || '',
-          type,
-          fromSupportedDomain: true
+          timestamp,
+          createdAt: new Date(timestamp).toISOString(),
+          sourceUrl: window.location.href
         };
-        
-        // Add to our collection and mark as seen
-        images.push(imageData);
-        seenUrls.add(src);
-      } catch (imgErr) {
-        // Silently handle individual image errors
-        logger.error('Error processing image:', imgErr);
-      }
-    });
+      });
     
-    logger.log(`Successfully extracted ${images.length} images from the page`);
-    
-    return { 
-      images, 
-      success: images.length > 0, 
-      count: images.length,
-      platform: getPlatformNameFromUrl(window.location.href)
-    };
+    // Ensure chronological ordering
+    return extractedImages.sort((a, b) => b.timestamp - a.timestamp);
   } catch (err) {
-    handleError('extractImages', err);
-    return { 
-      images: [], 
-      success: false, 
-      error: err.message,
-      url: window.location.href 
-    };
+    handleError("extractImagesFromPage", err);
+    return [];
   }
 }
 
-// Message the background script when content script loads
-function notifyBackgroundScriptReady() {
-  try {
-    chrome.runtime.sendMessage({ 
-      action: 'CONTENT_SCRIPT_READY',
-      location: window.location.href,
-      platform: getPlatformNameFromUrl(window.location.href),
-      isSupported: isSupportedPlatformUrl(window.location.href),
-      timestamp: Date.now()
-    });
-  } catch (err) {
-    handleError('notifyBackgroundScriptReady', err);
+// Initialize the content script
+function initialize() {
+  logger.log("Initializing content script on:", window.location.href);
+  
+  // Check if we're on a supported platform
+  const isSupportedSite = isSupportedPlatformUrl(window.location.href);
+  
+  if (isSupportedSite) {
+    logger.log("Running on supported platform:", getPlatformNameFromUrl(window.location.href));
+    
+    // Set up ping handler first
+    setupPingHandler();
+    
+    // Set up message listeners
+    setupMessageListeners();
+    
+    // Additional initialization can go here
+  } else {
+    logger.log("Not a supported platform, content script in passive mode");
   }
 }
 
-// Handle auto-scanning functionality
-async function handleAutoScan(options = {}) {
-  try {
-    const currentUrl = window.location.href;
-    if (!isSupportedPlatformUrl(currentUrl)) {
-      logger.log('Not a supported platform, showing notification');
-      showToast('This site is not in the approved platform list for MainGallery', 'error');
-      return { 
-        success: false, 
-        reason: 'unsupported_site',
-        url: currentUrl 
-      };
-    }
-    
-    const platformName = getPlatformNameFromUrl(currentUrl);
-    logger.log(`Starting auto-scan on ${platformName}`);
-    
-    // Show scanning toast
-    showToast(`Scanning ${platformName} for AI-generated images...`, 'info');
-    
-    // Start the auto-scan process
-    try {
-      // Auto-scroll to the bottom of the page to reveal more images
-      await autoScrollToBottom(options);
-      logger.log('Auto-scroll complete, extracting images');
-      
-      // After scrolling, extract all images
-      const result = extractImages();
-      const images = result.images || [];
-      logger.log(`Found ${images.length} images after scrolling`);
-      
-      // Show success toast
-      if (images.length > 0) {
-        showToast(`Found ${images.length} images, sending to gallery`, 'success');
-      } else {
-        showToast('No images found on this page', 'info');
-      }
-      
-      // Send the results back to background script
-      chrome.runtime.sendMessage({
-        action: 'scanComplete',
-        images: images,
-        platform: platformName,
-        success: images.length > 0,
-        count: images.length,
-        url: currentUrl,
-        timestamp: Date.now()
-      }).catch(err => {
-        handleError('sendScanResults', err);
-        showToast('Error syncing images to gallery', 'error');
-      });
-      
-      return { 
-        success: true, 
-        imageCount: images.length,
-        platform: platformName
-      };
-    } catch (err) {
-      handleError('autoScanProcess', err);
-      showToast('Error during page scanning', 'error');
-      
-      // Notify background script about failure
-      try {
-        chrome.runtime.sendMessage({
-          action: 'scanComplete',
-          images: [],
-          success: false,
-          error: err.message,
-          url: currentUrl,
-          timestamp: Date.now()
-        }).catch(e => handleError('sendScanError', e, { silent: true }));
-      } catch (e) {
-        handleError('sendScanErrorFailure', e, { silent: true });
-      }
-      
-      return { success: false, error: err.message };
-    }
-  } catch (err) {
-    handleError('handleAutoScan', err);
-    return { success: false, error: err.message };
-  }
-}
-
-// Main content script logic
-logger.log('MainGallery.AI content script loaded');
-
-// Check if we're on a supported site
-const currentUrl = window.location.href;
-const isSupportedURL = isSupportedPlatformUrl(currentUrl);
-
-if (isSupportedURL) {
-  const platformName = getPlatformNameFromUrl(currentUrl);
-  logger.log(`MainGallery.AI running on supported platform: ${platformName}`);
-  
-  // Set up mutation observer for dynamic content
-  setupMutationObserver((mutations, hasNewImages) => {
-    if (hasNewImages) {
-      logger.log('Detected new images added to DOM');
-    }
-  });
-  
-  // Send ready message to background script with platform info
-  notifyBackgroundScriptReady();
-} else {
-  logger.log('MainGallery.AI not running on unsupported site:', window.location.hostname);
-}
-
-// Listen for messages from the extension
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  logger.log('Content script received message:', request?.action);
-  
-  try {
-    // Always respond to ping requests to establish connection
-    if (request.action === 'ping' || request.action === 'PING') {
-      logger.log('Received ping, responding with pong');
-      sendResponse({ 
-        success: true, 
-        action: 'pong', 
-        from: 'content_script',
-        platform: getPlatformNameFromUrl(window.location.href),
-        isSupported: isSupportedPlatformUrl(window.location.href),
-        timestamp: Date.now()
-      });
-      return true;
-    }
-    
-    if (request.action === 'extractImages') {
-      if (!isSupportedPlatformUrl(window.location.href)) {
-        logger.warn('Attempted to extract images from unsupported platform');
-        sendResponse({ 
-          images: [], 
-          success: false, 
-          reason: 'unsupported_site',
-          url: window.location.href 
-        });
-        return true;
-      }
-      
-      const result = extractImages();
-      sendResponse(result);
-      return true;
-    } 
-    else if (request.action === 'startAutoScan') {
-      logger.log('Starting auto-scanning with scrolling');
-      
-      // Immediately send response that scan started (important to avoid connection errors)
-      sendResponse({ 
-        success: true, 
-        status: 'scan_started',
-        isSupported: isSupportedPlatformUrl(window.location.href),
-        platform: getPlatformNameFromUrl(window.location.href),
-        timestamp: Date.now()
-      });
-      
-      // Process the scan asynchronously (we already responded to avoid connection errors)
-      handleAutoScan(request.options);
-      
-      return true; // we've already sent the response
-    }
-    else if (request.action === 'showUnsupportedTabToast') {
-      const message = request.message || "Please switch to a supported AI platform to use MainGallery.AI";
-      showToast(message, 'error');
-      sendResponse({ success: true });
-      return true;
-    }
-    else if (request.action === 'getPlatformInfo') {
-      sendResponse({
-        success: true,
-        isSupported: isSupportedPlatformUrl(window.location.href),
-        platform: getPlatformNameFromUrl(window.location.href),
-        url: window.location.href,
-        timestamp: Date.now()
-      });
-      return true;
-    }
-  } catch (err) {
-    handleError('contentScriptMessageHandler', err);
-    sendResponse({ 
-      success: false, 
-      error: err.message,
-      action: request?.action || 'unknown',
-      timestamp: Date.now()
-    });
-  }
-  
-  return true; // Keep channel open for async response
-});
-
-// Send initial ready message for monitoring
-logger.log('MainGallery.AI content script fully loaded and initialized');
-notifyBackgroundScriptReady();
+// Start the content script
+initialize();
