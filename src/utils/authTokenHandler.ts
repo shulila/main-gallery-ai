@@ -85,8 +85,11 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
       if (accessToken) {
         console.log('[MainGallery] Setting session with token from hash');
         
-        // Update Supabase session with the correct argument format
-        const { data, error } = await supabase.auth.setSession(accessToken, refreshToken);
+        // Fixed: Using the correct object format for setSession in Supabase v2
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
         
         if (error) {
           console.error('[MainGallery] Error setting Supabase session:', error);
@@ -134,8 +137,11 @@ export const handleOAuthRedirect = async (): Promise<boolean> => {
       if (accessToken) {
         console.log('[MainGallery] Setting session with token from search params');
         
-        // Update Supabase session with the correct argument format
-        const { data, error } = await supabase.auth.setSession(accessToken, refreshToken);
+        // Fixed: Using the correct object format for setSession in Supabase v2
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
         
         if (error) {
           console.error('[MainGallery] Error setting Supabase session from query params:', error);
@@ -285,8 +291,11 @@ async function processAccessToken(accessToken: string, refreshToken: string, ema
     
     // Explicitly set Supabase session
     try {
-      // Fixed: Using the correct argument format for setSession in Supabase v2
-      const { data, error } = await supabase.auth.setSession(accessToken, refreshToken);
+      // Fixed: Using the correct object format for setSession in Supabase v2
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      });
       
       if (error) {
         console.error('[MainGallery] Error setting Supabase session in processAccessToken:', error);
