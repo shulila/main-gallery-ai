@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -159,7 +160,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             }
             
             if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
-              // Fixed: Using the named token variable instead of undefined accessToken
+              // Fixed: Get the token properly from the previously defined variables
               const currentToken = hashParams.get('access_token') || searchParams.get('access_token') || '';
               
               window.chrome.runtime.sendMessage({
