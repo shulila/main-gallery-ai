@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
@@ -98,7 +99,11 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
                 });
               }
               
-              const { data: userData } = await supabase.auth.getUser(accessToken);
+              // Fix: getUser now expects an object with access_token property
+              const { data: userData } = await supabase.auth.getUser({ 
+                access_token: accessToken 
+              });
+              
               recordDebugInfo('session_verification', { 
                 sessionValid: !!userData?.user,
                 userEmail: userData?.user?.email 
