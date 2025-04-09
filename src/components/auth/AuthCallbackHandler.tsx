@@ -99,10 +99,8 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
                 });
               }
               
-              // Fix: getUser now expects an object with access_token property
-              const { data: userData } = await supabase.auth.getUser({ 
-                access_token: accessToken 
-              });
+              // Fix: getUser doesn't take parameters in the current Supabase version
+              const { data: userData } = await supabase.auth.getUser();
               
               recordDebugInfo('session_verification', { 
                 sessionValid: !!userData?.user,
