@@ -59,10 +59,10 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
         
         if (hashParams.has('access_token') || searchParams.has('access_token')) {
           // We have tokens in the URL, extract and set them
-          const token = hashParams.get('access_token') || searchParams.get('access_token');
+          const accessToken = hashParams.get('access_token') || searchParams.get('access_token') || '';
           const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token') || '';
           
-          if (token) {
+          if (accessToken) {
             recordDebugInfo('token_found_in_url', { 
               source: hashParams.has('access_token') ? 'hash' : 'search' 
             });
@@ -70,7 +70,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             try {
               // Fixed: Using the proper object structure for setSession
               const { data, error } = await supabase.auth.setSession({
-                access_token: token,
+                access_token: accessToken,
                 refresh_token: refreshToken
               });
               
@@ -161,7 +161,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             
             if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
               // Fixed: Get the token properly from the previously defined variables
-              const currentToken = hashParams.get('access_token') || searchParams.get('access_token') || '';
+              const currentToken = accessToken;
               
               window.chrome.runtime.sendMessage({
                 type: "WEB_APP_TO_EXTENSION",
