@@ -162,7 +162,7 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             }
             
             if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
-              // Fixed: Use the properly defined accessToken variable from the outer scope
+              // Use the properly defined accessToken variable from the outer scope
               const currentToken = accessToken;
               
               window.chrome.runtime.sendMessage({
