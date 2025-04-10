@@ -1,9 +1,8 @@
-
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { getGalleryUrl } from '@/utils/authTokenHandler';
-import { supabase } from '../../chrome-extension/utils/supabaseClient.js';
+import { supabase } from '../../../chrome-extension/utils/supabaseClient.js';
 
 type AuthCallbackHandlerProps = {
   setStatus: (status: string) => void;
@@ -68,7 +67,6 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             });
             
             try {
-              // Fixed: Correct format for supabase.auth.setSession with proper parameters
               const { data, error } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken
@@ -147,9 +145,8 @@ export const AuthCallbackHandler = ({ setStatus, setError }: AuthCallbackHandler
             if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
               const currentToken = accessToken;
               
-              // Fixed: Correct format for window.chrome.runtime.sendMessage with all required arguments
               window.chrome.runtime.sendMessage(
-                undefined, // extensionId (undefined for own extension)
+                undefined,
                 {
                   type: "WEB_APP_TO_EXTENSION",
                   action: "loginSuccess",
