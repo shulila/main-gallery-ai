@@ -56,6 +56,13 @@ if [ ! -f "dist/utils/supabaseClient.js" ]; then
   echo "⚠️ Warning: supabaseClient.js is missing from utils directory"
 else
   echo "✅ supabaseClient.js is present in utils directory"
+  
+  # Validate supabaseClient.js exports
+  if grep -q "export default supabaseClient" dist/utils/supabaseClient.js && grep -q "export const supabase" dist/utils/supabaseClient.js; then
+    echo "✅ supabaseClient.js has proper exports"
+  else
+    echo "⚠️ Warning: supabaseClient.js might not have proper exports"
+  fi
 fi
 
 # Look for any remaining @/ imports in JavaScript files

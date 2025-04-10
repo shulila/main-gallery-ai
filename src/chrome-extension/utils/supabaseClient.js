@@ -30,8 +30,9 @@ try {
   };
 }
 
-// Export the client
-export { supabaseClient as supabase };
+// Export the client - make sure we use both export styles for compatibility
+export default supabaseClient; 
+export const supabase = supabaseClient;
 
 // Also export config for use in other modules
 export const supabaseConfig = {

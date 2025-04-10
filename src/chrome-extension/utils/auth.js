@@ -1,3 +1,4 @@
+
 // Import Supabase with the correct relative path
 import { supabase } from './supabaseClient.js';
 
