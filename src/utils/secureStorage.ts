@@ -1,3 +1,4 @@
+
 /**
  * Secure storage utility for sensitive data
  * Uses Chrome's storage.local with encryption for sensitive values
@@ -64,7 +65,10 @@ function decrypt(encryptedValue: string): string {
 }
 
 // Detect if we're in a browser extension context
-const isExtension = typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+const isExtension = typeof window !== 'undefined' && 
+                    typeof window.chrome !== 'undefined' && 
+                    window.chrome.storage && 
+                    window.chrome.storage.local;
 
 /**
  * Store a value securely
@@ -86,7 +90,7 @@ export async function secureSet(
       
       if (isExtension) {
         // Use chrome.storage if available
-        chrome.storage.local.set({ [key]: storageValue }, () => {
+        window.chrome?.storage?.local.set({ [key]: storageValue }, () => {
           resolve();
         });
       } else {
@@ -115,7 +119,7 @@ export async function secureGet<T>(
     try {
       if (isExtension) {
         // Use chrome.storage if available
-        chrome.storage.local.get([key], (result) => {
+        window.chrome?.storage?.local.get([key], (result) => {
           if (result[key] === undefined) {
             resolve(null);
             return;
@@ -167,7 +171,7 @@ export async function secureRemove(key: string): Promise<void> {
     try {
       if (isExtension) {
         // Use chrome.storage if available
-        chrome.storage.local.remove(key, () => {
+        window.chrome?.storage?.local.remove(key, () => {
           resolve();
         });
       } else {
