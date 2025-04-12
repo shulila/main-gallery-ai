@@ -1,212 +1,133 @@
 
-import { supabase } from "../chrome-extension/utils/supabaseClient.js";
-
 /**
- * Utility functions for handling authentication tokens
+ * Auth token handler utilities
+ * Handles OAuth redirects, token extraction, and related functionality
  */
 
+import { supabase } from '@/integrations/supabase/client';
+
 /**
- * Retrieves the current access token from Supabase session
- * @returns The current access token or null if not found
+ * Handle OAuth redirect from auth providers
+ * This processes the callback URL and signs in the user
  */
-export async function getCurrentAccessToken(): Promise<string | null> {
+export const handleOAuthRedirect = async (): Promise<boolean> => {
   try {
-    const { data, error } = await supabase.auth.getSession();
-    
-    if (error) {
-      console.error("[MainGallery] Error retrieving access token:", error);
-      return null;
-    }
-    
-    return data.session?.access_token || null;
-  } catch (error) {
-    console.error("[MainGallery] Exception retrieving access token:", error);
-    return null;
-  }
-}
-
-/**
- * Checks if the current user is authenticated
- * @returns True if authenticated, false otherwise
- */
-export async function isAuthenticated(): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    
-    if (error) {
-      console.error("[MainGallery] Error checking authentication:", error);
-      return false;
-    }
-    
-    return !!data.session;
-  } catch (error) {
-    console.error("[MainGallery] Exception checking authentication:", error);
-    return false;
-  }
-}
-
-/**
- * Gets the user ID of the currently authenticated user
- * @returns The user ID or null if not authenticated
- */
-export async function getCurrentUserId(): Promise<string | null> {
-  try {
-    const { data, error } = await supabase.auth.getUser();
-    
-    if (error) {
-      console.error("[MainGallery] Error retrieving user ID:", error);
-      return null;
-    }
-    
-    return data.user?.id || null;
-  } catch (error) {
-    console.error("[MainGallery] Exception retrieving user ID:", error);
-    return null;
-  }
-}
-
-/**
- * Gets the user email of the currently authenticated user
- * @returns The user email or null if not authenticated
- */
-export async function getCurrentUserEmail(): Promise<string | null> {
-  try {
-    const { data, error } = await supabase.auth.getUser();
-    
-    if (error) {
-      console.error("[MainGallery] Error retrieving user email:", error);
-      return null;
-    }
-    
-    return data.user?.email || null;
-  } catch (error) {
-    console.error("[MainGallery] Exception retrieving user email:", error);
-    return null;
-  }
-}
-
-/**
- * Refreshes the current session's token if needed
- * @returns True if successful, false otherwise
- */
-export async function refreshTokenIfNeeded(): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    
-    if (error) {
-      console.error("[MainGallery] Error getting session for refresh:", error);
-      return false;
-    }
-    
-    if (!data.session) {
-      console.log("[MainGallery] No session to refresh");
-      return false;
-    }
-    
-    // Only refresh if token is within 5 minutes of expiring
-    const expiresAt = data.session.expires_at || 0;
-    const fiveMinutesFromNow = Math.floor(Date.now() / 1000) + 300;
-    
-    if (expiresAt > fiveMinutesFromNow) {
-      // Token is still valid for more than 5 minutes
+    // Try to extract hash parameters if they exist
+    const hashSuccess = handleOAuthTokenFromHash(window.location.href);
+    if (hashSuccess) {
       return true;
     }
-    
-    // Refresh the session
-    const { error: refreshError } = await supabase.auth.refreshSession();
-    
-    if (refreshError) {
-      console.error("[MainGallery] Error refreshing token:", refreshError);
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error("[MainGallery] Exception refreshing token:", error);
-    return false;
-  }
-}
 
-/**
- * Handles OAuth redirect by processing authentication token from the URL
- * @returns True if successful, false otherwise
- */
-export async function handleOAuthRedirect(): Promise<boolean> {
-  try {
-    // Check if the URL contains a hash fragment with an access token
-    const hash = window.location.hash;
-    const search = window.location.search;
-    
-    if ((!hash || !hash.includes('access_token=')) && (!search || !search.includes('access_token='))) {
-      console.log("[MainGallery] No access token found in URL");
-      return false;
-    }
-    
-    console.log("[MainGallery] Processing OAuth redirect");
-    
+    // Fall back to Supabase's built-in flow handling
     const { data, error } = await supabase.auth.getSession();
     
     if (error) {
-      console.error("[MainGallery] Error getting session:", error);
+      console.error('Error handling OAuth redirect:', error);
       return false;
     }
     
     if (data.session) {
-      console.log("[MainGallery] Session found after OAuth redirect");
+      console.log('Successfully authenticated via Supabase OAuth flow');
       return true;
     }
     
     return false;
   } catch (error) {
-    console.error("[MainGallery] Exception during OAuth redirect handling:", error);
+    console.error('Error in handleOAuthRedirect:', error);
     return false;
   }
-}
+};
 
 /**
- * Extracts and processes OAuth token directly from URL hash
- * @param url The URL containing the hash with the token
- * @returns True if successful, false otherwise
+ * Extract OAuth token from URL hash
+ * This is a faster method than relying on the Supabase flow
  */
-export function handleOAuthTokenFromHash(url: string): boolean {
+export const handleOAuthTokenFromHash = (url: string): boolean => {
   try {
-    // Parse the URL hash
-    const hash = new URL(url).hash;
-    if (!hash || !hash.includes('access_token=')) {
-      return false;
-    }
+    // Parse the URL
+    const urlObj = new URL(url);
     
-    // Extract tokens from hash parameters
-    const params = new URLSearchParams(hash.substring(1));
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
+    // Check for access token in hash or query params
+    const hash = urlObj.hash.substring(1); // Remove the # character
+    const searchParams = new URLSearchParams(hash || urlObj.search);
+    
+    const accessToken = searchParams.get('access_token');
+    const refreshToken = searchParams.get('refresh_token');
+    const expiresIn = searchParams.get('expires_in');
     
     if (!accessToken) {
-      console.log("[MainGallery] No access token found in hash");
       return false;
     }
     
-    console.log("[MainGallery] Successfully extracted token from hash");
+    // Store the token in localStorage for future use
+    const now = Date.now();
+    const expiresAt = expiresIn ? now + parseInt(expiresIn) * 1000 : now + 3600000; // Default to 1 hour
     
-    // Store token in local storage for later use
-    localStorage.setItem('supabase.auth.token', JSON.stringify({
-      access_token: accessToken,
-      refresh_token: refreshToken || '',
-      expires_at: Date.now() + 3600 * 1000 // Default expiry of 1 hour
-    }));
+    localStorage.setItem('auth_access_token', accessToken);
     
+    if (refreshToken) {
+      localStorage.setItem('auth_refresh_token', refreshToken);
+    }
+    
+    localStorage.setItem('auth_expires_at', expiresAt.toString());
+    
+    console.log('Successfully extracted auth token from URL hash');
     return true;
   } catch (error) {
-    console.error("[MainGallery] Error processing token from hash:", error);
+    console.error('Error extracting OAuth token from hash:', error);
     return false;
   }
-}
+};
 
 /**
- * Gets the URL for the gallery page
- * @returns The gallery URL
+ * Get the gallery URL to redirect to after authentication
  */
-export function getGalleryUrl(): string {
-  const baseUrl = window.location.origin;
-  return `${baseUrl}/gallery`;
-}
+export const getGalleryUrl = (): string => {
+  // Default gallery URL
+  const defaultUrl = '/gallery';
+  
+  try {
+    // Check if there's a redirect URL in localStorage
+    const redirectUrl = localStorage.getItem('auth_redirect_url');
+    
+    if (redirectUrl) {
+      // Remove the redirect URL from localStorage
+      localStorage.removeItem('auth_redirect_url');
+      
+      // Validate the URL to prevent open redirect vulnerabilities
+      const url = new URL(redirectUrl, window.location.origin);
+      
+      // Only allow redirects to the same origin
+      if (url.origin === window.location.origin) {
+        return url.pathname + url.search + url.hash;
+      }
+    }
+  } catch (error) {
+    console.error('Error getting gallery URL:', error);
+  }
+  
+  return defaultUrl;
+};
+
+/**
+ * Store the current URL to redirect back after authentication
+ */
+export const storeCurrentUrlForRedirect = (): void => {
+  try {
+    localStorage.setItem('auth_redirect_url', window.location.href);
+  } catch (error) {
+    console.error('Error storing current URL for redirect:', error);
+  }
+};
+
+/**
+ * Get authentication token from storage
+ */
+export const getStoredAuthToken = (): string | null => {
+  try {
+    return localStorage.getItem('auth_access_token');
+  } catch (error) {
+    console.error('Error getting stored auth token:', error);
+    return null;
+  }
+};
