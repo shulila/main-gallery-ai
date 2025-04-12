@@ -11,21 +11,35 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Create and export the Supabase client
 let supabaseClient;
 
-// Check if we have the createClient function available
-try {
-  // Dynamically import createClient if available in runtime context
-  const { createClient } = await import('@supabase/supabase-js');
-  supabaseClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: {
-      storage: localStorage,
-      persistSession: true,
-      autoRefreshToken: true
-    }
-  });
-  console.log("[MainGallery] Supabase client initialized");
-} catch (err) {
-  console.error("[MainGallery] Error initializing Supabase client:", err);
-  // Create a minimal mock client for environments where Supabase can't be loaded
+// Initialize Supabase client without using top-level await
+function initSupabaseClient() {
+  // Check if we have the createClient function available
+  try {
+    // Dynamically import createClient if available in runtime context
+    // Use a promise-based approach instead of await
+    import('@supabase/supabase-js')
+      .then(({ createClient }) => {
+        supabaseClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+          auth: {
+            storage: localStorage,
+            persistSession: true,
+            autoRefreshToken: true
+          }
+        });
+        console.log("[MainGallery] Supabase client initialized");
+      })
+      .catch(err => {
+        console.error("[MainGallery] Error importing Supabase client:", err);
+        createMinimalMockClient();
+      });
+  } catch (err) {
+    console.error("[MainGallery] Error initializing Supabase client:", err);
+    createMinimalMockClient();
+  }
+}
+
+// Create a minimal mock client for environments where Supabase can't be loaded
+function createMinimalMockClient() {
   supabaseClient = {
     auth: {
       getSession: () => Promise.resolve({ data: { session: null }, error: null }),
@@ -34,7 +48,11 @@ try {
       signOut: () => Promise.resolve({ error: null })
     }
   };
+  console.log("[MainGallery] Created minimal mock Supabase client");
 }
+
+// Initialize the client immediately
+initSupabaseClient();
 
 // Export the client - make sure we use both export styles for compatibility
 export default supabaseClient; 

@@ -223,6 +223,7 @@ export default defineConfig(({ mode }) => {
       port: 8080
     },
     build: {
+      target: 'esnext', // Enable modern JavaScript features including top-level await
       // Special build configuration for Chrome extension
       ...(isExtensionBuild ? {
         outDir: 'dist',
@@ -265,7 +266,9 @@ export default defineConfig(({ mode }) => {
             }
           } as Plugin
         ]
-      } : {}),
+      } : {
+        target: 'esnext', // Also ensure esnext target in non-extension builds
+      }),
     },
   }
 })
