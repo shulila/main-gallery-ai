@@ -1,83 +1,95 @@
 
 #!/bin/bash
-# Simple script to build the MainGallery.AI Chrome Extension
 
-echo "Building MainGallery.AI Chrome Extension..."
+# Build script for the MainGallery Chrome extension
+# This script:
+# 1. Runs necessary checks for alias imports
+# 2. Performs the Vite build
+# 3. Copies necessary files to the dist directory
 
-# Clean up previous build
-echo "Cleaning up dist folder..."
-rm -rf dist
+echo "🔍 Checking for alias imports in chrome-extension files..."
 
-# Run the Vite build with extension mode
-echo "Running Vite build in extension mode..."
-npx vite build --mode extension
-
-echo "Verifying critical files..."
-# Check for critical files
-if [ ! -f "dist/background.js" ]; then
-  echo "❌ ERROR: background.js is missing from build!"
-  exit 1
-else
-  echo "✅ background.js is present"
-  
-  # Check content of background.js for any remaining @/ imports
-  if grep -q "@/integrations/supabase/client" dist/background.js; then
-    echo "❌ ERROR: background.js still contains @/ imports that will cause it to fail!"
-    echo "Please check vite.config.ts to ensure all imports are being properly converted."
+# Function to check for alias imports in a file
+check_alias_imports() {
+  local file=$1
+  if grep -q "@/" "$file"; then
+    echo "❌ ERROR: Alias import found in $file"
+    echo "   Please replace '@/' imports with relative paths."
+    grep -n "@/" "$file"
     exit 1
-  else
-    echo "✅ No problematic @/ imports found in background.js"
   fi
+}
+
+# Function to check for correct exports in supabaseClient.js
+check_supabase_exports() {
+  local file="src/chrome-extension/utils/supabaseClient.js"
+  if [ -f "$file" ]; then
+    if ! grep -q "export const supabase = supabaseClient" "$file"; then
+      echo "❌ ERROR: Missing named export 'supabase' in $file"
+      echo "   Please ensure the file has both default export and named export."
+      echo "   Example: export const supabase = supabaseClient;"
+      exit 1
+    fi
+    
+    if ! grep -q "export default supabaseClient" "$file"; then
+      echo "❌ ERROR: Missing default export in $file"
+      echo "   Please ensure the file has both default export and named export."
+      echo "   Example: export default supabaseClient;"
+      exit 1
+    fi
+  else
+    echo "❌ ERROR: $file not found"
+    exit 1
+  fi
+}
+
+# Check chrome-extension files
+find src/chrome-extension -type f -name "*.js" | while read file; do
+  check_alias_imports "$file"
+done
+
+# Check auth-related files
+check_alias_imports "src/components/auth/AuthCallbackHandler.tsx"
+check_alias_imports "src/pages/AuthCallback.tsx"
+check_alias_imports "src/pages/auth/callback.tsx"
+check_alias_imports "src/utils/authTokenHandler.ts"
+
+# Check for correct supabase exports
+check_supabase_exports
+
+echo "✅ Alias import checks passed!"
+
+# Build the extension
+echo "🔨 Building extension..."
+npm run build -- --mode=extension
+
+# Verify that the build succeeded
+if [ $? -ne 0 ]; then
+  echo "❌ Build failed!"
+  exit 1
 fi
 
+echo "✅ Build completed successfully!"
+
+# Additional steps for extension package
+echo "📦 Preparing extension package..."
+
+# Verify critical files exist
 if [ ! -f "dist/manifest.json" ]; then
-  echo "❌ ERROR: manifest.json is missing from build!"
+  echo "❌ ERROR: manifest.json not found in dist/"
   exit 1
-else
-  echo "✅ manifest.json is present"
-  
-  # Validate manifest content
-  if grep -q "\"type\": \"module\"" dist/manifest.json; then
-    echo "✅ background.type is correctly set to 'module' in manifest.json"
-  else
-    echo "⚠️ Warning: background.type may not be correctly set to 'module' in manifest.json"
-  fi
 fi
 
-if [ ! -d "dist/utils" ]; then
-  echo "❌ ERROR: utils directory is missing from build!"
+if [ ! -f "dist/background.js" ]; then
+  echo "❌ ERROR: background.js not found in dist/"
   exit 1
-else
-  echo "✅ utils directory is present"
 fi
 
-# Check for supabaseClient.js utility
-if [ ! -f "dist/utils/supabaseClient.js" ]; then
-  echo "⚠️ Warning: supabaseClient.js is missing from utils directory"
-else
-  echo "✅ supabaseClient.js is present in utils directory"
-  
-  # Validate supabaseClient.js exports
-  if grep -q "export default supabaseClient" dist/utils/supabaseClient.js && grep -q "export const supabase" dist/utils/supabaseClient.js; then
-    echo "✅ supabaseClient.js has proper exports"
-  else
-    echo "⚠️ Warning: supabaseClient.js might not have proper exports"
-  fi
-fi
-
-# Look for any remaining @/ imports in JavaScript files
-echo "Checking for remaining @/ alias imports in built files..."
-if grep -r --include="*.js" "@/integrations/supabase/client" dist/; then
-  echo "❌ ERROR: Found @/ alias imports in built files that will cause runtime errors!"
-  echo "Please check all source files to ensure they're using relative imports."
+if [ ! -f "dist/popup.html" ]; then
+  echo "❌ ERROR: popup.html not found in dist/"
   exit 1
-else
-  echo "✅ No problematic @/ imports found in built JavaScript files"
 fi
 
-echo "✅ Build completed successfully! Extension files are in the dist folder."
-echo ""
-echo "To load the extension in Chrome:"
-echo "1. Go to chrome://extensions/"
-echo "2. Enable Developer mode"
-echo "3. Click 'Load unpacked' and select the dist folder"
+echo "✅ Extension package prepared successfully!"
+echo "📂 Extension is ready in the dist/ directory"
+echo "⚙️  You can load it in Chrome by going to chrome://extensions, enabling Developer mode, and clicking 'Load unpacked'"

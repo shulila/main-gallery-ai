@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { AuthCallbackHandler } from "@/components/auth/AuthCallbackHandler";
 import { AuthCallbackStatus } from "@/components/auth/AuthCallbackStatus";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "../../chrome-extension/utils/supabaseClient.js";
 
 /**
  * OAuth callback page that handles authentication redirects

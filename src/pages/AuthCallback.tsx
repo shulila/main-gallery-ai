@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from "../chrome-extension/utils/supabaseClient.js";
 import { AuthCallbackHandler } from '@/components/auth/AuthCallbackHandler';
 import { AuthCallbackStatus } from '@/components/auth/AuthCallbackStatus';
 

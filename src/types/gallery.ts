@@ -1,40 +1,139 @@
 
-// Shared type definitions for gallery images
-export type GalleryImage = {
+/**
+ * Type definitions for gallery images
+ * This file centralizes all gallery-related type definitions
+ */
+
+/**
+ * Base interface for gallery images with required properties
+ */
+export interface BaseGalleryImage {
   id: string;
   url: string;
-  src?: string; // For compatibility with extension data
+  sourceURL: string;
+  timestamp: number;
+  createdAt: string;
+}
+
+/**
+ * Extended interface with optional properties
+ */
+export interface GalleryImage extends BaseGalleryImage {
+  // Image metadata
+  src?: string;
   prompt?: string;
   alt?: string;
   title?: string;
   platform?: string;
-  creationDate?: string;
-  sourceURL: string;
-  tabUrl?: string;
-  timestamp: number;
-  type?: string;
-  // Additional optional fields for AI generation metadata
   model?: string;
   seed?: string;
   status?: string;
-  // Platform-specific fields
+  
+  // Platform-specific metadata
   platformName?: string;
   favicon?: string;
+  tabUrl?: string;
   tabTitle?: string;
+  
+  // Image dimensions
   naturalWidth?: number;
   naturalHeight?: number;
+  
+  // Source information
   domain?: string;
   path?: string;
   pageTitle?: string;
-  // Domain/platform verification
+  
+  // Flags
   fromSupportedDomain?: boolean;
-  // Deduplication helpers
+  
+  // Identification
   imageHash?: string;
-  // Creation timestamp with formatted date
-  createdAt: string;
-};
+  type?: string;
+}
 
-// Updated list of supported domains for auto-sync using the approved list
+/**
+ * Interface for gallery filter options
+ */
+export interface GalleryFilterOptions {
+  platform?: string | null;
+  dateRange?: DateRangeFilter | null;
+  searchTerm?: string | null;
+  modelType?: string | null;
+}
+
+/**
+ * Interface for date range filter
+ */
+export interface DateRangeFilter {
+  startDate: Date;
+  endDate: Date;
+}
+
+/**
+ * Interface for gallery pagination options
+ */
+export interface GalleryPaginationOptions {
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * Interface for gallery sort options
+ */
+export type GallerySortField = 'timestamp' | 'title' | 'platform';
+export type SortDirection = 'asc' | 'desc';
+
+export interface GallerySortOptions {
+  field: GallerySortField;
+  direction: SortDirection;
+}
+
+/**
+ * Interface for gallery statistics
+ */
+export interface GalleryStats {
+  totalImages: number;
+  uniquePlatforms: number;
+  platformsList: string[];
+  approximateSizeMB: number;
+}
+
+/**
+ * Enum for supported platforms
+ */
+export enum SupportedPlatform {
+  MIDJOURNEY = 'Midjourney',
+  DALLE = 'DALL-E',
+  LEONARDO = 'Leonardo',
+  RUNWAY = 'Runway',
+  PIKA = 'Pika',
+  KREA = 'Krea',
+  FIREFLY = 'Firefly',
+  SORA = 'Sora'
+  // Add all 53 platforms here
+}
+
+/**
+ * Type guard to check if a value is a GalleryImage
+ */
+export function isGalleryImage(value: unknown): value is GalleryImage {
+  if (!value || typeof value !== 'object') return false;
+  
+  const image = value as Partial<GalleryImage>;
+  
+  return (
+    typeof image.id === 'string' &&
+    typeof image.url === 'string' &&
+    typeof image.sourceURL === 'string' &&
+    typeof image.timestamp === 'number' &&
+    typeof image.createdAt === 'string'
+  );
+}
+
+/**
+ * Updated list of supported domains for auto-sync
+ */
 export const SUPPORTED_DOMAINS = [
   'midjourney.com',
   'www.midjourney.com',
@@ -83,7 +182,9 @@ export const SUPPORTED_DOMAINS = [
   'www.genspark.ai'
 ];
 
-// List of supported paths/routes that are gallery or creation pages - updated per the approved list
+/**
+ * List of supported paths/routes that are gallery or creation pages
+ */
 export const SUPPORTED_PATHS = [
   '/imagine',
   '/archive',
@@ -122,7 +223,9 @@ export const SUPPORTED_PATHS = [
   '/dreamup'
 ];
 
-// Function to check if a URL is from a supported domain and path
+/**
+ * Function to check if a URL is from a supported domain and path
+ */
 export function isSupportedURL(url: string): boolean {
   try {
     const urlObj = new URL(url);

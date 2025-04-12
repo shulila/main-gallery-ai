@@ -4,7 +4,7 @@
  * Provides access to Supabase from extension background script
  */
 
-// Using relative path instead of alias import
+// Using hardcoded values for the extension
 const SUPABASE_URL = "https://ovhriawcqvcpagcaidlb.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U";
 
@@ -15,7 +15,13 @@ let supabaseClient;
 try {
   // Dynamically import createClient if available in runtime context
   const { createClient } = await import('@supabase/supabase-js');
-  supabaseClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+  supabaseClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      storage: localStorage,
+      persistSession: true,
+      autoRefreshToken: true
+    }
+  });
   console.log("[MainGallery] Supabase client initialized");
 } catch (err) {
   console.error("[MainGallery] Error initializing Supabase client:", err);

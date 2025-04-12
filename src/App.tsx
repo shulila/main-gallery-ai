@@ -13,11 +13,10 @@ import Start from './pages/Start';
 import Settings from './pages/Settings';
 import Platforms from './pages/Platforms';
 import FeatureDetail from './pages/FeatureDetail';
-import Callback from '@/pages/auth/callback'; // Import the new callback page
+import Callback from '@/pages/auth/callback';
 
 import './App.css';
 
-// Special handling for auth callbacks with hash fragments
 function App() {
   // Special handling for auth callbacks with hash fragments
   useEffect(() => {
@@ -26,30 +25,30 @@ function App() {
     const search = window.location.search;
     
     if ((hash && hash.includes('access_token=')) || (search && search.includes('access_token='))) {
-      console.log('Detected access token in URL - this should trigger AuthCallback component');
+      console.log('[MainGallery] Detected access token in URL - this should trigger AuthCallback component');
     }
   }, []);
 
   return (
     <AuthProvider>
       <Routes>
+        {/* Main pages */}
         <Route path="/" element={<Index />} />
         <Route path="/auth" element={<AuthPage />} />
-        
-        {/* Critical: Ensure all auth callback paths are properly routed */}
-        <Route path="/auth/callback" element={<Callback />} /> {/* New dedicated callback route */}
-        <Route path="/auth/callback/*" element={<Callback />} />
-        <Route path="/_callback" element={<AuthCallback />} />
-        <Route path="/_callback/*" element={<AuthCallback />} />
-        <Route path="/callback" element={<AuthCallback />} />
-        <Route path="/callback/*" element={<AuthCallback />} />
-        
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/platforms" element={<Platforms />} />
         <Route path="/start" element={<Start />} />
         <Route path="/detail/:id" element={<Detail />} />
         <Route path="/features/:id" element={<FeatureDetail />} />
+        
+        {/* Critical: Ensure all auth callback paths are properly routed */}
+        <Route path="/auth/callback" element={<Callback />} />
+        <Route path="/auth/callback/*" element={<Callback />} />
+        <Route path="/_callback" element={<AuthCallback />} />
+        <Route path="/_callback/*" element={<AuthCallback />} />
+        <Route path="/callback" element={<AuthCallback />} />
+        <Route path="/callback/*" element={<AuthCallback />} />
         
         {/* Catch all unknown routes */}
         <Route path="*" element={<NotFound />} />
