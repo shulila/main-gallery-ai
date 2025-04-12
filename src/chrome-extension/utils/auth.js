@@ -1,76 +1,126 @@
 
 // Import Supabase with the correct relative path
 import { supabase } from './supabaseClient.js';
+import { logger } from './logger.js';
 
 /**
- * Utility functions for handling authentication within the Chrome extension.
+ * Check if user is logged in
+ * @returns {Promise<boolean>} Whether the user is logged in
  */
-
-// Function to handle Google Sign-In
-export const handleGoogleSignIn = async () => {
+export async function isLoggedIn() {
   try {
-    // Sign in with Google using Supabase auth
+    const { data: { session } } = await supabase.auth.getSession();
+    return !!session;
+  } catch (error) {
+    logger.error('Error checking login status:', error);
+    return false;
+  }
+}
+
+/**
+ * Open auth page for specified provider
+ * @param {string} provider - Auth provider (google, facebook, etc.)
+ * @returns {Promise<void>}
+ */
+export async function openAuthPage(provider = 'google') {
+  try {
     const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider: provider,
+      options: {
+        redirectTo: chrome.identity.getRedirectURL()
+      }
     });
-
-    if (error) {
-      console.error('Error signing in with Google:', error.message);
-      return { success: false, error: error.message };
+    
+    if (error) throw error;
+    
+    if (data?.url) {
+      chrome.tabs.create({ url: data.url });
     }
-
-    // Return success and the authorization URL
-    return { success: true, url: data.url };
-  } catch (err) {
-    console.error('Unexpected error during Google Sign-In:', err);
-    return { success: false, error: 'Unexpected error during sign-in.' };
+  } catch (error) {
+    logger.error(`Error opening ${provider} auth page:`, error);
+    throw error;
   }
-};
+}
 
-// Function to handle Sign-Out
-export const handleSignOut = async () => {
+/**
+ * Handle email/password login
+ * @param {string} email - User email
+ * @param {string} password - User password
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function handleEmailPasswordLogin(email, password) {
   try {
-    // Sign out using Supabase auth
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      console.error('Error signing out:', error.message);
-      return { success: false, error: error.message };
-    }
-
-    // Clear local storage
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('main_gallery_auth_token');
-    localStorage.removeItem('main_gallery_user_email');
-    localStorage.removeItem('main_gallery_user_id');
-
-    // Return success
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+    
+    if (error) throw error;
+    
     return { success: true };
-  } catch (err) {
-    console.error('Unexpected error during Sign-Out:', err);
-    return { success: false, error: 'Unexpected error during sign-out.' };
+  } catch (error) {
+    logger.error('Error logging in with email/password:', error);
+    return { 
+      success: false, 
+      error: error.message || 'Login failed. Please try again.'
+    };
   }
-};
+}
 
-// Function to check the authentication status
-export const checkAuthStatus = async () => {
+/**
+ * Get current user's email
+ * @returns {Promise<string|null>} User email or null if not logged in
+ */
+export async function getUserEmail() {
   try {
-    // Get the current session
-    const { data: { session }, error } = await supabase.auth.getSession();
-
-    if (error) {
-      console.error('Error getting session:', error.message);
-      return { isLoggedIn: false, error: error.message };
-    }
-
-    // Check if there is a session and user
-    const isLoggedIn = !!(session && session.user);
-
-    // Return the authentication status
-    return { isLoggedIn };
-  } catch (err) {
-    console.error('Unexpected error during authentication check:', err);
-    return { isLoggedIn: false, error: 'Unexpected error during authentication check.' };
+    const { data: { user } } = await supabase.auth.getUser();
+    return user?.email || null;
+  } catch (error) {
+    logger.error('Error getting user email:', error);
+    return null;
   }
-};
+}
+
+/**
+ * Log out current user
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function logout() {
+  try {
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) throw error;
+    
+    return { success: true };
+  } catch (error) {
+    logger.error('Error logging out:', error);
+    return { 
+      success: false, 
+      error: error.message || 'Logout failed. Please try again.'
+    };
+  }
+}
+
+/**
+ * Set up listener for auth callback
+ * @returns {Promise<void>}
+ */
+export async function setupAuthCallbackListener() {
+  try {
+    // Listen for auth state changes
+    supabase.auth.onAuthStateChange((event, session) => {
+      logger.log('Auth state changed:', event);
+      
+      if (event === 'SIGNED_IN') {
+        // User signed in, update UI or state as needed
+        chrome.storage.local.set({ auth_event: 'SIGNED_IN' });
+      } else if (event === 'SIGNED_OUT') {
+        // User signed out, update UI or state as needed
+        chrome.storage.local.set({ auth_event: 'SIGNED_OUT' });
+      }
+    });
+  } catch (error) {
+    logger.error('Error setting up auth callback listener:', error);
+    throw error;
+  }
+}
