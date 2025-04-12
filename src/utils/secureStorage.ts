@@ -67,8 +67,8 @@ function decrypt(encryptedValue: string): string {
 // Detect if we're in a browser extension context
 const isExtension = typeof window !== 'undefined' && 
                     typeof window.chrome !== 'undefined' && 
-                    window.chrome.storage && 
-                    window.chrome.storage.local;
+                    !!window.chrome.storage && 
+                    !!window.chrome.storage.local;
 
 /**
  * Store a value securely
@@ -88,9 +88,12 @@ export async function secureSet(
         ? encrypt(value)
         : value;
       
-      if (isExtension) {
+      if (isExtension && window.chrome?.storage?.local) {
         // Use chrome.storage if available
-        window.chrome?.storage?.local.set({ [key]: storageValue }, () => {
+        window.chrome.storage.local.set({ [key]: storageValue }, () => {
+          if (window.chrome?.runtime?.lastError) {
+            logger.error(`Error storing ${key}:`, window.chrome.runtime.lastError);
+          }
           resolve();
         });
       } else {
@@ -117,9 +120,15 @@ export async function secureGet<T>(
 ): Promise<T | null> {
   return new Promise((resolve) => {
     try {
-      if (isExtension) {
+      if (isExtension && window.chrome?.storage?.local) {
         // Use chrome.storage if available
-        window.chrome?.storage?.local.get([key], (result) => {
+        window.chrome.storage.local.get([key], (result) => {
+          if (window.chrome?.runtime?.lastError) {
+            logger.error(`Error retrieving ${key}:`, window.chrome.runtime.lastError);
+            resolve(null);
+            return;
+          }
+
           if (result[key] === undefined) {
             resolve(null);
             return;
@@ -169,9 +178,12 @@ export async function secureGet<T>(
 export async function secureRemove(key: string): Promise<void> {
   return new Promise((resolve) => {
     try {
-      if (isExtension) {
+      if (isExtension && window.chrome?.storage?.local) {
         // Use chrome.storage if available
-        window.chrome?.storage?.local.remove(key, () => {
+        window.chrome.storage.local.remove(key, () => {
+          if (window.chrome?.runtime?.lastError) {
+            logger.error(`Error removing ${key}:`, window.chrome.runtime.lastError);
+          }
           resolve();
         });
       } else {
