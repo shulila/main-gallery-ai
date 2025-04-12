@@ -1,6 +1,7 @@
 
 /**
  * Authentication utilities for the extension background script
+ * Fixed version compatible with Service Workers
  */
 
 // Import supabase client using relative path
@@ -17,6 +18,15 @@ export function setupAuthListeners() {
   
   // Set up interval to periodically check auth status
   setInterval(checkAuthStatus, 30 * 60 * 1000); // 30 minutes
+  
+  // Listen for OAuth redirects
+  chrome.identity.onSignInChanged?.addListener((account, signedIn) => {
+    console.log("[MainGallery] Sign in state changed for account:", account.id, signedIn);
+    if (signedIn) {
+      // Handle signed in state if needed
+      checkAuthStatus();
+    }
+  });
 }
 
 /**
@@ -95,6 +105,33 @@ export async function signOut() {
     return true;
   } catch (err) {
     console.error("[MainGallery] Error during sign out:", err);
+    return false;
+  }
+}
+
+/**
+ * Handles auth token received from OAuth redirect
+ */
+export async function handleAuthToken(token, provider = 'google') {
+  try {
+    console.log("[MainGallery] Handling auth token");
+    
+    const { data, error } = await supabase.auth.handleOAuthToken(token, provider);
+    
+    if (error) {
+      console.error("[MainGallery] Error handling auth token:", error);
+      return false;
+    }
+    
+    console.log("[MainGallery] Auth token handled successfully");
+    
+    // Update auth state
+    const userEmail = data?.user?.email || data?.session?.user?.email;
+    await updateAuthState(true, userEmail);
+    
+    return true;
+  } catch (err) {
+    console.error("[MainGallery] Error in handleAuthToken:", err);
     return false;
   }
 }
