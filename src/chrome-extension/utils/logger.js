@@ -6,7 +6,7 @@
 
 // Set debug level
 // 0 = errors only, 1 = warnings, 2 = info, 3 = debug, 4 = verbose
-let LOG_LEVEL = 2;
+let LOG_LEVEL = 3; // Increased default log level for debugging
 
 // Format date for log entries
 function getTimestamp() {

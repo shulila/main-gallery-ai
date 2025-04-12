@@ -6,6 +6,7 @@
 
 // Import supabase client using relative path
 import { supabase } from '../utils/supabaseClient.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Sets up listeners for authentication state changes
@@ -18,15 +19,6 @@ export function setupAuthListeners() {
   
   // Set up interval to periodically check auth status
   setInterval(checkAuthStatus, 30 * 60 * 1000); // 30 minutes
-  
-  // Listen for OAuth redirects
-  chrome.identity.onSignInChanged?.addListener((account, signedIn) => {
-    console.log("[MainGallery] Sign in state changed for account:", account.id, signedIn);
-    if (signedIn) {
-      // Handle signed in state if needed
-      checkAuthStatus();
-    }
-  });
 }
 
 /**
@@ -70,7 +62,7 @@ async function updateAuthState(isAuthenticated, userEmail) {
   
   // Notify any open popups about the change
   chrome.runtime.sendMessage({
-    type: 'AUTH_STATE_CHANGED',
+    action: 'authStatusChanged',
     isAuthenticated,
     userEmail
   }).catch(() => {
@@ -115,6 +107,11 @@ export async function signOut() {
 export async function handleAuthToken(token, provider = 'google') {
   try {
     console.log("[MainGallery] Handling auth token");
+    
+    if (!token) {
+      console.error("[MainGallery] No token provided");
+      return false;
+    }
     
     const { data, error } = await supabase.auth.handleOAuthToken(token, provider);
     

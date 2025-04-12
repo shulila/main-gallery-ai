@@ -1,4 +1,3 @@
-
 /**
  * Message handlers for background script
  */
@@ -35,6 +34,10 @@ export function setupMessageHandlers() {
         
       case 'handleAuthToken':
         handleProcessAuthToken(message, sendResponse);
+        break;
+        
+      case 'startGoogleAuth':
+        handleStartGoogleAuth(sendResponse);
         break;
         
       case 'startAutoScan':
@@ -133,6 +136,60 @@ function handleProcessAuthToken(message, sendResponse) {
       logger.error('[MainGallery] Error handling auth token:', error);
       sendResponse({ success: false, error: error.message });
     });
+}
+
+/**
+ * Handle start Google auth request from popup
+ */
+function handleStartGoogleAuth(sendResponse) {
+  logger.log('[MainGallery] Starting Google auth flow');
+  
+  const manifest = chrome.runtime.getManifest();
+  const clientId = manifest.oauth2?.client_id;
+  
+  if (!clientId) {
+    const error = 'OAuth client ID not found in manifest';
+    logger.error('[MainGallery] ' + error);
+    sendResponse({ success: false, error });
+    return;
+  }
+  
+  // Use chrome.identity.getAuthToken for a more reliable auth flow
+  chrome.identity.getAuthToken({ interactive: true }, (token) => {
+    if (chrome.runtime.lastError) {
+      logger.error('[MainGallery] Error getting auth token:', chrome.runtime.lastError);
+      sendResponse({ 
+        success: false, 
+        error: chrome.runtime.lastError.message 
+      });
+      return;
+    }
+    
+    if (token) {
+      logger.log('[MainGallery] Got auth token from Google');
+      
+      // Process the token
+      handleAuthToken(token, 'google')
+        .then(success => {
+          sendResponse({ success });
+          
+          // Also notify any open popups
+          chrome.runtime.sendMessage({ 
+            action: 'authStatusChanged', 
+            isAuthenticated: true
+          }).catch(() => {
+            // Ignore errors if no popup is listening
+          });
+        })
+        .catch(error => {
+          logger.error('[MainGallery] Error handling Google auth token:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+    } else {
+      logger.error('[MainGallery] No auth token returned');
+      sendResponse({ success: false, error: 'No auth token returned' });
+    }
+  });
 }
 
 /**

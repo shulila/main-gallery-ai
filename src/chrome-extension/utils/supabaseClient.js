@@ -48,29 +48,13 @@ const supabaseClient = {
       return new Promise((resolve) => {
         const { provider, options: authOptions } = options;
         
-        // For Google auth, use Chrome Identity API which works in Service Workers
+        // For Google auth, we'll use a different approach
+        // We'll just return a signal to use direct Google auth
         if (provider === 'google') {
-          const manifest = chrome.runtime.getManifest();
-          const clientId = manifest.oauth2?.client_id;
-          
-          if (!clientId) {
-            console.error('OAuth client ID not found in manifest');
-            resolve({ data: null, error: 'OAuth client ID not found in manifest' });
-            return;
-          }
-          
-          // Construct the OAuth URL manually
-          const redirectUri = chrome.identity.getRedirectURL();
-          const scopes = manifest.oauth2?.scopes || ['openid', 'email', 'profile'];
-          
-          const authUrl = new URL('https://accounts.google.com/o/oauth2/auth');
-          authUrl.searchParams.append('client_id', clientId);
-          authUrl.searchParams.append('response_type', 'token');
-          authUrl.searchParams.append('redirect_uri', redirectUri);
-          authUrl.searchParams.append('scope', scopes.join(' '));
-          
-          // Return the URL for the background script to open
-          resolve({ data: { url: authUrl.toString() }, error: null });
+          resolve({ 
+            data: { provider: 'google' }, 
+            error: null 
+          });
         } else {
           // For other providers, construct a URL to the Supabase auth page
           const authUrl = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
@@ -114,7 +98,7 @@ const supabaseClient = {
           // Fetch user info from Google
           fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
             headers: { Authorization: `Bearer ${token}` }
-          })
+          }) 
             .then(response => response.json())
             .then(userData => {
               // Update user data with email and other info

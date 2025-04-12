@@ -1,4 +1,3 @@
-
 // Brand configuration to align with the main app
 const BRAND = {
   name: "MainGallery.AI",
@@ -100,11 +99,10 @@ import { isPreviewEnvironment, getBaseUrl, getAuthUrl, getGalleryUrl } from './u
 import { logger } from './utils/logger.js';
 import { handleError, safeFetch } from './utils/errorHandler.js';
 import { 
-  handleInPopupGoogleLogin, 
-  handleEmailPasswordLogin,
   isLoggedIn, 
   getUserEmail, 
-  logout
+  logout,
+  openAuthPage
 } from './utils/auth.js';
 
 // Log environment for debugging
@@ -321,61 +319,32 @@ function updateUIForUnsupportedPlatform() {
   }
 }
 
-// Google OAuth login - improved for direct in-popup login
-async function initiateGoogleLogin() {
+// Handle Google login - improved for reliability
+function initiateGoogleLogin() {
   try {
     if (states.loading) showState(states.loading);
-    logger.log('Starting Google login flow with chrome.identity');
+    logger.log('Starting Google login flow');
     
-    try {
-      // Use the handleInPopupGoogleLogin from auth.js with improved error handling
-      const response = await handleInPopupGoogleLogin();
-      
-      if (response.success) {
-        logger.log('Login successful:', response.user);
-        
-        // Show success notification
-        showToast('Successfully signed in!', 'success');
-        
-        // Update UI to show logged-in state
-        if (userEmailElement && response.user && response.user.email) {
-          userEmailElement.textContent = response.user.email;
-        }
-        
-        showState(states.mainView);
-        
-        // Check if current tab is a supported platform
-        checkCurrentTab();
-        
-        // Send message to background script to update other contexts
-        chrome.runtime.sendMessage({ 
-          action: 'updateUI',
-          userEmail: response.user?.email
-        });
-      } else {
-        throw new Error(response.error || 'Login failed');
-      }
-    } catch (oauthError) {
-      logger.error('OAuth error:', oauthError);
-      
-      // Show human-readable error
-      let errorMessage = 'Authentication failed.';
-      
-      if (oauthError.message && oauthError.message.includes('did not approve')) {
-        errorMessage = 'You did not approve access to your Google account.';
-      } else if (oauthError.message && oauthError.message.includes('invalid_client')) {
-        errorMessage = 'Authentication configuration error. Please try again later.';
-      } else if (oauthError.message && oauthError.message.includes('cancel')) {
-        errorMessage = 'Authentication was canceled.';
-      } else if (oauthError.message && oauthError.message.includes('access')) {
-        errorMessage = 'Could not connect to Google. Please try again later.';
-      }
-      
-      showError(errorMessage);
-    }
+    // Clear any existing login timeout
+    clearLoadingTimeout();
+    
+    // Start a new timeout
+    startLoadingTimeout();
+    
+    // Set a flag in local storage to detect authentication completion
+    localStorage.setItem('mg_auth_started', Date.now().toString());
+    
+    // Use the openAuthPage function from auth.js which will send a message to background.js
+    openAuthPage('google')
+      .catch(error => {
+        logger.error('Error initiating Google login:', error);
+        showError('Could not start login process. Please try again.');
+        clearLoadingTimeout();
+      });
   } catch (error) {
-    logger.error('Error initiating Google login:', error);
+    logger.error('Error in Google login handler:', error);
     showError('Could not start login process. Please try again.');
+    clearLoadingTimeout();
   }
 }
 
@@ -440,8 +409,14 @@ async function checkAuthAndRedirect() {
     if (states.loading) showState(states.loading);
     logger.log('Checking authentication status...');
     
+    // Start loading timeout
+    startLoadingTimeout();
+    
     // Use isLoggedIn from auth.js with improved token validation
     const loggedIn = await isLoggedIn();
+    
+    // Clear loading timeout since we got a response
+    clearLoadingTimeout();
     
     if (loggedIn) {
       logger.log('User is logged in, showing logged-in state');
@@ -463,6 +438,9 @@ async function checkAuthAndRedirect() {
       showState(states.loginView);
     }
   } catch (error) {
+    // Clear loading timeout in case of error
+    clearLoadingTimeout();
+    
     logger.error('Error checking auth status:', error);
     showToast('Connection error', 'error');
     showState(states.loginView); // Default to login view
@@ -558,11 +536,13 @@ function resetAndTryAgain() {
 }
 
 // Set timeout to prevent infinite loading spinner
-const loadingTimeoutMs = 5000; // 5 seconds
+const loadingTimeoutMs = 15000; // 15 seconds, increased for better reliability
 let loadingTimeout;
 
 function startLoadingTimeout() {
-  if (states.loading && loadingTimeout === undefined) {
+  clearLoadingTimeout(); // Clear any existing timeout first
+  
+  if (states.loading) {
     loadingTimeout = setTimeout(() => {
       // Check if we're still in loading state
       if (states.loading.style.display !== 'none') {
@@ -642,7 +622,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message) => {
-  if (message.action === 'updateUI') {
+  logger.debug('Received message in popup:', message);
+  
+  if (message.action === 'authStatusChanged') {
+    // Clear any loading timeout
+    clearLoadingTimeout();
+    
+    // Auth state changed, update UI
+    if (message.isAuthenticated) {
+      logger.log('Auth successful, updating UI');
+      
+      // Show success notification
+      showToast('Successfully signed in!', 'success');
+      
+      // Update UI to show logged-in state
+      if (userEmailElement && message.userEmail) {
+        userEmailElement.textContent = message.userEmail;
+      }
+      
+      showState(states.mainView);
+      
+      // Check if current tab is a supported platform
+      checkCurrentTab();
+    } else {
+      logger.log('Auth failed or user logged out');
+      showState(states.loginView);
+    }
+  } else if (message.action === 'updateUI') {
     checkAuthAndRedirect();
   } else if (message.action === 'scanComplete') {
     if (message.success) {
@@ -660,6 +666,7 @@ chrome.runtime.onMessage.addListener((message) => {
     }
   } else if (message.action === 'authError') {
     // Handle authentication errors
+    clearLoadingTimeout();
     showError(message.error || 'Authentication failed. Please try again.');
   }
 });
