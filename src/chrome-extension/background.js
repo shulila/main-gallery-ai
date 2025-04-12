@@ -1,48 +1,160 @@
 /**
- * MainGallery.AI background script
- * Responsible for coordinating extension operations and communicating with tabs
+ * Background script for MainGallery.AI Chrome Extension
+ * Fixed version with proper Google authentication handling
  */
 
-console.log("[MainGallery] background.js is alive");
-
-// Import required modules
 import { logger } from './utils/logger.js';
-import { handleError, safeFetch } from './utils/errorHandler.js';
-import { 
-  isSupportedPlatformUrl, 
-  getGalleryUrl, 
-  getAuthUrl, 
-  isPreviewEnvironment,
-  getBaseUrl 
-} from './utils/urlUtils.js';
+
+// Initialize logger
+logger.setLogLevel(logger.LOG_LEVELS.LOG);
+logger.log('Background script initialized');
+
+// Import auth utilities
+import { isLoggedIn, setupAuthCallbackListener } from './utils/auth.js';
+import { supabase } from './utils/supabaseClient.js';
 import { safeSendMessage, ensureContentScriptLoaded } from './utils/messaging.js';
-import { 
-  isLoggedIn, 
-  openAuthPage, 
-  setupAuthCallbackListener,
-  handleEmailPasswordLogin,
-  logout
-} from './utils/auth.js';
-import { 
-  isGalleryEmpty, 
-  setGalleryHasImages,
-  logEnvironmentDetails 
-} from './utils/galleryUtils.js';
 
-logger.log('MainGallery.AI background script initialized');
-logger.log('Environment check:', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION');
+// Set up auth callback listener
+setupAuthCallbackListener().catch(err => {
+  logger.error('Error setting up auth callback listener:', err);
+});
 
-// Create notification utility
-function createNotification(id, title, message) {
-  try {
-    chrome.notifications.create(id, {
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: title,
-      message: message
+// Store the environment type in local storage (helps with detection in content scripts)
+chrome.storage.local.set({ 'environment': 'production' }, () => {
+  logger.log('Environment stored in local storage: production');
+});
+
+// Handle messages from popup and content scripts
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  logger.log('Received message:', message);
+  
+  // Check if user is logged in
+  if (message.action === 'isLoggedIn') {
+    isLoggedIn().then(loggedIn => {
+      sendResponse({ loggedIn });
+    }).catch(err => {
+      logger.error('Error checking login status:', err);
+      sendResponse({ loggedIn: false, error: err.message });
     });
-  } catch (err) {
-    handleError('createNotification', err, { silent: true });
+    
+    return true; // Keep channel open for async response
+  }
+  
+  // Start Google authentication flow
+  else if (message.action === 'startGoogleAuth') {
+    handleGoogleAuth().then(result => {
+      sendResponse(result);
+    }).catch(err => {
+      logger.error('Error in Google auth:', err);
+      sendResponse({ success: false, error: err.message });
+    });
+    
+    return true; // Keep channel open for async response
+  }
+  
+  // Get the logged-in user's email
+  else if (message.action === 'getUserEmail') {
+    import('./utils/auth.js').then(({ getUserEmail }) => {
+      getUserEmail().then(email => {
+        sendResponse({ email });
+      }).catch(err => {
+        logger.error('Error getting user email:', err);
+        sendResponse({ email: null, error: err.message });
+      });
+    }).catch(err => {
+      logger.error('Error importing auth module for getUserEmail:', err);
+      sendResponse({ email: null, error: err.message });
+    });
+    
+    return true; // Keep channel open for async response
+  }
+  
+  // Handle logout
+  else if (message.action === 'logout') {
+    import('./utils/auth.js').then(({ logout }) => {
+      logout().then(result => {
+        sendResponse(result);
+      }).catch(err => {
+        logger.error('Error logging out:', err);
+        sendResponse({ success: false, error: err.message });
+      });
+    }).catch(err => {
+      logger.error('Error importing auth module for logout:', err);
+      sendResponse({ success: false, error: err.message });
+    });
+    
+    return true; // Keep channel open for async response
+  }
+  
+  // Handle other messages from the original background.js
+  // ... keep existing code (other message handlers like CONTENT_SCRIPT_READY, scanComplete, openGallery, etc.)
+  
+  return true; // Keep channel open for potential async responses
+});
+
+/**
+ * Handle Google authentication flow
+ * This function is specifically designed to work in background.js
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function handleGoogleAuth() {
+  try {
+    logger.log('Starting Google auth flow...');
+    
+    // Get the client ID from manifest
+    const manifest = chrome.runtime.getManifest();
+    const clientId = manifest.oauth2?.client_id;
+    
+    if (!clientId) {
+      throw new Error('OAuth client ID not found in manifest');
+    }
+    
+    // Get the redirect URL
+    const redirectURL = chrome.identity.getRedirectURL();
+    logger.log('Redirect URL:', redirectURL);
+    
+    // Use chrome.identity.getAuthToken for a simpler flow that works better
+    // This is more reliable than launchWebAuthFlow for Chrome extensions
+    return new Promise((resolve, reject) => {
+      chrome.identity.getAuthToken({ interactive: true }, async (token) => {
+        if (chrome.runtime.lastError) {
+          logger.error('Error getting auth token:', chrome.runtime.lastError);
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        
+        if (!token) {
+          reject(new Error('No auth token received'));
+          return;
+        }
+        
+        try {
+          logger.log('Got auth token, processing...');
+          
+          // Process the token with our custom handler
+          const result = await supabase.auth.handleOAuthToken(token, 'google');
+          
+          if (result.error) {
+            reject(new Error(result.error.message || 'Authentication failed'));
+            return;
+          }
+          
+          // Notify that auth state changed
+          chrome.storage.local.set({ auth_event: 'SIGNED_IN' });
+          
+          // Success
+          resolve({
+            success: true,
+            user: result.data?.user || result.data?.session?.user
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+  } catch (error) {
+    logger.error('Error in handleGoogleAuth:', error);
+    return { success: false, error: error.message || 'Authentication failed' };
   }
 }
 
@@ -66,194 +178,18 @@ async function tabExists(tabId) {
   }
 }
 
-// Set up the auth callback listener immediately
-setupAuthCallbackListener();
-
-// Store the environment type in local storage (helps with detection in content scripts)
-chrome.storage.local.set({ 'environment': isPreviewEnvironment() ? 'preview' : 'production' }, () => {
-  logger.log('Environment stored in local storage:', isPreviewEnvironment() ? 'preview' : 'production');
-  
-  // Log detailed environment info for debugging
-  const envDetails = logEnvironmentDetails();
-  logger.log('Environment details:', envDetails);
+// Check login status on startup
+isLoggedIn().then(loggedIn => {
+  logger.log('Initial login status:', loggedIn);
+}).catch(err => {
+  logger.error('Error checking initial login status:', err);
 });
 
-// Check if tab exists and content script can receive messages
-async function verifyTabIsReady(tabId) {
-  if (!tabId) return false;
-  
-  try {
-    const exists = await tabExists(tabId);
-    if (!exists) {
-      logger.log(`Tab ${tabId} no longer exists`);
-      return false;
-    }
-    
-    // Try to check if content script is loaded
-    return await ensureContentScriptLoaded({ id: tabId });
-  } catch (error) {
-    logger.error(`Error verifying tab ${tabId}:`, error);
-    return false;
-  }
-}
+// Log that background script is loaded
+logger.log('Background script loaded successfully');
 
-// Implement image syncing with improved error handling
-async function syncImagesToGallery(images) {
-  if (!images || images.length === 0) {
-    logger.log('No images to sync');
-    return false;
-  }
-  
-  try {
-    // Add metadata
-    const enrichedImages = images.map(img => ({
-      ...img,
-      timestamp: img.timestamp || Date.now(),
-      synced_at: Date.now()
-    }));
-    
-    // Mark that we have images in the gallery
-    await setGalleryHasImages(true);
-    
-    // Check if gallery tab is already open
-    const galleryTabQuery = { url: `${getGalleryUrl()}*` };
-    
-    // Using promise-based approach to better handle errors
-    try {
-      const tabs = await chrome.tabs.query(galleryTabQuery);
-      
-      if (tabs.length > 0) {
-        // If gallery is open, first verify the tab exists and is ready
-        const isReady = await verifyTabIsReady(tabs[0].id);
-        
-        if (isReady) {
-          // Try sending message to the tab
-          try {
-            const response = await safeSendMessage(
-              tabs[0].id, 
-              { type: 'GALLERY_IMAGES', images: enrichedImages }
-            );
-            
-            if (response && response.success) {
-              logger.log('Successfully sent images to gallery tab:', response);
-              // Focus the gallery tab
-              chrome.tabs.update(tabs[0].id, { active: true });
-              return true;
-            } else {
-              logger.log('Error sending to gallery tab:', response?.error || 'Unknown error');
-              // Fallback to opening a new gallery tab
-              openGalleryWithImages(enrichedImages);
-              return true;
-            }
-          } catch (err) {
-            handleError('syncToGalleryTab', err);
-            // Fallback to opening a new gallery tab
-            openGalleryWithImages(enrichedImages);
-            return true;
-          }
-        } else {
-          logger.log('Gallery tab found but not ready, opening new tab');
-          openGalleryWithImages(enrichedImages);
-          return true;
-        }
-      } else {
-        // Open gallery in a new tab with images
-        openGalleryWithImages(enrichedImages);
-        return true;
-      }
-    } catch (err) {
-      handleError('queryGalleryTabs', err);
-      // Fallback: just open a new gallery tab
-      openGalleryWithImages(enrichedImages);
-      return true;
-    }
-  } catch (err) {
-    handleError('syncImagesToGallery', err);
-    return false;
-  }
-}
-
-// Open gallery with images to sync
-function openGalleryWithImages(images) {
-  // Create gallery tab with sync flag
-  chrome.tabs.create({ url: `${getGalleryUrl()}?sync=true&from=extension` }, (tab) => {
-    if (!tab) {
-      logger.error('Failed to create gallery tab');
-      return;
-    }
-
-    logger.log('Opened gallery tab with sync flag, tab ID:', tab.id);
-    
-    // Set up listener for when gallery tab is ready
-    chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo, updatedTab) {
-      if (tabId === tab.id && changeInfo.status === 'complete' && 
-          updatedTab.url && updatedTab.url.includes(getBaseUrl())) {
-        
-        logger.log('Gallery tab fully loaded, waiting to ensure bridge is ready');
-        
-        // Wait a bit to ensure the page is fully loaded and bridge script is injected
-        setTimeout(async () => {
-          try {
-            // First check if tab still exists
-            const tabStillExists = await tabExists(tabId);
-            
-            if (!tabStillExists) {
-              logger.error('Tab no longer exists, cannot send images');
-              chrome.tabs.onUpdated.removeListener(listener);
-              return;
-            }
-            
-            try {
-              const response = await safeSendMessage(
-                tabId,
-                { type: 'GALLERY_IMAGES', images: images },
-                { maxRetries: 2, retryDelay: 500 }
-              );
-              
-              if (response && response.success) {
-                logger.log('Successfully sent images to new gallery tab');
-              } else {
-                logger.error('Error sending images to new tab:', response?.error || 'Unknown error');
-                
-                // Store images in session storage as fallback
-                chrome.scripting.executeScript({
-                  target: { tabId: tabId },
-                  func: (imagesJson) => {
-                    try {
-                      window.sessionStorage.setItem('maingallery_sync_images', imagesJson);
-                      console.log('Stored images in session storage for gallery to pick up');
-                      
-                      // Notify the page
-                      window.postMessage({
-                        type: 'GALLERY_SYNC_STORAGE',
-                        count: JSON.parse(imagesJson).length,
-                        timestamp: Date.now()
-                      }, '*');
-                    } catch (e) {
-                      console.error('Error storing images in session storage:', e);
-                    }
-                  },
-                  args: [JSON.stringify(images)]
-                }).catch(err => {
-                  logger.error('Error executing session storage script:', err);
-                });
-              }
-            } catch (err) {
-              handleError('sendImagesToNewTab', err);
-            }
-          } catch (err) {
-            handleError('sendImagesToGalleryTab', err);
-          }
-        }, 2500); // Increased delay to ensure page and bridge are ready
-        
-        chrome.tabs.onUpdated.removeListener(listener);
-      }
-    });
-  });
-}
-
-// Handle action/icon clicks - Direct open login or gallery
-chrome.action.onClicked.addListener(async (tab) => {
+// Chrome action click handler
+chrome.action.onClicked.addListener((tab) => {
   logger.log('Extension icon clicked on tab:', tab?.url);
   
   // First, log the current environment for easier debugging

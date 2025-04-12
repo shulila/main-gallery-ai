@@ -4,74 +4,94 @@
  * Centralizes logging with consistent formatting and level control
  */
 
-// Set debug level
-// 0 = errors only, 1 = warnings, 2 = info, 3 = debug, 4 = verbose
-let LOG_LEVEL = 3; // Increased default log level for debugging
-
-// Format date for log entries
-function getTimestamp() {
-  return new Date().toISOString();
-}
-
-// Function to determine if a message should be logged based on level
-function shouldLog(level) {
-  const levelMap = {
-    error: 0,
-    warn: 1,
-    info: 2,
-    debug: 3,
-    verbose: 4
-  };
-  
-  return levelMap[level] <= LOG_LEVEL;
-}
-
-// Log that this module has loaded successfully
-console.log("[MainGallery] logger.js loaded successfully");
-
-// Wrap console methods with formatting and level control
-export const logger = {
-  error: (message, ...args) => {
-    if (shouldLog('error')) {
-      console.error(`[${getTimestamp()}] ERROR:`, message, ...args);
-    }
-  },
-  
-  warn: (message, ...args) => {
-    if (shouldLog('warn')) {
-      console.warn(`[${getTimestamp()}] WARN:`, message, ...args);
-    }
-  },
-  
-  info: (message, ...args) => {
-    if (shouldLog('info')) {
-      console.info(`[${getTimestamp()}] INFO:`, message, ...args);
-    }
-  },
-  
-  log: (message, ...args) => {
-    if (shouldLog('info')) {
-      console.log(`[${getTimestamp()}] INFO:`, message, ...args);
-    }
-  },
-  
-  debug: (message, ...args) => {
-    if (shouldLog('debug')) {
-      console.debug(`[${getTimestamp()}] DEBUG:`, message, ...args);
-    }
-  },
-  
-  verbose: (message, ...args) => {
-    if (shouldLog('verbose')) {
-      console.log(`[${getTimestamp()}] VERBOSE:`, message, ...args);
-    }
-  },
-  
-  // Allow setting log level dynamically
-  setLevel: (level) => {
-    if (typeof level === 'number' && level >= 0 && level <= 4) {
-      LOG_LEVEL = level;
-      console.log(`[${getTimestamp()}] Log level set to ${level}`);
-    }
-  }
+// Log levels
+export const LOG_LEVELS = {
+  DEBUG: 0,
+  LOG: 1,
+  INFO: 2,
+  WARN: 3,
+  ERROR: 4
 };
+
+// Current log level (can be changed at runtime)
+let currentLogLevel = LOG_LEVELS.LOG;
+
+// Prefix for all log messages
+const LOG_PREFIX = '[MainGallery]';
+
+/**
+ * Set the current log level
+ * @param {number} level - Log level to set
+ */
+function setLogLevel(level) {
+  if (Object.values(LOG_LEVELS).includes(level)) {
+    currentLogLevel = level;
+    log(`Log level set to ${Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === level)}`);
+  } else {
+    error(`Invalid log level: ${level}`);
+  }
+}
+
+/**
+ * Log a debug message
+ * @param {...any} args - Arguments to log
+ */
+function debug(...args) {
+  if (currentLogLevel <= LOG_LEVELS.DEBUG) {
+    console.debug(LOG_PREFIX, 'DEBUG:', ...args);
+  }
+}
+
+/**
+ * Log a regular message
+ * @param {...any} args - Arguments to log
+ */
+function log(...args) {
+  if (currentLogLevel <= LOG_LEVELS.LOG) {
+    console.log(LOG_PREFIX, ...args);
+  }
+}
+
+/**
+ * Log an info message
+ * @param {...any} args - Arguments to log
+ */
+function info(...args) {
+  if (currentLogLevel <= LOG_LEVELS.INFO) {
+    console.info(LOG_PREFIX, 'INFO:', ...args);
+  }
+}
+
+/**
+ * Log a warning message
+ * @param {...any} args - Arguments to log
+ */
+function warn(...args) {
+  if (currentLogLevel <= LOG_LEVELS.WARN) {
+    console.warn(LOG_PREFIX, 'WARNING:', ...args);
+  }
+}
+
+/**
+ * Log an error message
+ * @param {...any} args - Arguments to log
+ */
+function error(...args) {
+  if (currentLogLevel <= LOG_LEVELS.ERROR) {
+    console.error(LOG_PREFIX, 'ERROR:', ...args);
+  }
+}
+
+// Export the logger functions
+export const logger = {
+  setLogLevel,
+  debug,
+  log,
+  info,
+  warn,
+  error,
+  LOG_LEVELS
+};
+
+// Export default for compatibility
+export default logger;
