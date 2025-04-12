@@ -1,4 +1,3 @@
-
 /**
  * Type definitions for gallery images
  * This file centralizes all gallery-related type definitions
@@ -50,6 +49,9 @@ export interface GalleryImage extends BaseGalleryImage {
   // Identification
   imageHash?: string;
   type?: string;
+  
+  // Creation date information
+  creationDate?: string;
 }
 
 /**

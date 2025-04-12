@@ -126,3 +126,87 @@ export async function refreshTokenIfNeeded(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Handles OAuth redirect by processing authentication token from the URL
+ * @returns True if successful, false otherwise
+ */
+export async function handleOAuthRedirect(): Promise<boolean> {
+  try {
+    // Check if the URL contains a hash fragment with an access token
+    const hash = window.location.hash;
+    const search = window.location.search;
+    
+    if ((!hash || !hash.includes('access_token=')) && (!search || !search.includes('access_token='))) {
+      console.log("[MainGallery] No access token found in URL");
+      return false;
+    }
+    
+    console.log("[MainGallery] Processing OAuth redirect");
+    
+    const { data, error } = await supabase.auth.getSession();
+    
+    if (error) {
+      console.error("[MainGallery] Error getting session:", error);
+      return false;
+    }
+    
+    if (data.session) {
+      console.log("[MainGallery] Session found after OAuth redirect");
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error("[MainGallery] Exception during OAuth redirect handling:", error);
+    return false;
+  }
+}
+
+/**
+ * Extracts and processes OAuth token directly from URL hash
+ * @param url The URL containing the hash with the token
+ * @returns True if successful, false otherwise
+ */
+export function handleOAuthTokenFromHash(url: string): boolean {
+  try {
+    // Parse the URL hash
+    const hash = new URL(url).hash;
+    if (!hash || !hash.includes('access_token=')) {
+      return false;
+    }
+    
+    // Extract tokens from hash parameters
+    const params = new URLSearchParams(hash.substring(1));
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    
+    if (!accessToken) {
+      console.log("[MainGallery] No access token found in hash");
+      return false;
+    }
+    
+    console.log("[MainGallery] Successfully extracted token from hash");
+    
+    // Store token in local storage for later use
+    localStorage.setItem('supabase.auth.token', JSON.stringify({
+      access_token: accessToken,
+      refresh_token: refreshToken || '',
+      expires_at: Date.now() + 3600 * 1000 // Default expiry of 1 hour
+    }));
+    
+    return true;
+  } catch (error) {
+    console.error("[MainGallery] Error processing token from hash:", error);
+    return false;
+  }
+}
+
+/**
+ * Gets the URL for the gallery page
+ * @returns The gallery URL
+ */
+export function getGalleryUrl(): string {
+  const baseUrl = window.location.origin;
+  return `${baseUrl}/gallery`;
+}
