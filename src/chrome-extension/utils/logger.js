@@ -1,113 +1,84 @@
 
 /**
- * Simple logger for the MainGallery.AI extension
- * Centralizes logging with consistent formatting and level control
+ * Logger utility for MainGallery.AI Chrome Extension
  */
 
 // Log levels
-export const LOG_LEVELS = {
-  DEBUG: 0,
-  LOG: 1,
+const LOG_LEVELS = {
+  ERROR: 0,
+  WARN: 1,
   INFO: 2,
-  WARN: 3,
-  ERROR: 4
+  DEBUG: 3,
+  TRACE: 4
 };
 
-// Current log level (can be changed at runtime)
-let currentLogLevel = LOG_LEVELS.LOG;
+// Current log level - can be adjusted based on environment
+const CURRENT_LOG_LEVEL = LOG_LEVELS.INFO;
 
-// Prefix for all log messages
-const LOG_PREFIX = '[MainGallery]';
-
-/**
- * Set the current log level
- * @param {number} level - Log level to set
- */
-function setLogLevel(level) {
-  if (Object.values(LOG_LEVELS).includes(level)) {
-    currentLogLevel = level;
-    log(`Log level set to ${Object.keys(LOG_LEVELS).find(key => LOG_LEVELS[key] === level)}`);
-  } else {
-    error(`Invalid log level: ${level}`);
-  }
+// Get timestamp for logs
+function getTimestamp() {
+  return new Date().toISOString();
 }
 
-/**
- * Log a debug message
- * @param {...any} args - Arguments to log
- */
-function debug(...args) {
-  if (currentLogLevel <= LOG_LEVELS.DEBUG) {
-    console.debug(LOG_PREFIX, 'DEBUG:', ...args);
+// Format log message with timestamp and level
+function formatLogMessage(level, message, data) {
+  const timestamp = getTimestamp();
+  let formattedMessage = `[${timestamp}] [${level}] ${message}`;
+  
+  if (data !== undefined) {
+    try {
+      if (typeof data === 'object') {
+        formattedMessage += ` ${JSON.stringify(data)}`;
+      } else {
+        formattedMessage += ` ${data}`;
+      }
+    } catch (error) {
+      formattedMessage += ` [Error stringifying data: ${error.message}]`;
+    }
   }
+  
+  return formattedMessage;
 }
 
-/**
- * Log a regular message
- * @param {...any} args - Arguments to log
- */
-function log(...args) {
-  if (currentLogLevel <= LOG_LEVELS.LOG) {
-    console.log(LOG_PREFIX, ...args);
-  }
-}
-
-/**
- * Log an info message
- * @param {...any} args - Arguments to log
- */
-function info(...args) {
-  if (currentLogLevel <= LOG_LEVELS.INFO) {
-    console.info(LOG_PREFIX, 'INFO:', ...args);
-  }
-}
-
-/**
- * Log a warning message
- * @param {...any} args - Arguments to log
- */
-function warn(...args) {
-  if (currentLogLevel <= LOG_LEVELS.WARN) {
-    console.warn(LOG_PREFIX, 'WARNING:', ...args);
-  }
-}
-
-/**
- * Log an error message
- * @param {...any} args - Arguments to log
- */
-function error(...args) {
-  if (currentLogLevel <= LOG_LEVELS.ERROR) {
-    console.error(LOG_PREFIX, 'ERROR:', ...args);
-  }
-}
-
-/**
- * Create a timestamped log message 
- * Useful for tracking timing issues in authentication flow
- * @param {string} message - Message to log
- * @param {any} data - Optional data to include
- */
-function time(message, data) {
-  const timestamp = new Date().toISOString();
-  if (data) {
-    log(`[${timestamp}] ${message}`, data);
-  } else {
-    log(`[${timestamp}] ${message}`);
-  }
-}
-
-// Export the logger functions
+// Logger object with methods for different log levels
 export const logger = {
-  setLogLevel,
-  debug,
-  log,
-  info,
-  warn,
-  error,
-  time,
-  LOG_LEVELS
+  error: function(message, data) {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.ERROR) {
+      console.error(formatLogMessage('ERROR', message, data));
+    }
+  },
+  
+  warn: function(message, data) {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.WARN) {
+      console.warn(formatLogMessage('WARN', message, data));
+    }
+  },
+  
+  log: function(message, data) {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.INFO) {
+      console.log(formatLogMessage('INFO', message, data));
+    }
+  },
+  
+  debug: function(message, data) {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+      console.log(formatLogMessage('DEBUG', message, data));
+    }
+  },
+  
+  trace: function(message, data) {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.TRACE) {
+      console.log(formatLogMessage('TRACE', message, data));
+    }
+  },
+  
+  // Special method for timing operations with start/end logs
+  time: function(message, data) {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+      console.log(formatLogMessage('TIME', message, data));
+    }
+  }
 };
 
-// Export default for compatibility
+// Export the logger
 export default logger;

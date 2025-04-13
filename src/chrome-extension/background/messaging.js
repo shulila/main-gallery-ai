@@ -1,4 +1,3 @@
-
 /**
  * Message handlers for background script
  */
@@ -306,6 +305,17 @@ function handleResetAuthErrors(sendResponse) {
       logger.error('Error resetting auth errors:', error);
       sendResponse({ success: false, error: error.message });
     });
+}
+
+/**
+ * Opens the auth page in a new tab
+ */
+export function openAuthPage() {
+  const authUrl = 'https://main-gallery-ai.lovable.app/auth';
+  
+  chrome.tabs.create({ url: authUrl }, (tab) => {
+    logger.log("[MainGallery] Opened auth page in new tab", tab.id);
+  });
 }
 
 // Export the necessary functions

@@ -113,6 +113,7 @@ export async function handleAuthToken(token, provider = 'google') {
       return false;
     }
     
+    // Use our custom method that properly works in Service Workers
     const { data, error } = await supabase.auth.handleOAuthToken(token, provider);
     
     if (error) {
@@ -130,5 +131,19 @@ export async function handleAuthToken(token, provider = 'google') {
   } catch (err) {
     console.error("[MainGallery] Error in handleAuthToken:", err);
     return false;
+  }
+}
+
+/**
+ * Reset any auth errors
+ * @returns {Promise<void>}
+ */
+export async function resetAuthErrors() {
+  try {
+    // Clear any auth errors or loading states
+    await chrome.storage.local.remove(['auth_error', 'auth_loading', 'auth_success']);
+    logger.log('Auth errors reset successfully');
+  } catch (error) {
+    logger.error('Error resetting auth errors:', error);
   }
 }

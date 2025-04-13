@@ -134,34 +134,6 @@ export async function logout() {
 }
 
 /**
- * Set up listener for auth callback
- * @returns {Promise<void>}
- */
-export async function setupAuthCallbackListener() {
-  try {
-    logger.log('Setting up auth callback listener');
-    
-    // Listen for auth state changes
-    supabase.auth.onAuthStateChange((event, session) => {
-      logger.time('Auth state changed:', event);
-      
-      if (event === 'SIGNED_IN') {
-        // User signed in, update UI or state as needed
-        chrome.storage.local.set({ auth_event: 'SIGNED_IN' });
-      } else if (event === 'SIGNED_OUT') {
-        // User signed out, update UI or state as needed
-        chrome.storage.local.set({ auth_event: 'SIGNED_OUT' });
-      }
-    });
-    
-    logger.log('Auth callback listener set up successfully');
-  } catch (error) {
-    logger.error('Error setting up auth callback listener:', error);
-    throw error;
-  }
-}
-
-/**
  * Handle auth errors and reset state
  * @returns {Promise<void>}
  */
