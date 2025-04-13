@@ -3,7 +3,9 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { checkAuthStatus, handleAuthToken, openAuthPage, signOut } from './auth.js';
+import { checkAuthStatus, handleAuthToken, signOut } from './auth.js';
+import { supabase } from '../utils/supabaseClient.js';
+import { resetAuthErrors } from '../utils/auth.js';
 import { safeSendMessage, ensureContentScriptLoaded } from '../utils/messaging.js';
 
 /**
@@ -54,6 +56,10 @@ export function setupMessageHandlers() {
         
       case 'addImageToGallery':
         handleAddImage(message, sendResponse);
+        break;
+        
+      case 'resetAuthErrors':
+        handleResetAuthErrors(sendResponse);
         break;
         
       default:
@@ -142,14 +148,14 @@ function handleProcessAuthToken(message, sendResponse) {
  * Handle start Google auth request from popup
  */
 function handleStartGoogleAuth(sendResponse) {
-  logger.log('[MainGallery] Starting Google auth flow');
+  logger.log('Starting Google auth flow');
   
   const manifest = chrome.runtime.getManifest();
   const clientId = manifest.oauth2?.client_id;
   
   if (!clientId) {
     const error = 'OAuth client ID not found in manifest';
-    logger.error('[MainGallery] ' + error);
+    logger.error(error);
     sendResponse({ success: false, error });
     return;
   }
@@ -157,7 +163,7 @@ function handleStartGoogleAuth(sendResponse) {
   // Use chrome.identity.getAuthToken for a more reliable auth flow
   chrome.identity.getAuthToken({ interactive: true }, (token) => {
     if (chrome.runtime.lastError) {
-      logger.error('[MainGallery] Error getting auth token:', chrome.runtime.lastError);
+      logger.error('Error getting auth token:', chrome.runtime.lastError);
       sendResponse({ 
         success: false, 
         error: chrome.runtime.lastError.message 
@@ -166,7 +172,7 @@ function handleStartGoogleAuth(sendResponse) {
     }
     
     if (token) {
-      logger.log('[MainGallery] Got auth token from Google');
+      logger.log('Got auth token from Google');
       
       // Process the token
       handleAuthToken(token, 'google')
@@ -182,11 +188,11 @@ function handleStartGoogleAuth(sendResponse) {
           });
         })
         .catch(error => {
-          logger.error('[MainGallery] Error handling Google auth token:', error);
+          logger.error('Error handling Google auth token:', error);
           sendResponse({ success: false, error: error.message });
         });
     } else {
-      logger.error('[MainGallery] No auth token returned');
+      logger.error('No auth token returned');
       sendResponse({ success: false, error: 'No auth token returned' });
     }
   });
@@ -286,3 +292,24 @@ function handleAddImage(message, sendResponse) {
   
   sendResponse({ success: true });
 }
+
+/**
+ * Handle resetting auth errors
+ */
+function handleResetAuthErrors(sendResponse) {
+  resetAuthErrors()
+    .then(() => {
+      sendResponse({ success: true });
+    })
+    .catch(error => {
+      logger.error('Error resetting auth errors:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+}
+
+// Export the necessary functions
+export { 
+  setupMessageHandlers,
+  handleStartGoogleAuth,
+  handleResetAuthErrors
+};
