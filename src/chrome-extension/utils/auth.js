@@ -36,20 +36,34 @@ export async function openAuthPage(provider = 'google') {
     if (provider === 'google') {
       logger.log('Using Chrome Identity API for Google auth');
       
+      // Show loading state in UI if needed
+      chrome.storage.local.set({ 'auth_loading': true });
+      
       // This function will be called from popup.js, not from background.js
       // So we need to send a message to background.js to handle the auth flow
       chrome.runtime.sendMessage(
         { action: 'startGoogleAuth' },
         (response) => {
+          // Clear loading state
+          chrome.storage.local.set({ 'auth_loading': false });
+          
           if (chrome.runtime.lastError) {
             logger.error('Error starting Google auth:', chrome.runtime.lastError);
+            // Notify UI of error
+            chrome.storage.local.set({ 
+              'auth_error': chrome.runtime.lastError.message || 'Failed to start authentication'
+            });
             return;
           }
           
           if (response && response.error) {
             logger.error('Error in Google auth response:', response.error);
+            // Notify UI of error
+            chrome.storage.local.set({ 'auth_error': response.error });
           } else if (response && response.success) {
             logger.log('Google auth succeeded via Chrome Identity API');
+            // Notify UI of success
+            chrome.storage.local.set({ 'auth_success': true });
           }
         }
       );
@@ -74,6 +88,8 @@ export async function openAuthPage(provider = 'google') {
     }
   } catch (error) {
     logger.error(`Error opening ${provider} auth page:`, error);
+    // Notify UI of error
+    chrome.storage.local.set({ 'auth_error': error.message || `Failed to open ${provider} auth page` });
     throw error;
   }
 }
@@ -142,6 +158,20 @@ export async function setupAuthCallbackListener() {
   } catch (error) {
     logger.error('Error setting up auth callback listener:', error);
     throw error;
+  }
+}
+
+/**
+ * Handle auth errors and reset state
+ * @returns {Promise<void>}
+ */
+export async function resetAuthErrors() {
+  try {
+    // Clear any auth errors or loading states
+    await chrome.storage.local.remove(['auth_error', 'auth_loading', 'auth_success']);
+    logger.log('Auth errors reset successfully');
+  } catch (error) {
+    logger.error('Error resetting auth errors:', error);
   }
 }
 
