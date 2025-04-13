@@ -14,7 +14,9 @@ import { logger } from './logger.js';
 export async function isLoggedIn() {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    return !!session;
+    const loggedIn = !!session;
+    logger.time('isLoggedIn check result:', loggedIn);
+    return loggedIn;
   } catch (error) {
     logger.error('Error checking login status:', error);
     return false;
@@ -28,8 +30,12 @@ export async function isLoggedIn() {
  */
 export async function openAuthPage(provider = 'google') {
   try {
+    logger.time('Opening auth page for provider:', provider);
+    
     // For Google auth, use direct Chrome Identity API approach
     if (provider === 'google') {
+      logger.log('Using Chrome Identity API for Google auth');
+      
       // This function will be called from popup.js, not from background.js
       // So we need to send a message to background.js to handle the auth flow
       chrome.runtime.sendMessage(
@@ -42,6 +48,8 @@ export async function openAuthPage(provider = 'google') {
           
           if (response && response.error) {
             logger.error('Error in Google auth response:', response.error);
+          } else if (response && response.success) {
+            logger.log('Google auth succeeded via Chrome Identity API');
           }
         }
       );
@@ -49,6 +57,7 @@ export async function openAuthPage(provider = 'google') {
     }
     
     // For other providers, use Supabase OAuth
+    logger.log('Using Supabase OAuth for provider:', provider);
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: provider,
       options: {
@@ -59,6 +68,7 @@ export async function openAuthPage(provider = 'google') {
     if (error) throw error;
     
     if (data?.url) {
+      logger.log('Opening OAuth URL:', data.url);
       // Open in a new tab
       chrome.tabs.create({ url: data.url });
     }
@@ -88,12 +98,14 @@ export async function getUserEmail() {
  */
 export async function logout() {
   try {
+    logger.time('Logging out user');
     const { error } = await supabase.auth.signOut();
     
     if (error) throw error;
     
     // Notify that auth state changed
     chrome.storage.local.set({ auth_event: 'SIGNED_OUT' });
+    logger.log('User logged out successfully');
     
     return { success: true };
   } catch (error) {
@@ -111,9 +123,11 @@ export async function logout() {
  */
 export async function setupAuthCallbackListener() {
   try {
+    logger.log('Setting up auth callback listener');
+    
     // Listen for auth state changes
     supabase.auth.onAuthStateChange((event, session) => {
-      logger.log('Auth state changed:', event);
+      logger.time('Auth state changed:', event);
       
       if (event === 'SIGNED_IN') {
         // User signed in, update UI or state as needed
@@ -123,8 +137,43 @@ export async function setupAuthCallbackListener() {
         chrome.storage.local.set({ auth_event: 'SIGNED_OUT' });
       }
     });
+    
+    logger.log('Auth callback listener set up successfully');
   } catch (error) {
     logger.error('Error setting up auth callback listener:', error);
     throw error;
+  }
+}
+
+/**
+ * Verify token validity with Google API
+ * Useful for confirming or refreshing tokens
+ * @param {string} token - OAuth token to verify
+ * @returns {Promise<boolean>} - Whether the token is valid
+ */
+export async function verifyGoogleToken(token) {
+  try {
+    if (!token) return false;
+    
+    logger.time('Verifying Google token');
+    
+    // Use Google's token info endpoint to verify the token
+    const response = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`);
+    
+    if (!response.ok) {
+      logger.warn('Token verification failed with status:', response.status);
+      return false;
+    }
+    
+    const data = await response.json();
+    
+    // Check if token has required scopes
+    const hasScopes = data.scope?.includes('email') && data.scope?.includes('profile');
+    
+    logger.time('Token verification result:', { valid: true, hasScopes });
+    return hasScopes;
+  } catch (error) {
+    logger.error('Error verifying Google token:', error);
+    return false;
   }
 }

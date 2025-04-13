@@ -8,6 +8,8 @@
 const SUPABASE_URL = "https://ovhriawcqvcpagcaidlb.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI2MDQxNzMsImV4cCI6MjA1ODE4MDE3M30.Hz5AA2WF31w187GkEOtKJCpoEi6JDcrdZ-dDv6d8Z7U";
 
+import { logger } from './logger.js';
+
 // Create a minimal mock client that works in Service Worker context
 // This avoids the dynamic import() which is not allowed in Service Workers
 const supabaseClient = {
@@ -17,7 +19,7 @@ const supabaseClient = {
         // Try to get session from storage
         chrome.storage.local.get(['supabase_session'], (result) => {
           if (chrome.runtime.lastError) {
-            console.error('Error getting session from storage:', chrome.runtime.lastError);
+            logger.error('Error getting session from storage:', chrome.runtime.lastError);
             resolve({ data: { session: null }, error: chrome.runtime.lastError });
             return;
           }
@@ -33,7 +35,7 @@ const supabaseClient = {
         // Try to get user from storage
         chrome.storage.local.get(['supabase_user'], (result) => {
           if (chrome.runtime.lastError) {
-            console.error('Error getting user from storage:', chrome.runtime.lastError);
+            logger.error('Error getting user from storage:', chrome.runtime.lastError);
             resolve({ data: { user: null }, error: chrome.runtime.lastError });
             return;
           }
@@ -66,9 +68,17 @@ const supabaseClient = {
       });
     },
     
-    // Handle the OAuth token received from Chrome Identity API
+    // Handle the OAuth token received from Chrome Identity API or callback URL
     handleOAuthToken: (token, provider = 'google') => {
       return new Promise((resolve) => {
+        logger.time('Starting handleOAuthToken', { provider });
+        
+        if (!token) {
+          logger.error('No token provided to handleOAuthToken');
+          resolve({ data: null, error: new Error('No authentication token provided') });
+          return;
+        }
+        
         // Store the token in local storage
         const sessionData = {
           provider_token: token,
@@ -90,20 +100,34 @@ const supabaseClient = {
         // Store the session
         chrome.storage.local.set({ 'supabase_session': sessionData }, () => {
           if (chrome.runtime.lastError) {
-            console.error('Error storing session:', chrome.runtime.lastError);
+            logger.error('Error storing session:', chrome.runtime.lastError);
             resolve({ data: null, error: chrome.runtime.lastError });
             return;
           }
+          
+          logger.time('Session stored, fetching user info');
           
           // Fetch user info from Google
           fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
             headers: { Authorization: `Bearer ${token}` }
           }) 
-            .then(response => response.json())
+            .then(response => {
+              if (!response.ok) {
+                throw new Error(`Google API returned status: ${response.status}`);
+              }
+              return response.json();
+            })
             .then(userData => {
+              logger.time('User info received', userData);
+              
+              if (!userData || !userData.email) {
+                throw new Error('Invalid user data or missing email');
+              }
+              
               // Update user data with email and other info
               const user = {
                 ...sessionData.user,
+                id: userData.sub || 'google-user',
                 email: userData.email,
                 user_metadata: {
                   full_name: userData.name,
@@ -114,7 +138,7 @@ const supabaseClient = {
               // Store updated user data
               chrome.storage.local.set({ 'supabase_user': user }, () => {
                 if (chrome.runtime.lastError) {
-                  console.error('Error storing user data:', chrome.runtime.lastError);
+                  logger.error('Error storing user data:', chrome.runtime.lastError);
                   resolve({ data: { session: sessionData }, error: chrome.runtime.lastError });
                   return;
                 }
@@ -122,12 +146,19 @@ const supabaseClient = {
                 // Update session with user data
                 sessionData.user = user;
                 chrome.storage.local.set({ 'supabase_session': sessionData }, () => {
+                  if (chrome.runtime.lastError) {
+                    logger.error('Error updating session with user data:', chrome.runtime.lastError);
+                    resolve({ data: { session: sessionData, user }, error: chrome.runtime.lastError });
+                    return;
+                  }
+                  
+                  logger.time('Auth process completed successfully');
                   resolve({ data: { session: sessionData, user }, error: null });
                 });
               });
             })
             .catch(error => {
-              console.error('Error fetching user info:', error);
+              logger.error('Error in OAuth flow:', error);
               resolve({ data: { session: sessionData }, error });
             });
         });
@@ -139,7 +170,7 @@ const supabaseClient = {
         // Clear session and user data from storage
         chrome.storage.local.remove(['supabase_session', 'supabase_user'], () => {
           if (chrome.runtime.lastError) {
-            console.error('Error clearing auth data:', chrome.runtime.lastError);
+            logger.error('Error clearing auth data:', chrome.runtime.lastError);
             resolve({ error: chrome.runtime.lastError });
             return;
           }
@@ -179,7 +210,7 @@ const supabaseClient = {
 };
 
 // Log that this module was loaded
-console.log("[MainGallery] supabaseClient.js loaded");
+logger.log("supabaseClient.js loaded");
 
 // Export the client - make sure we use both export styles for compatibility
 export default supabaseClient; 

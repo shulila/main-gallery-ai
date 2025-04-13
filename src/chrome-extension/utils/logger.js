@@ -82,6 +82,21 @@ function error(...args) {
   }
 }
 
+/**
+ * Create a timestamped log message 
+ * Useful for tracking timing issues in authentication flow
+ * @param {string} message - Message to log
+ * @param {any} data - Optional data to include
+ */
+function time(message, data) {
+  const timestamp = new Date().toISOString();
+  if (data) {
+    log(`[${timestamp}] ${message}`, data);
+  } else {
+    log(`[${timestamp}] ${message}`);
+  }
+}
+
 // Export the logger functions
 export const logger = {
   setLogLevel,
@@ -90,6 +105,7 @@ export const logger = {
   info,
   warn,
   error,
+  time,
   LOG_LEVELS
 };
 
