@@ -5,7 +5,7 @@
  */
 
 import { logger } from './logger.js';
-import { supabase } from './supabaseClient.js';
+import { storage, STORAGE_KEYS } from './storage.js';
 
 /**
  * Check if the current URL is a callback URL with access_token
@@ -97,27 +97,69 @@ export async function processCallbackUrl(url) {
     
     logger.log('Token extracted successfully');
     
-    // Process the token with our custom handler
-    const result = await supabase.auth.handleOAuthToken(
-      tokenData.access_token, 
-      'google'
-    );
-    
-    if (result.error) {
-      logger.error('Error handling OAuth token:', result.error);
+    // Get user info from Google
+    try {
+      const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` }
+      });
+      
+      if (!userInfoResponse.ok) {
+        throw new Error(`Failed to get user info: ${userInfoResponse.status}`);
+      }
+      
+      const userData = await userInfoResponse.json();
+      
+      if (!userData || !userData.email) {
+        throw new Error('Invalid user data or missing email');
+      }
+      
+      // Create session data
+      const sessionData = {
+        provider: 'google',
+        provider_token: tokenData.access_token,
+        access_token: tokenData.access_token,
+        expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+        user: {
+          id: userData.sub,
+          email: userData.email,
+          user_metadata: {
+            full_name: userData.name,
+            avatar_url: userData.picture
+          }
+        }
+      };
+      
+      // Store session data
+      await storage.set(STORAGE_KEYS.SESSION, sessionData);
+      await storage.set(STORAGE_KEYS.USER, sessionData.user);
+      
+      // Notify that auth state changed
+      await storage.set(STORAGE_KEYS.AUTH_EVENT, {
+        type: 'SIGNED_IN',
+        timestamp: new Date().toISOString()
+      });
+      
+      // Broadcast authentication success
+      chrome.runtime.sendMessage({
+        type: 'AUTH_STATE_CHANGE',
+        event: 'SIGNED_IN',
+        user: sessionData.user
+      }).catch(err => {
+        // Ignore errors from no listeners
+        logger.debug('Error broadcasting auth state change (expected if no listeners):', err);
+      });
+      
+      return {
+        success: true,
+        user: sessionData.user
+      };
+    } catch (error) {
+      logger.error('Error processing user data:', error);
       return { 
         success: false, 
-        error: result.error.message || 'Authentication failed' 
+        error: error.message || 'Failed to process user data' 
       };
     }
-    
-    // Notify that auth state changed
-    chrome.storage.local.set({ auth_event: 'SIGNED_IN' });
-    
-    return {
-      success: true,
-      user: result.data?.user || result.data?.session?.user
-    };
   } catch (error) {
     logger.error('Error processing callback URL:', error);
     return { 
@@ -148,9 +190,9 @@ export function setupCallbackUrlListener() {
               if (result.success) {
                 logger.log('Successfully processed callback URL');
                 
-                // Redirect to gallery or close the tab
+                // Redirect to gallery
                 chrome.tabs.update(tabId, { 
-                  url: getGalleryUrl() 
+                  url: 'https://main-gallery-ai.lovable.app/gallery'
                 });
               } else {
                 logger.error('Failed to process callback URL:', result.error);
@@ -164,6 +206,8 @@ export function setupCallbackUrlListener() {
                       <button onclick="window.close()">Close</button>
                     </div>';
                   `
+                }).catch(err => {
+                  logger.error('Failed to inject error message:', err);
                 });
               }
             })
@@ -178,16 +222,4 @@ export function setupCallbackUrlListener() {
   } catch (error) {
     logger.error('Error setting up callback URL listener:', error);
   }
-}
-
-/**
- * Get the gallery URL
- * @returns {string} - Gallery URL
- */
-function getGalleryUrl() {
-  // Use the utility function if available, otherwise use hardcoded URL
-  if (typeof window !== 'undefined' && window.getGalleryUrl) {
-    return window.getGalleryUrl();
-  }
-  return 'https://main-gallery-ai.lovable.app/gallery';
 }

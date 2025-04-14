@@ -8,8 +8,7 @@ const LOG_LEVELS = {
   ERROR: 0,
   WARN: 1,
   INFO: 2,
-  DEBUG: 3,
-  TRACE: 4
+  DEBUG: 3
 };
 
 // Current log level - can be adjusted based on environment
@@ -20,7 +19,7 @@ function getTimestamp() {
   return new Date().toISOString();
 }
 
-// Format log message with timestamp and level
+// Format log message
 function formatLogMessage(level, message, data) {
   const timestamp = getTimestamp();
   let formattedMessage = `[${timestamp}] [${level}] ${message}`;
@@ -40,7 +39,7 @@ function formatLogMessage(level, message, data) {
   return formattedMessage;
 }
 
-// Logger object with methods for different log levels
+// Logger object
 export const logger = {
   error: function(message, data) {
     if (CURRENT_LOG_LEVEL >= LOG_LEVELS.ERROR) {
@@ -63,19 +62,6 @@ export const logger = {
   debug: function(message, data) {
     if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
       console.log(formatLogMessage('DEBUG', message, data));
-    }
-  },
-  
-  trace: function(message, data) {
-    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.TRACE) {
-      console.log(formatLogMessage('TRACE', message, data));
-    }
-  },
-  
-  // Special method for timing operations with start/end logs
-  time: function(message, data) {
-    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
-      console.log(formatLogMessage('TIME', message, data));
     }
   }
 };
