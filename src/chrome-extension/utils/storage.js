@@ -1,3 +1,4 @@
+
 /**
  * Storage utility for MainGallery.AI Chrome Extension
  */
@@ -14,7 +15,7 @@ export const STORAGE_KEYS = {
 };
 
 export const storage = {
-  get: async <T = any>(key: string, defaultValue?: T): Promise<T | null> => {
+  get: async function(key, defaultValue) {
     try {
       const result = await chrome.storage.local.get(key);
       return result[key] !== undefined ? result[key] : (defaultValue ?? null);
@@ -24,7 +25,7 @@ export const storage = {
     }
   },
   
-  set: async <T>(key: string, value: T): Promise<boolean> => {
+  set: async function(key, value) {
     try {
       await chrome.storage.local.set({ [key]: value });
       return true;
@@ -34,7 +35,7 @@ export const storage = {
     }
   },
   
-  remove: async (key) => {
+  remove: async function(key) {
     try {
       await chrome.storage.local.remove(key);
       return true;
@@ -44,7 +45,7 @@ export const storage = {
     }
   },
   
-  clear: async () => {
+  clear: async function() {
     try {
       await chrome.storage.local.clear();
       return true;
@@ -54,7 +55,7 @@ export const storage = {
     }
   },
   
-  getAll: async () => {
+  getAll: async function() {
     try {
       return await chrome.storage.local.get(null);
     } catch (error) {
