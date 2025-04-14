@@ -21,7 +21,7 @@ export async function syncAuthState() {
     
     if (session) {
       // Extension has a session, set cookies in web app
-      await setCookiesFromSession(session);
+      await setAuthCookies(session);
       logger.log('Auth state synced from extension to web app');
     } else {
       // Extension doesn't have a session, check if web app does
@@ -49,11 +49,11 @@ export async function syncAuthState() {
 }
 
 /**
- * Set cookies in web app from session data
- * @param {Object} session Session data
+ * Set auth cookies in web app from session data
+ * @param {Object} session Session data to set in cookies
  * @returns {Promise<boolean>} Whether cookies were set successfully
  */
-async function setCookiesFromSession(session) {
+export async function setAuthCookies(session) {
   try {
     if (!session) return false;
     
@@ -92,7 +92,33 @@ async function setCookiesFromSession(session) {
     
     return true;
   } catch (error) {
-    logger.error('Error setting cookies from session:', error);
+    logger.error('Error setting auth cookies:', error);
+    return false;
+  }
+}
+
+/**
+ * Remove auth cookies from web app
+ * @returns {Promise<boolean>} Whether cookies were removed successfully
+ */
+export async function removeAuthCookies() {
+  try {
+    // Remove session cookie
+    await chrome.cookies.remove({
+      url: WEB_APP_URLS.BASE,
+      name: COOKIE_CONFIG.NAMES.SESSION
+    });
+    
+    // Remove user cookie
+    await chrome.cookies.remove({
+      url: WEB_APP_URLS.BASE,
+      name: COOKIE_CONFIG.NAMES.USER
+    });
+    
+    logger.log('Auth cookies removed from web app');
+    return true;
+  } catch (error) {
+    logger.error('Error removing auth cookies:', error);
     return false;
   }
 }
@@ -140,5 +166,23 @@ async function getSessionFromCookies() {
   } catch (error) {
     logger.error('Error getting session from cookies:', error);
     return null;
+  }
+}
+
+/**
+ * Check if auth cookies exist in web app
+ * @returns {Promise<boolean>} Whether auth cookies exist
+ */
+export async function hasAuthCookies() {
+  try {
+    const sessionCookie = await chrome.cookies.get({
+      url: WEB_APP_URLS.BASE,
+      name: COOKIE_CONFIG.NAMES.SESSION
+    });
+    
+    return !!sessionCookie && !!sessionCookie.value;
+  } catch (error) {
+    logger.error('Error checking auth cookies:', error);
+    return false;
   }
 }
