@@ -4,8 +4,8 @@ import { authService } from './auth-service.js';
 import { syncAuthState } from '../cookie-sync.js';
 import { WEB_APP_URLS } from '../oauth-config.js';
 
-// Import types directly
-import type { AuthUser, AuthResult } from '../types/auth';
+// Import types with correct path and extension
+import type { AuthUser, AuthResult } from '../types/auth.d.ts';
 
 interface CallbackResult {
   success: boolean;

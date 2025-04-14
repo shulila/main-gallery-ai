@@ -5,8 +5,8 @@ import { COOKIE_CONFIG, WEB_APP_URLS } from '../oauth-config.js';
 import { syncAuthToCookies } from '../cookie-sync.js';
 import { processGoogleCallback } from './google-auth.ts';
 
-// Import types directly from the type file
-import type { AuthUser, AuthSession, AuthResult } from '../types/auth';
+// Import types with correct path and extension
+import type { AuthUser, AuthSession, AuthResult } from '../types/auth.d.ts';
 
 class AuthService {
   async isAuthenticated(): Promise<boolean> {

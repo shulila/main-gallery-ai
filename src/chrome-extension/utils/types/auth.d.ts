@@ -1,18 +1,18 @@
 
-interface AuthResult {
+export interface AuthResult {
   success: boolean;
   error?: string;
   user?: AuthUser;
 }
 
-interface UserInfo {
+export interface UserInfo {
   sub: string;
   email: string;
   name: string;
   picture: string;
 }
 
-interface AuthSession {
+export interface AuthSession {
   provider: string;
   provider_token: string;
   access_token: string;
@@ -21,7 +21,7 @@ interface AuthSession {
   created_at: number;
 }
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   email: string;
   name: string;
