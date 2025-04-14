@@ -7,12 +7,16 @@
 import { logger } from './logger.js';
 import { authService } from './auth-service.js';
 import { isCallbackUrl, processCallbackUrl } from './callback-handler.js';
+import { syncAuthState } from './cookie-sync.js';
+import { WEB_APP_URLS } from './oauth-config.js';
 
 /**
  * Check if user is authenticated
  * @returns {Promise<boolean>} Whether user is authenticated
  */
 export async function isLoggedIn() {
+  // First sync auth state with web app to ensure consistency
+  await syncAuthState();
   return await authService.isAuthenticated();
 }
 
@@ -31,7 +35,7 @@ export async function getUserEmail() {
  * @returns {Promise<void>}
  */
 export async function openAuthPage(provider = null) {
-  let authUrl = 'https://main-gallery-ai.lovable.app/auth';
+  let authUrl = WEB_APP_URLS.AUTH;
   
   if (provider) {
     authUrl += `?provider=${provider}`;
@@ -74,6 +78,12 @@ export async function handleAuthToken(token, provider = 'google') {
     const result = await authService.processGoogleCallback(
       `https://example.com/callback#access_token=${token}&token_type=bearer&expires_in=3600`
     );
+    
+    // If successful, sync auth state with web app
+    if (result.success) {
+      await syncAuthState();
+    }
+    
     return result.success;
   } catch (error) {
     logger.error('Error handling auth token:', error);
@@ -95,11 +105,19 @@ export async function handleAuthUrl(url) {
     return { success: false, error: 'Not a valid callback URL' };
   }
   
-  return await processCallbackUrl(url);
+  const result = await processCallbackUrl(url);
+  
+  // If successful, sync auth state with web app
+  if (result.success) {
+    await syncAuthState();
+  }
+  
+  return result;
 }
 
 // Export additional functions for backwards compatibility
 export {
   isCallbackUrl,
-  processCallbackUrl
+  processCallbackUrl,
+  syncAuthState
 };

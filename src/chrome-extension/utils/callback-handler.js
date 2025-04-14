@@ -6,6 +6,8 @@
 
 import { logger } from './logger.js';
 import { authService } from './auth-service.js';
+import { syncAuthState } from './cookie-sync.js';
+import { WEB_APP_URLS } from './oauth-config.js';
 
 /**
  * Set up callback URL listener
@@ -19,18 +21,21 @@ export function setupCallbackUrlListener() {
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       // Only process if URL changed and is complete
       if (changeInfo.status === 'complete' && tab.url) {
-        if (authService.isCallbackUrl(tab.url)) {
+        if (isCallbackUrl(tab.url)) {
           logger.log('Detected callback URL in tab:', tabId);
           
           // Process the callback URL
-          authService.processGoogleCallback(tab.url)
+          processCallbackUrl(tab.url)
             .then(result => {
               if (result.success) {
                 logger.log('Successfully processed callback URL');
                 
-                // Redirect to gallery
-                chrome.tabs.update(tabId, { 
-                  url: 'https://main-gallery-ai.lovable.app/gallery' 
+                // Sync auth state with web app
+                syncAuthState().then(() => {
+                  // Redirect to gallery
+                  chrome.tabs.update(tabId, { 
+                    url: WEB_APP_URLS.GALLERY
+                  });
                 });
               } else {
                 logger.error('Failed to process callback URL:', result.error);
@@ -72,7 +77,16 @@ export function setupCallbackUrlListener() {
  * @returns {boolean} - Whether the URL is a callback URL
  */
 export function isCallbackUrl(url) {
-  return authService.isCallbackUrl(url);
+  if (!url) return false;
+  
+  // Check if URL is from our webapp callback
+  if (url.startsWith(WEB_APP_URLS.AUTH_CALLBACK)) {
+    return true;
+  }
+  
+  // Also check for any URL with access_token or code
+  return url.includes('callback') && 
+         (url.includes('access_token=') || url.includes('code='));
 }
 
 /**
@@ -81,5 +95,22 @@ export function isCallbackUrl(url) {
  * @returns {Promise<{success: boolean, error?: string}>} - Result of processing
  */
 export async function processCallbackUrl(url) {
-  return await authService.processGoogleCallback(url);
+  try {
+    logger.log('Processing callback URL');
+    
+    const result = await authService.processGoogleCallback(url);
+    
+    if (result.success) {
+      // Sync auth state with web app after successful processing
+      await syncAuthState();
+    }
+    
+    return result;
+  } catch (error) {
+    logger.error('Error processing callback URL:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to process callback URL'
+    };
+  }
 }

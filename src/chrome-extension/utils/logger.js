@@ -22,7 +22,7 @@ function getTimestamp() {
 // Format log message
 function formatLogMessage(level, message, data) {
   const timestamp = getTimestamp();
-  let formattedMessage = `[${timestamp}] [${level}] ${message}`;
+  let formattedMessage = `[MainGallery] [${timestamp}] [${level}] ${message}`;
   
   if (data !== undefined) {
     try {

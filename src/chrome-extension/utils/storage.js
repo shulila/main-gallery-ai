@@ -10,6 +10,9 @@ import { logger } from './logger.js';
 export const STORAGE_KEYS = {
   SESSION: 'mg_session',
   USER: 'mg_user',
+  AUTH_STATE: 'mg_auth_state',
+  AUTH_ERROR: 'mg_auth_error',
+  LAST_AUTH_ATTEMPT: 'mg_last_auth_attempt',
   AUTH_EVENT: 'mg_auth_event'
 };
 
@@ -56,6 +59,16 @@ export const storage = {
     } catch (error) {
       logger.error('Error clearing storage', error);
       return false;
+    }
+  },
+  
+  // Get multiple items from storage
+  getMultiple: async function(keys) {
+    try {
+      return await chrome.storage.local.get(keys);
+    } catch (error) {
+      logger.error(`Error getting multiple items from storage`, error);
+      return {};
     }
   }
 };
