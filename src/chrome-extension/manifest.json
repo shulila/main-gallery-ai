@@ -1,4 +1,3 @@
-
 {
   "manifest_version": 3,
   "name": "MainGallery.AI",
@@ -10,7 +9,8 @@
     "scripting",
     "tabs",
     "notifications",
-    "identity"
+    "identity",
+    "cookies"
   ],
   "host_permissions": [
     "https://*.midjourney.com/*",

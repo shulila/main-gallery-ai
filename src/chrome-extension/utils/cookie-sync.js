@@ -1,7 +1,7 @@
 
 /**
  * Cookie synchronization utility for MainGallery.AI Chrome Extension
- * Handles syncing authentication state between the extension and web app
+ * Handles synchronization of authentication state between extension and web app
  */
 
 import { logger } from './logger.js';
@@ -10,11 +10,17 @@ import { COOKIE_CONFIG, WEB_APP_URLS } from './oauth-config.js';
 
 /**
  * Synchronize authentication state between extension and web app
- * @returns {Promise<boolean>} Whether synchronization was successful
  */
 export async function syncAuthState() {
   try {
     logger.log('Syncing auth state between extension and web app');
+    
+    // Check if we have the cookies permission
+    const permissions = await chrome.permissions.getAll();
+    if (!permissions.permissions.includes('cookies')) {
+      logger.error('Missing cookies permission, cannot sync auth state');
+      return false;
+    }
     
     // Get session from extension storage
     const session = await storage.get(STORAGE_KEYS.SESSION);
@@ -24,7 +30,7 @@ export async function syncAuthState() {
       await setAuthCookies(session);
       logger.log('Auth state synced from extension to web app');
     } else {
-      // Extension doesn't have a session, check if web app does
+      // Extension doesn't have a session, check web app
       const webAppSession = await getSessionFromCookies();
       
       if (webAppSession) {
@@ -37,7 +43,7 @@ export async function syncAuthState() {
         
         logger.log('Auth state synced from web app to extension');
       } else {
-        logger.log('No auth state to sync (both extension and web app are logged out)');
+        logger.log('No auth state to sync (both logged out)');
       }
     }
     
@@ -50,19 +56,15 @@ export async function syncAuthState() {
 
 /**
  * Set auth cookies in web app from session data
- * @param {Object} session Session data to set in cookies
- * @returns {Promise<boolean>} Whether cookies were set successfully
  */
 export async function setAuthCookies(session) {
+  if (!session) return false;
+  
   try {
-    if (!session) return false;
-    
-    // Calculate expiration
     const expiresInSeconds = session.expires_at 
       ? Math.floor((session.expires_at - Date.now()) / 1000)
-      : 3600; // Default to 1 hour
+      : 3600;
     
-    // Set session cookie
     await chrome.cookies.set({
       url: WEB_APP_URLS.BASE,
       name: COOKIE_CONFIG.NAMES.SESSION,
@@ -75,7 +77,6 @@ export async function setAuthCookies(session) {
       expirationDate: Math.floor(Date.now() / 1000) + expiresInSeconds
     });
     
-    // Set user cookie if available
     if (session.user) {
       await chrome.cookies.set({
         url: WEB_APP_URLS.BASE,
@@ -99,17 +100,14 @@ export async function setAuthCookies(session) {
 
 /**
  * Remove auth cookies from web app
- * @returns {Promise<boolean>} Whether cookies were removed successfully
  */
 export async function removeAuthCookies() {
   try {
-    // Remove session cookie
     await chrome.cookies.remove({
       url: WEB_APP_URLS.BASE,
       name: COOKIE_CONFIG.NAMES.SESSION
     });
     
-    // Remove user cookie
     await chrome.cookies.remove({
       url: WEB_APP_URLS.BASE,
       name: COOKIE_CONFIG.NAMES.USER
@@ -125,44 +123,28 @@ export async function removeAuthCookies() {
 
 /**
  * Get session data from web app cookies
- * @returns {Promise<Object|null>} Session data or null if not found
  */
 async function getSessionFromCookies() {
   try {
-    // Get session cookie
     const sessionCookie = await chrome.cookies.get({
       url: WEB_APP_URLS.BASE,
       name: COOKIE_CONFIG.NAMES.SESSION
     });
     
-    if (!sessionCookie || !sessionCookie.value) {
-      return null;
+    if (!sessionCookie?.value) return null;
+    
+    const session = JSON.parse(sessionCookie.value);
+    
+    const userCookie = await chrome.cookies.get({
+      url: WEB_APP_URLS.BASE,
+      name: COOKIE_CONFIG.NAMES.USER
+    });
+    
+    if (userCookie?.value) {
+      session.user = JSON.parse(userCookie.value);
     }
     
-    try {
-      // Parse session data
-      const session = JSON.parse(sessionCookie.value);
-      
-      // Get user cookie
-      const userCookie = await chrome.cookies.get({
-        url: WEB_APP_URLS.BASE,
-        name: COOKIE_CONFIG.NAMES.USER
-      });
-      
-      if (userCookie && userCookie.value) {
-        try {
-          // Add user data to session
-          session.user = JSON.parse(userCookie.value);
-        } catch (e) {
-          logger.warn('Error parsing user cookie:', e);
-        }
-      }
-      
-      return session;
-    } catch (e) {
-      logger.error('Error parsing session cookie:', e);
-      return null;
-    }
+    return session;
   } catch (error) {
     logger.error('Error getting session from cookies:', error);
     return null;
@@ -171,7 +153,6 @@ async function getSessionFromCookies() {
 
 /**
  * Check if auth cookies exist in web app
- * @returns {Promise<boolean>} Whether auth cookies exist
  */
 export async function hasAuthCookies() {
   try {
@@ -186,3 +167,4 @@ export async function hasAuthCookies() {
     return false;
   }
 }
+
