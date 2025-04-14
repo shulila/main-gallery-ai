@@ -1,7 +1,6 @@
 
 /**
  * Authentication service for MainGallery.AI Chrome Extension
- * מודול מרכזי לניהול אימות משתמשים
  */
 
 import { logger } from './logger.js';
@@ -90,142 +89,41 @@ export const authService = {
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error_description || errorData.message || 'Failed to sign in');
+        return {
+          success: false,
+          error: errorData.error_description || errorData.message || 'Invalid email or password'
+        };
       }
       
       const data = await response.json();
       
-      // Create session object
-      const session = {
+      // Save session and user data
+      await storage.set(STORAGE_KEYS.SESSION, {
         access_token: data.access_token,
         refresh_token: data.refresh_token,
-        expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
-        provider: 'email',
+        expires_at: Date.now() + (data.expires_in * 1000),
         user: data.user
-      };
+      });
       
-      // Store session and user
-      await storage.set(STORAGE_KEYS.SESSION, session);
       await storage.set(STORAGE_KEYS.USER, data.user);
-      
-      // Trigger auth state change
-      await this._triggerAuthStateChange('SIGNED_IN', data.user);
-      
-      logger.log('Successfully signed in with email');
       
       return {
         success: true,
         user: data.user
       };
     } catch (error) {
-      logger.error('Error signing in with email and password:', error);
+      logger.error('Error signing in with email:', error);
       return {
         success: false,
-        error: error.message || 'Failed to sign in with email and password'
+        error: error.message || 'An error occurred during sign in'
       };
     }
   },
   
   /**
-   * Sign in with Google
-   * @returns {Promise<{success: boolean, error?: string, user?: Object}>} Result
-   */
-  signInWithGoogle: async function() {
-    try {
-      logger.log('Initiating Google sign in');
-      
-      return new Promise((resolve) => {
-        chrome.identity.getAuthToken({ interactive: true }, async (token) => {
-          if (chrome.runtime.lastError) {
-            logger.error('Chrome identity error:', chrome.runtime.lastError);
-            return resolve({
-              success: false,
-              error: chrome.runtime.lastError.message || 'Failed to get Google authentication token'
-            });
-          }
-          
-          if (!token) {
-            logger.error('No token returned from Chrome Identity API');
-            return resolve({
-              success: false,
-              error: 'No authentication token received from Google'
-            });
-          }
-          
-          try {
-            // Get user info from Google
-            const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: {
-                Authorization: `Bearer ${token}`
-              }
-            });
-            
-            if (!userInfoResponse.ok) {
-              throw new Error(`Failed to get user info: ${userInfoResponse.status}`);
-            }
-            
-            const userInfo = await userInfoResponse.json();
-            
-            // Create user object
-            const user = {
-              id: userInfo.sub,
-              email: userInfo.email,
-              app_metadata: { provider: 'google' },
-              user_metadata: {
-                full_name: userInfo.name,
-                avatar_url: userInfo.picture
-              }
-            };
-            
-            // Create session object
-            const session = {
-              access_token: token,
-              refresh_token: null,
-              expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
-              provider: 'google',
-              provider_token: token,
-              user: user
-            };
-            
-            // Store session and user
-            await storage.set(STORAGE_KEYS.SESSION, session);
-            await storage.set(STORAGE_KEYS.USER, user);
-            
-            // Trigger auth state change
-            await this._triggerAuthStateChange('SIGNED_IN', user);
-            
-            logger.log('Successfully signed in with Google');
-            
-            resolve({
-              success: true,
-              user: user
-            });
-          } catch (error) {
-            logger.error('Error in Google sign in process:', error);
-            
-            // Revoke token on error
-            chrome.identity.removeCachedAuthToken({ token });
-            
-            resolve({
-              success: false,
-              error: error.message || 'Failed to sign in with Google'
-            });
-          }
-        });
-      });
-    } catch (error) {
-      logger.error('Error in Google sign in process:', error);
-      return {
-        success: false,
-        error: error.message || 'Failed to sign in with Google'
-      };
-    }
-  },
-  
-  /**
-   * Process Google OAuth callback URL
-   * @param {string} url - Callback URL with access_token
-   * @returns {Promise<{success: boolean, error?: string, user?: Object}>} Result
+   * Process Google callback URL
+   * @param {string} url - Callback URL with access token
+   * @returns {Promise<{success: boolean, error?: string, user?: Object}>}
    */
   processGoogleCallback: async function(url) {
     try {
@@ -234,224 +132,149 @@ export const authService = {
       if (!url) {
         return {
           success: false,
-          error: 'No URL provided'
+          error: 'No callback URL provided'
         };
       }
       
-      // Extract token from URL
-      const token = this._extractTokenFromUrl(url);
+      // Extract access token from URL
+      let accessToken = '';
+      let refreshToken = '';
       
-      if (!token) {
+      // Check hash parameters first (#access_token=...)
+      const hashParams = new URLSearchParams(url.split('#')[1] || '');
+      accessToken = hashParams.get('access_token') || '';
+      refreshToken = hashParams.get('refresh_token') || '';
+      
+      // If not in hash, check query parameters (?access_token=...)
+      if (!accessToken) {
+        const queryParams = new URLSearchParams(url.split('?')[1] || '');
+        accessToken = queryParams.get('access_token') || '';
+        refreshToken = queryParams.get('refresh_token') || '';
+      }
+      
+      if (!accessToken) {
         return {
           success: false,
-          error: 'No token found in URL'
+          error: 'No access token found in callback URL'
         };
       }
       
-      try {
-        // Get user info from Google
-        const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: {
-            Authorization: `Bearer ${token.access_token}`
-          }
-        });
-        
-        if (!userInfoResponse.ok) {
-          throw new Error(`Failed to get user info: ${userInfoResponse.status}`);
+      // Get user info from Google
+      const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
         }
-        
-        const userInfo = await userInfoResponse.json();
-        
-        // Create user object
-        const user = {
-          id: userInfo.sub,
-          email: userInfo.email,
-          app_metadata: { provider: 'google' },
-          user_metadata: {
-            full_name: userInfo.name,
-            avatar_url: userInfo.picture
-          }
-        };
-        
-        // Create session object
-        const session = {
-          access_token: token.access_token,
-          refresh_token: null,
-          expires_at: new Date(Date.now() + token.expires_in * 1000).toISOString(),
-          provider: 'google',
-          provider_token: token.access_token,
-          user: user
-        };
-        
-        // Store session and user
-        await storage.set(STORAGE_KEYS.SESSION, session);
-        await storage.set(STORAGE_KEYS.USER, user);
-        
-        // Trigger auth state change
-        await this._triggerAuthStateChange('SIGNED_IN', user);
-        
-        logger.log('Successfully processed Google callback');
-        
-        return {
-          success: true,
-          user: user
-        };
-      } catch (error) {
-        logger.error('Error processing Google callback:', error);
+      });
+      
+      if (!userInfoResponse.ok) {
         return {
           success: false,
-          error: error.message || 'Failed to process Google callback'
+          error: `Failed to get user info: ${userInfoResponse.status}`
         };
       }
+      
+      const userInfo = await userInfoResponse.json();
+      
+      // Create user and session objects
+      const user = {
+        id: userInfo.sub,
+        email: userInfo.email,
+        user_metadata: {
+          full_name: userInfo.name,
+          avatar_url: userInfo.picture
+        },
+        app_metadata: {
+          provider: 'google'
+        }
+      };
+      
+      const session = {
+        provider: 'google',
+        provider_token: accessToken,
+        provider_refresh_token: refreshToken,
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: Date.now() + 3600 * 1000, // 1 hour by default
+        user: user
+      };
+      
+      // Save session and user data
+      await storage.set(STORAGE_KEYS.SESSION, session);
+      await storage.set(STORAGE_KEYS.USER, user);
+      
+      logger.log('Google authentication successful');
+      
+      return {
+        success: true,
+        user: user
+      };
     } catch (error) {
       logger.error('Error processing Google callback:', error);
       return {
         success: false,
-        error: error.message || 'Failed to process Google callback'
+        error: error.message || 'An error occurred during Google authentication'
       };
     }
   },
   
   /**
-   * Sign out
-   * @returns {Promise<{success: boolean, error?: string}>} Result
+   * Sign in with Google
+   * @returns {Promise<{success: boolean, error?: string, user?: Object}>}
+   */
+  signInWithGoogle: async function() {
+    try {
+      logger.log('Initiating Google sign in');
+      
+      // Generate a random state value for CSRF protection
+      const state = Math.random().toString(36).substring(2, 15);
+      
+      // Store state for verification later
+      await storage.set('google_auth_state', state);
+      
+      // Prepare OAuth URL
+      const redirectUri = encodeURIComponent('https://main-gallery-ai.lovable.app/auth/callback');
+      const clientId = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
+      const scope = encodeURIComponent('email profile openid');
+      
+      const oauthUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&state=${state}`;
+      
+      // Open OAuth URL in a new tab
+      chrome.tabs.create({ url: oauthUrl });
+      
+      return {
+        success: true,
+        message: 'Google sign in initiated'
+      };
+    } catch (error) {
+      logger.error('Error initiating Google sign in:', error);
+      return {
+        success: false,
+        error: error.message || 'An error occurred during Google sign in'
+      };
+    }
+  },
+  
+  /**
+   * Sign out the current user
+   * @returns {Promise<{success: boolean, error?: string}>}
    */
   signOut: async function() {
     try {
       logger.log('Signing out');
       
-      // Get current session
-      const session = await this.getSession();
-      
-      // Revoke Google token if present
-      if (session?.provider === 'google' && session.provider_token) {
-        try {
-          chrome.identity.removeCachedAuthToken({ token: session.provider_token });
-        } catch (error) {
-          logger.warn('Error removing cached auth token:', error);
-        }
-      }
-      
-      // Clear session and user
+      // Clear all auth related data
       await storage.remove(STORAGE_KEYS.SESSION);
       await storage.remove(STORAGE_KEYS.USER);
       
-      // Trigger auth state change
-      await this._triggerAuthStateChange('SIGNED_OUT');
-      
-      logger.log('Successfully signed out');
-      
-      return { success: true };
+      return {
+        success: true
+      };
     } catch (error) {
       logger.error('Error signing out:', error);
       return {
         success: false,
-        error: error.message || 'Failed to sign out'
+        error: error.message || 'An error occurred during sign out'
       };
     }
-  },
-  
-  /**
-   * Check if URL is a Google OAuth callback
-   * @param {string} url - URL to check
-   * @returns {boolean} True if URL is a callback URL
-   */
-  isCallbackUrl: function(url) {
-    if (!url) return false;
-    
-    return url.includes('callback') && 
-           (url.includes('access_token=') || url.includes('code='));
-  },
-  
-  /**
-   * Extract token from callback URL
-   * @param {string} url - Callback URL
-   * @returns {Object|null} Token object or null if not found
-   */
-  _extractTokenFromUrl: function(url) {
-    try {
-      if (!url) return null;
-      
-      // Parse the URL
-      const urlObj = new URL(url);
-      
-      // Check if we have a hash fragment with the token
-      if (urlObj.hash) {
-        // Remove the leading # and parse the parameters
-        const params = new URLSearchParams(urlObj.hash.substring(1));
-        
-        // Extract token data
-        const accessToken = params.get('access_token');
-        const tokenType = params.get('token_type');
-        const expiresIn = params.get('expires_in');
-        
-        if (!accessToken) {
-          return null;
-        }
-        
-        return {
-          access_token: accessToken,
-          token_type: tokenType || 'Bearer',
-          expires_in: parseInt(expiresIn) || 3600
-        };
-      }
-      
-      return null;
-    } catch (error) {
-      logger.error('Error extracting token from URL:', error);
-      return null;
-    }
-  },
-  
-  /**
-   * Trigger auth state change event
-   * @param {string} event - Event type (SIGNED_IN, SIGNED_OUT)
-   * @param {Object} [user] - User object for SIGNED_IN event
-   * @returns {Promise<void>}
-   */
-  _triggerAuthStateChange: async function(event, user) {
-    try {
-      // Store event in storage
-      await storage.set(STORAGE_KEYS.AUTH_EVENT, { event, user, timestamp: Date.now() });
-      
-      // Send message to all extension components
-      chrome.runtime.sendMessage({
-        type: 'AUTH_STATE_CHANGE',
-        event,
-        user
-      }).catch(err => {
-        // Ignore errors from no listeners
-        if (!err.message?.includes('Could not establish connection')) {
-          logger.error('Error broadcasting auth state change:', err);
-        }
-      });
-    } catch (error) {
-      logger.error('Error triggering auth state change:', error);
-    }
-  },
-  
-  /**
-   * Set up auth state change listener
-   * @param {Function} callback - Function to call when auth state changes
-   * @returns {Function} Function to remove listener
-   */
-  onAuthStateChange: function(callback) {
-    const listener = (changes, areaName) => {
-      if (areaName !== 'local') return;
-      
-      if (changes[STORAGE_KEYS.AUTH_EVENT]) {
-        const newValue = changes[STORAGE_KEYS.AUTH_EVENT].newValue;
-        if (newValue) {
-          callback(newValue.event, newValue.user);
-        }
-      }
-    };
-    
-    chrome.storage.onChanged.addListener(listener);
-    
-    // Return function to remove listener
-    return () => {
-      chrome.storage.onChanged.removeListener(listener);
-    };
   }
 };
