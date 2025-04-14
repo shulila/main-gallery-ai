@@ -4,6 +4,13 @@ import { storage, STORAGE_KEYS } from '../storage.js';
 import { syncAuthState, removeAuthCookies } from '../cookie-sync.js';
 import { signInWithGoogle, processGoogleCallback } from './google-auth.js';
 
+interface AuthResult {
+  success: boolean;
+  error?: string;
+  user?: any;
+  message?: string;
+}
+
 export const authService = {
   getSession: async () => {
     try {
@@ -44,7 +51,7 @@ export const authService = {
   signInWithGoogle,
   processGoogleCallback,
 
-  signOut: async () => {
+  signOut: async (): Promise<AuthResult> => {
     try {
       const session = await authService.getSession();
       
@@ -62,7 +69,7 @@ export const authService = {
       }
 
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error signing out:', error);
       return { success: false, error: error.message };
     }
@@ -77,4 +84,3 @@ export async function initAuthService() {
     logger.error('Error initializing auth service:', error);
   }
 }
-

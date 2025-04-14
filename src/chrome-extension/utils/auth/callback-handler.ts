@@ -14,6 +14,12 @@ import { storage, STORAGE_KEYS } from '../storage.js';
 let isProcessingCallback = false;
 let lastProcessedUrl = '';
 
+interface CallbackResult {
+  success: boolean;
+  error?: string;
+  user?: any;
+}
+
 /**
  * Set up callback URL listener
  */
@@ -34,7 +40,7 @@ export function setupCallbackUrlListener(): void {
           
           // Process the callback URL
           processCallbackUrl(tab.url, tabId)
-            .then((result: any) => {
+            .then((result: CallbackResult) => {
               if (result.success) {
                 logger.log('Successfully processed callback URL');
                 
@@ -90,7 +96,7 @@ export function setupCallbackUrlListener(): void {
         
         // Process the callback URL
         processCallbackUrl(details.url, details.tabId)
-          .then((result: any) => {
+          .then((result: CallbackResult) => {
             if (result.success) {
               logger.log('Successfully processed callback URL from history state update');
               
@@ -140,7 +146,7 @@ export function isCallbackUrl(url: string): boolean {
 /**
  * Process the callback URL and handle the authentication
  */
-export async function processCallbackUrl(url: string, tabId?: number): Promise<{success: boolean, error?: string}> {
+export async function processCallbackUrl(url: string, tabId?: number): Promise<CallbackResult> {
   try {
     logger.log('Processing callback URL');
     
@@ -186,7 +192,7 @@ export async function processCallbackUrl(url: string, tabId?: number): Promise<{
     }
     
     // Set a timeout to prevent hanging
-    const timeoutPromise = new Promise<{success: boolean, error: string}>((_, reject) => {
+    const timeoutPromise = new Promise<CallbackResult>((_, reject) => {
       setTimeout(() => {
         reject(new Error('Authentication timed out'));
       }, AUTH_TIMEOUTS.LOGIN_TIMEOUT);

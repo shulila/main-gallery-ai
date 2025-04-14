@@ -8,10 +8,23 @@ import { storage, STORAGE_KEYS } from '../storage.js';
 import { syncAuthState } from '../cookie-sync.js';
 import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES, WEB_APP_URLS } from '../oauth-config.js';
 
+interface UserInfo {
+  sub: string;
+  email: string;
+  name: string;
+  picture: string;
+}
+
+interface AuthResult {
+  success: boolean;
+  error?: string;
+  user?: any;
+}
+
 /**
  * Get user info from Google API
  */
-async function getUserInfo(accessToken: string) {
+async function getUserInfo(accessToken: string): Promise<UserInfo> {
   const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { 'Authorization': `Bearer ${accessToken}` }
   });
@@ -26,11 +39,11 @@ async function getUserInfo(accessToken: string) {
 /**
  * Sign in with Google using chrome.identity API
  */
-export async function signInWithGoogle(): Promise<{success: boolean, error?: string, user?: any}> {
+export async function signInWithGoogle(): Promise<AuthResult> {
   try {
     logger.log('Initiating Google sign in with chrome.identity');
 
-    return new Promise((resolve) => {
+    return new Promise<AuthResult>((resolve) => {
       chrome.identity.getAuthToken({ interactive: true }, async (token) => {
         if (chrome.runtime.lastError) {
           logger.error('Error getting auth token:', chrome.runtime.lastError);
@@ -100,7 +113,7 @@ export async function signInWithGoogle(): Promise<{success: boolean, error?: str
 /**
  * Process Google callback URL
  */
-export async function processGoogleCallback(url: string): Promise<{success: boolean, error?: string, user?: any}> {
+export async function processGoogleCallback(url: string): Promise<AuthResult> {
   try {
     if (!url) {
       return { success: false, error: 'No callback URL provided' };
