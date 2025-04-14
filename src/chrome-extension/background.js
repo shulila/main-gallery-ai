@@ -4,21 +4,102 @@
 
 // Import utilities
 import { logger } from './utils/logger.js';
-import { setupAuthListeners } from './background/auth.js';
-import { setupMessageHandlers } from './background/messaging.js';
-import { setupCallbackUrlListener, processCallbackUrl, isCallbackUrl } from './utils/callback-handler.js';
+import { supabase } from './utils/supabaseClient.js';
+import { setupCallbackUrlListener, isCallbackUrl, processCallbackUrl } from './utils/callback-handler.js';
+import { authService } from './utils/auth-service.js';
 
 // Log script initialization
 logger.log('Background script initialized');
 
-// Initialize authentication
-setupAuthListeners();
-
-// Set up message handlers
-setupMessageHandlers();
-
 // Set up callback URL listener for OAuth
 setupCallbackUrlListener();
+
+// Set up messaging system
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Handle messages asynchronously
+  handleMessage(message, sender)
+    .then(response => {
+      if (response) sendResponse(response);
+    })
+    .catch(error => {
+      logger.error('Error handling message:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+  
+  // Return true to indicate we will send a response asynchronously
+  return true;
+});
+
+// Handle messages from popup and content scripts
+async function handleMessage(message, sender) {
+  try {
+    if (!message.action && !message.type) {
+      return { success: false, error: 'Invalid message format' };
+    }
+    
+    const action = message.action || message.type;
+    logger.log('Received message:', action);
+    
+    switch (action) {
+      case 'checkAuth':
+      case 'CHECK_AUTH':
+        const isAuthenticated = await authService.isAuthenticated();
+        const user = isAuthenticated ? await authService.getUser() : null;
+        return { success: true, isAuthenticated, user };
+        
+      case 'login':
+      case 'SIGN_IN_EMAIL':
+        return await authService.signInWithEmailPassword(message.email, message.password);
+        
+      case 'loginWithGoogle':
+      case 'SIGN_IN_GOOGLE':
+        return await authService.signInWithGoogle();
+        
+      case 'logout':
+      case 'SIGN_OUT':
+        return await authService.signOut();
+        
+      case 'handleAuthToken':
+      case 'HANDLE_AUTH_URL':
+        if (message.url) {
+          return await processCallbackUrl(message.url);
+        } else if (message.token) {
+          return await supabase.auth.handleOAuthToken(message.token, message.provider || 'google');
+        }
+        return { success: false, error: 'No URL or token provided' };
+        
+      case 'openAuthPage':
+        chrome.tabs.create({ url: 'https://main-gallery-ai.lovable.app/auth' });
+        return { success: true };
+        
+      case 'openGallery':
+        const galleryUrl = 'https://main-gallery-ai.lovable.app/gallery';
+        
+        // Check if a gallery tab is already open
+        chrome.tabs.query({ url: `${galleryUrl}*` }, (tabs) => {
+          if (tabs.length > 0) {
+            // Focus the existing tab
+            chrome.tabs.update(tabs[0].id, { active: true });
+            chrome.windows.update(tabs[0].windowId, { focused: true });
+          } else {
+            // Open a new tab
+            chrome.tabs.create({ url: galleryUrl });
+          }
+        });
+        return { success: true };
+        
+      case 'PING':
+        return { success: true, message: 'PONG' };
+        
+      default:
+        logger.warn('Unknown message type:', action);
+        return { success: false, error: 'Unknown message type' };
+    }
+  } catch (error) {
+    logger.error('Error handling message:', error);
+    return { success: false, error: error.message };
+  }
+}
 
 // Listen for tab updates to capture OAuth callbacks
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {

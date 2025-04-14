@@ -1,140 +1,56 @@
 
 /**
- * Auth utilities for Chrome Extension
- * Fixed version that works with the Service Worker compatible Supabase client
+ * Authentication utilities for the extension
+ * Wrapper around auth-service.js for backwards compatibility
  */
 
-import { supabase } from './supabaseClient.js';
 import { logger } from './logger.js';
+import { authService } from './auth-service.js';
+import { isCallbackUrl, processCallbackUrl } from './callback-handler.js';
 
 /**
- * Check if user is logged in
- * @returns {Promise<boolean>} Whether the user is logged in
+ * Check if user is authenticated
+ * @returns {Promise<boolean>} Whether user is authenticated
  */
 export async function isLoggedIn() {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const loggedIn = !!session;
-    logger.time('isLoggedIn check result:', loggedIn);
-    return loggedIn;
-  } catch (error) {
-    logger.error('Error checking login status:', error);
-    return false;
-  }
+  return await authService.isAuthenticated();
 }
 
 /**
- * Open auth page for specified provider
- * @param {string} provider - Auth provider (google, facebook, etc.)
- * @returns {Promise<void>}
- */
-export async function openAuthPage(provider = 'google') {
-  try {
-    logger.time('Opening auth page for provider:', provider);
-    
-    // For Google auth, use direct Chrome Identity API approach
-    if (provider === 'google') {
-      logger.log('Using Chrome Identity API for Google auth');
-      
-      // Show loading state in UI if needed
-      chrome.storage.local.set({ 'auth_loading': true });
-      
-      // This function will be called from popup.js, not from background.js
-      // So we need to send a message to background.js to handle the auth flow
-      chrome.runtime.sendMessage(
-        { action: 'startGoogleAuth' },
-        (response) => {
-          // Clear loading state
-          chrome.storage.local.set({ 'auth_loading': false });
-          
-          if (chrome.runtime.lastError) {
-            logger.error('Error starting Google auth:', chrome.runtime.lastError);
-            // Notify UI of error
-            chrome.storage.local.set({ 
-              'auth_error': chrome.runtime.lastError.message || 'Failed to start authentication'
-            });
-            return;
-          }
-          
-          if (response && response.error) {
-            logger.error('Error in Google auth response:', response.error);
-            // Notify UI of error
-            chrome.storage.local.set({ 'auth_error': response.error });
-          } else if (response && response.success) {
-            logger.log('Google auth succeeded via Chrome Identity API');
-            // Notify UI of success
-            chrome.storage.local.set({ 'auth_success': true });
-          }
-        }
-      );
-      return;
-    }
-    
-    // For other providers, use Supabase OAuth
-    logger.log('Using Supabase OAuth for provider:', provider);
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: provider,
-      options: {
-        redirectTo: chrome.identity.getRedirectURL()
-      }
-    });
-    
-    if (error) throw error;
-    
-    if (data?.url) {
-      logger.log('Opening OAuth URL:', data.url);
-      // Open in a new tab
-      chrome.tabs.create({ url: data.url });
-    }
-  } catch (error) {
-    logger.error(`Error opening ${provider} auth page:`, error);
-    // Notify UI of error
-    chrome.storage.local.set({ 'auth_error': error.message || `Failed to open ${provider} auth page` });
-    throw error;
-  }
-}
-
-/**
- * Get current user's email
+ * Get user email
  * @returns {Promise<string|null>} User email or null if not logged in
  */
 export async function getUserEmail() {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user?.email || null;
-  } catch (error) {
-    logger.error('Error getting user email:', error);
-    return null;
+  const user = await authService.getUser();
+  return user?.email || null;
+}
+
+/**
+ * Open auth page in new tab
+ * @param {string} [provider] Provider to use for authentication
+ * @returns {Promise<void>}
+ */
+export async function openAuthPage(provider = null) {
+  let authUrl = 'https://main-gallery-ai.lovable.app/auth';
+  
+  if (provider) {
+    authUrl += `?provider=${provider}`;
   }
+  
+  chrome.tabs.create({ url: authUrl });
 }
 
 /**
  * Log out current user
- * @returns {Promise<{success: boolean, error?: string}>}
+ * @returns {Promise<boolean>} Whether logout was successful
  */
 export async function logout() {
-  try {
-    logger.time('Logging out user');
-    const { error } = await supabase.auth.signOut();
-    
-    if (error) throw error;
-    
-    // Notify that auth state changed
-    chrome.storage.local.set({ auth_event: 'SIGNED_OUT' });
-    logger.log('User logged out successfully');
-    
-    return { success: true };
-  } catch (error) {
-    logger.error('Error logging out:', error);
-    return { 
-      success: false, 
-      error: error.message || 'Logout failed. Please try again.'
-    };
-  }
+  const result = await authService.signOut();
+  return result.success;
 }
 
 /**
- * Handle auth errors and reset state
+ * Reset any auth errors
  * @returns {Promise<void>}
  */
 export async function resetAuthErrors() {
@@ -148,34 +64,25 @@ export async function resetAuthErrors() {
 }
 
 /**
- * Verify token validity with Google API
- * Useful for confirming or refreshing tokens
- * @param {string} token - OAuth token to verify
- * @returns {Promise<boolean>} - Whether the token is valid
+ * Handle OAuth token received from Google
+ * @param {string} token - OAuth token
+ * @param {string} [provider='google'] - Auth provider
+ * @returns {Promise<boolean>} Success status
  */
-export async function verifyGoogleToken(token) {
+export async function handleAuthToken(token, provider = 'google') {
   try {
-    if (!token) return false;
-    
-    logger.time('Verifying Google token');
-    
-    // Use Google's token info endpoint to verify the token
-    const response = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`);
-    
-    if (!response.ok) {
-      logger.warn('Token verification failed with status:', response.status);
-      return false;
-    }
-    
-    const data = await response.json();
-    
-    // Check if token has required scopes
-    const hasScopes = data.scope?.includes('email') && data.scope?.includes('profile');
-    
-    logger.time('Token verification result:', { valid: true, hasScopes });
-    return hasScopes;
+    const result = await authService.processGoogleCallback(
+      `https://example.com/callback#access_token=${token}&token_type=bearer&expires_in=3600`
+    );
+    return result.success;
   } catch (error) {
-    logger.error('Error verifying Google token:', error);
+    logger.error('Error handling auth token:', error);
     return false;
   }
 }
+
+// Export additional functions for backwards compatibility
+export {
+  isCallbackUrl,
+  processCallbackUrl
+};
