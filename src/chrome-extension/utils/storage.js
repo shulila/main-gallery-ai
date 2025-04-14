@@ -17,8 +17,12 @@ export const STORAGE_KEYS = {
 export const storage = {
   get: async function(key, defaultValue) {
     try {
-      // Using array syntax for key to be consistent with TypeScript implementation
-      const result = await chrome.storage.local.get([key]);
+      // Using Promise-based wrapper around the callback API
+      const result = await new Promise((resolve) => {
+        chrome.storage.local.get([key], (items) => {
+          resolve(items);
+        });
+      });
       return result[key] !== undefined ? result[key] : (defaultValue ?? null);
     } catch (error) {
       logger.error(`Error getting ${key} from storage:`, error);
@@ -28,7 +32,11 @@ export const storage = {
   
   set: async function(key, value) {
     try {
-      await chrome.storage.local.set({ [key]: value });
+      await new Promise((resolve) => {
+        chrome.storage.local.set({ [key]: value }, () => {
+          resolve();
+        });
+      });
       return true;
     } catch (error) {
       logger.error(`Error setting ${key} in storage:`, error);
@@ -38,7 +46,11 @@ export const storage = {
   
   remove: async function(key) {
     try {
-      await chrome.storage.local.remove(key);
+      await new Promise((resolve) => {
+        chrome.storage.local.remove(key, () => {
+          resolve();
+        });
+      });
       return true;
     } catch (error) {
       logger.error(`Error removing ${key} from storage:`, error);
@@ -48,7 +60,11 @@ export const storage = {
   
   clear: async function() {
     try {
-      await chrome.storage.local.clear();
+      await new Promise((resolve) => {
+        chrome.storage.local.clear(() => {
+          resolve();
+        });
+      });
       return true;
     } catch (error) {
       logger.error('Error clearing storage:', error);
@@ -58,7 +74,11 @@ export const storage = {
   
   getAll: async function() {
     try {
-      return await chrome.storage.local.get(null);
+      return await new Promise((resolve) => {
+        chrome.storage.local.get(null, (items) => {
+          resolve(items);
+        });
+      });
     } catch (error) {
       logger.error('Error getting all storage data:', error);
       return {};

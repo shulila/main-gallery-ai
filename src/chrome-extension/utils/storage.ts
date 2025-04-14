@@ -11,9 +11,13 @@ export const STORAGE_KEYS = {
 export const storage = {
   get: async <T = any>(key: string, defaultValue?: T): Promise<T | null> => {
     try {
-      // The chrome.storage.local.get method actually expects either a string, array of strings, or an object
-      // We're using a string key, so this should work properly
-      const result = await chrome.storage.local.get([key]);
+      // The chrome.storage.local.get method expects a callback as second argument
+      // We need to wrap it in a Promise to use await
+      const result = await new Promise<Record<string, any>>((resolve) => {
+        chrome.storage.local.get([key], (items) => {
+          resolve(items);
+        });
+      });
       return result[key] !== undefined ? result[key] : (defaultValue ?? null);
     } catch (error) {
       logger.error('Storage get error:', error);
@@ -23,7 +27,11 @@ export const storage = {
 
   set: async <T>(key: string, value: T): Promise<boolean> => {
     try {
-      await chrome.storage.local.set({ [key]: value });
+      await new Promise<void>((resolve) => {
+        chrome.storage.local.set({ [key]: value }, () => {
+          resolve();
+        });
+      });
       return true;
     } catch (error) {
       logger.error('Storage set error:', error);
@@ -33,7 +41,11 @@ export const storage = {
 
   remove: async (key: string): Promise<boolean> => {
     try {
-      await chrome.storage.local.remove(key);
+      await new Promise<void>((resolve) => {
+        chrome.storage.local.remove(key, () => {
+          resolve();
+        });
+      });
       return true;
     } catch (error) {
       logger.error('Storage remove error:', error);
@@ -43,7 +55,11 @@ export const storage = {
 
   clear: async (): Promise<boolean> => {
     try {
-      await chrome.storage.local.clear();
+      await new Promise<void>((resolve) => {
+        chrome.storage.local.clear(() => {
+          resolve();
+        });
+      });
       return true;
     } catch (error) {
       logger.error('Storage clear error:', error);
