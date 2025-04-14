@@ -1,4 +1,3 @@
-
 import { logger } from '../logger.js';
 import { storage, STORAGE_KEYS } from '../storage.js';
 import { syncAuthState } from '../cookie-sync.js';
@@ -49,6 +48,9 @@ export async function signInWithGoogle(): Promise<AuthResult> {
           const user = {
             id: userInfo.sub,
             email: userInfo.email,
+            name: userInfo.name,
+            picture: userInfo.picture,
+            provider: 'google',
             user_metadata: {
               full_name: userInfo.name,
               avatar_url: userInfo.picture
@@ -116,6 +118,9 @@ export async function processGoogleCallback(url: string): Promise<AuthResult> {
     const user = {
       id: userInfo.sub,
       email: userInfo.email,
+      name: userInfo.name,
+      picture: userInfo.picture,
+      provider: 'google',
       user_metadata: {
         full_name: userInfo.name,
         avatar_url: userInfo.picture
@@ -130,8 +135,8 @@ export async function processGoogleCallback(url: string): Promise<AuthResult> {
       provider_token: accessToken,
       access_token: accessToken,
       expires_at: Date.now() + 3600 * 1000,
-      user,
-      created_at: Date.now()
+      created_at: Date.now(),
+      user
     };
 
     await storage.set(STORAGE_KEYS.SESSION, session);

@@ -1,9 +1,10 @@
-
 interface AuthSession {
   provider: string;
-  token: string;
-  expires_at: string;
-  created_at: string;
+  provider_token: string;
+  access_token: string;
+  expires_at: number;
+  created_at: number;
+  user?: AuthUser;
 }
 
 interface AuthUser {
@@ -12,6 +13,13 @@ interface AuthUser {
   name: string;
   picture: string;
   provider: string;
+  user_metadata?: {
+    full_name?: string;
+    avatar_url?: string;
+  };
+  app_metadata?: {
+    provider?: string;
+  };
 }
 
 interface AuthResult {

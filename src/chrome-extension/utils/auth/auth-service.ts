@@ -3,11 +3,12 @@ import { logger } from '../logger.js';
 import { storage, STORAGE_KEYS } from '../storage.js';
 import { COOKIE_CONFIG, WEB_APP_URLS } from '../oauth-config.js';
 import { syncAuthToCookies } from '../cookie-sync.js';
+import { processGoogleCallback } from './google-auth.ts';
 
 class AuthService {
   async isAuthenticated(): Promise<boolean> {
     try {
-      const session = await storage.get(STORAGE_KEYS.SESSION) as AuthSession | null;
+      const session = await storage.get<AuthSession>(STORAGE_KEYS.SESSION);
       
       if (!session) return false;
       
@@ -26,7 +27,7 @@ class AuthService {
 
   async getUser(): Promise<AuthUser | null> {
     try {
-      return await storage.get(STORAGE_KEYS.USER) as AuthUser | null;
+      return await storage.get<AuthUser>(STORAGE_KEYS.USER);
     } catch (error) {
       logger.error('Error getting user:', error);
       return null;
@@ -74,9 +75,10 @@ class AuthService {
 
       const session: AuthSession = {
         provider: 'google',
-        token: token,
-        expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
-        created_at: new Date().toISOString()
+        provider_token: token,
+        access_token: token,
+        expires_at: Date.now() + 3600 * 1000,
+        created_at: Date.now()
       };
 
       await storage.set(STORAGE_KEYS.SESSION, session);
@@ -95,12 +97,12 @@ class AuthService {
 
   async signOut(): Promise<AuthResult> {
     try {
-      const session = await storage.get(STORAGE_KEYS.SESSION) as AuthSession | null;
+      const session = await storage.get<AuthSession>(STORAGE_KEYS.SESSION);
 
-      if (session?.provider === 'google' && session.token) {
+      if (session?.provider === 'google' && session.provider_token) {
         try {
           await new Promise<void>((resolve) => {
-            chrome.identity.removeCachedAuthToken({ token: session.token }, resolve);
+            chrome.identity.removeCachedAuthToken({ token: session.provider_token }, resolve);
           });
           logger.log('Removed cached auth token');
         } catch (error) {
@@ -120,6 +122,11 @@ class AuthService {
         error: error instanceof Error ? error.message : 'An error occurred during sign out'
       };
     }
+  }
+
+  // Add the missing processGoogleCallback method
+  async processGoogleCallback(url: string): Promise<AuthResult> {
+    return await processGoogleCallback(url);
   }
 }
 
