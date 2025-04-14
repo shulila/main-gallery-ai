@@ -81,6 +81,23 @@ export async function handleAuthToken(token, provider = 'google') {
   }
 }
 
+/**
+ * Handle authentication URL
+ * @param {string} url - Auth callback URL
+ * @returns {Promise<{success: boolean, error?: string}>} Result
+ */
+export async function handleAuthUrl(url) {
+  if (!url) {
+    return { success: false, error: 'No URL provided' };
+  }
+  
+  if (!isCallbackUrl(url)) {
+    return { success: false, error: 'Not a valid callback URL' };
+  }
+  
+  return await processCallbackUrl(url);
+}
+
 // Export additional functions for backwards compatibility
 export {
   isCallbackUrl,

@@ -1,10 +1,10 @@
+
 /**
  * Background script for MainGallery.AI Chrome Extension
  */
 
 // Import utilities
 import { logger } from './utils/logger.js';
-import { supabase } from './utils/supabaseClient.js';
 import { setupCallbackUrlListener, isCallbackUrl, processCallbackUrl } from './utils/callback-handler.js';
 import { authService } from './utils/auth-service.js';
 
@@ -64,7 +64,9 @@ async function handleMessage(message, sender) {
         if (message.url) {
           return await processCallbackUrl(message.url);
         } else if (message.token) {
-          return await supabase.auth.handleOAuthToken(message.token, message.provider || 'google');
+          return await authService.processGoogleCallback(
+            `https://example.com/callback#access_token=${message.token}&token_type=bearer&expires_in=3600`
+          );
         }
         return { success: false, error: 'No URL or token provided' };
         
