@@ -5,8 +5,8 @@ import { COOKIE_CONFIG, WEB_APP_URLS } from '../oauth-config.js';
 import { syncAuthToCookies } from '../cookie-sync.js';
 import { processGoogleCallback } from './google-auth.ts';
 
-// Import type definitions
-import '../../../types/auth.d.ts';
+// Import types directly from the type file
+import type { AuthUser, AuthSession, AuthResult } from '../types/auth';
 
 class AuthService {
   async isAuthenticated(): Promise<boolean> {
@@ -128,7 +128,7 @@ class AuthService {
     }
   }
 
-  // Add the missing processGoogleCallback method
+  // Add the processGoogleCallback method
   async processGoogleCallback(url: string): Promise<AuthResult> {
     return await processGoogleCallback(url);
   }

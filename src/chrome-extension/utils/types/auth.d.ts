@@ -20,3 +20,18 @@ interface AuthSession {
   user: AuthUser;
   created_at: number;
 }
+
+interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  picture: string;
+  provider: string;
+  user_metadata?: {
+    full_name?: string;
+    avatar_url?: string;
+  };
+  app_metadata?: {
+    provider?: string;
+  };
+}

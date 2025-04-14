@@ -4,8 +4,8 @@ import { storage, STORAGE_KEYS } from '../storage.js';
 import { syncAuthState } from '../cookie-sync.js';
 import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from '../oauth-config.js';
 
-// Import type definitions
-import '../../../types/auth.d.ts';
+// Import types directly
+import type { AuthUser, AuthSession, AuthResult, UserInfo } from '../types/auth';
 
 /**
  * Get user info from Google API
