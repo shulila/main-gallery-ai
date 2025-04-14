@@ -1,24 +1,20 @@
 
-/**
- * Google authentication for MainGallery.AI Chrome Extension
- */
-
 import { logger } from '../logger.js';
 import { storage, STORAGE_KEYS } from '../storage.js';
 import { syncAuthState } from '../cookie-sync.js';
 import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES, WEB_APP_URLS } from '../oauth-config.js';
+
+interface AuthResult {
+  success: boolean;
+  error?: string;
+  user?: any;
+}
 
 interface UserInfo {
   sub: string;
   email: string;
   name: string;
   picture: string;
-}
-
-interface AuthResult {
-  success: boolean;
-  error?: string;
-  user?: any;
 }
 
 /**
