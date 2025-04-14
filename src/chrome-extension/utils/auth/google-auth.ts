@@ -1,7 +1,11 @@
+
 import { logger } from '../logger.js';
 import { storage, STORAGE_KEYS } from '../storage.js';
 import { syncAuthState } from '../cookie-sync.js';
 import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from '../oauth-config.js';
+
+// Import type definitions
+import '../../../types/auth.d.ts';
 
 /**
  * Get user info from Google API
@@ -45,7 +49,7 @@ export async function signInWithGoogle(): Promise<AuthResult> {
         try {
           const userInfo = await getUserInfo(token);
           
-          const user = {
+          const user: AuthUser = {
             id: userInfo.sub,
             email: userInfo.email,
             name: userInfo.name,
@@ -65,8 +69,8 @@ export async function signInWithGoogle(): Promise<AuthResult> {
             provider_token: token,
             access_token: token,
             expires_at: Date.now() + 3600 * 1000,
-            user,
-            created_at: Date.now()
+            created_at: Date.now(),
+            user
           };
 
           await storage.set(STORAGE_KEYS.SESSION, session);
@@ -115,7 +119,7 @@ export async function processGoogleCallback(url: string): Promise<AuthResult> {
 
     const userInfo = await getUserInfo(accessToken);
 
-    const user = {
+    const user: AuthUser = {
       id: userInfo.sub,
       email: userInfo.email,
       name: userInfo.name,

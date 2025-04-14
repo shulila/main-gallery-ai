@@ -2,7 +2,7 @@
 interface AuthResult {
   success: boolean;
   error?: string;
-  user?: any;
+  user?: AuthUser;
 }
 
 interface UserInfo {
@@ -17,6 +17,6 @@ interface AuthSession {
   provider_token: string;
   access_token: string;
   expires_at: number;
-  user: any;
+  user: AuthUser;
   created_at: number;
 }

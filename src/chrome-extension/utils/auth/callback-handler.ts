@@ -4,10 +4,13 @@ import { authService } from './auth-service.js';
 import { syncAuthState } from '../cookie-sync.js';
 import { WEB_APP_URLS } from '../oauth-config.js';
 
+// Import type definitions
+import '../../../types/auth.d.ts';
+
 interface CallbackResult {
   success: boolean;
   error?: string;
-  user?: any;
+  user?: AuthUser;
 }
 
 // Track processing state to prevent duplicate processing

@@ -5,6 +5,9 @@ import { COOKIE_CONFIG, WEB_APP_URLS } from '../oauth-config.js';
 import { syncAuthToCookies } from '../cookie-sync.js';
 import { processGoogleCallback } from './google-auth.ts';
 
+// Import type definitions
+import '../../../types/auth.d.ts';
+
 class AuthService {
   async isAuthenticated(): Promise<boolean> {
     try {
@@ -78,7 +81,8 @@ class AuthService {
         provider_token: token,
         access_token: token,
         expires_at: Date.now() + 3600 * 1000,
-        created_at: Date.now()
+        created_at: Date.now(),
+        user // Include user in the session
       };
 
       await storage.set(STORAGE_KEYS.SESSION, session);
