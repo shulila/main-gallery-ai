@@ -9,13 +9,13 @@ export const STORAGE_KEYS = {
 } as const;
 
 export const storage = {
-  get: async <T>(key: string): Promise<T | null> => {
+  get: async <T = any>(key: string, defaultValue?: T): Promise<T | null> => {
     try {
       const result = await chrome.storage.local.get(key);
-      return result[key] || null;
+      return result[key] !== undefined ? result[key] : (defaultValue ?? null);
     } catch (error) {
       logger.error('Storage get error:', error);
-      return null;
+      return defaultValue ?? null;
     }
   },
 
