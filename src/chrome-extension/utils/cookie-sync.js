@@ -1,4 +1,3 @@
-
 /**
  * Cookie synchronization utility for MainGallery.AI Chrome Extension
  * Handles synchronization of authentication state between extension and web app
@@ -58,13 +57,17 @@ export async function syncAuthState() {
  * Set auth cookies in web app from session data
  */
 export async function setAuthCookies(session) {
-  if (!session) return false;
-  
   try {
+    if (!session) {
+      logger.warn('No session data provided, cannot set auth cookies');
+      return false;
+    }
+    
     const expiresInSeconds = session.expires_at 
-      ? Math.floor((session.expires_at - Date.now()) / 1000)
+      ? Math.floor((new Date(session.expires_at).getTime() - Date.now()) / 1000)
       : 3600;
     
+    // Set session cookie
     await chrome.cookies.set({
       url: WEB_APP_URLS.BASE,
       name: COOKIE_CONFIG.NAMES.SESSION,
@@ -77,7 +80,23 @@ export async function setAuthCookies(session) {
       expirationDate: Math.floor(Date.now() / 1000) + expiresInSeconds
     });
     
+    if (session.access_token) {
+      // Set access token cookie
+      await chrome.cookies.set({
+        url: WEB_APP_URLS.BASE,
+        name: COOKIE_CONFIG.NAMES.ACCESS_TOKEN,
+        value: session.access_token,
+        domain: COOKIE_CONFIG.DOMAIN,
+        path: '/',
+        secure: true,
+        httpOnly: false,
+        sameSite: 'lax',
+        expirationDate: Math.floor(Date.now() / 1000) + expiresInSeconds
+      });
+    }
+    
     if (session.user) {
+      // Set user cookie
       await chrome.cookies.set({
         url: WEB_APP_URLS.BASE,
         name: COOKIE_CONFIG.NAMES.USER,
@@ -91,6 +110,7 @@ export async function setAuthCookies(session) {
       });
     }
     
+    logger.log('Successfully set auth cookies');
     return true;
   } catch (error) {
     logger.error('Error setting auth cookies:', error);
@@ -167,4 +187,3 @@ export async function hasAuthCookies() {
     return false;
   }
 }
-

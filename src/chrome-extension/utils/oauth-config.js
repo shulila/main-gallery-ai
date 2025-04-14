@@ -1,4 +1,3 @@
-
 /**
  * OAuth configuration for MainGallery.AI Chrome Extension
  * מגדיר פרמטרים לאימות ב-OAuth
@@ -48,6 +47,27 @@ export const COOKIE_CONFIG = {
     SESSION: 'sb-ovhriawcqvcpagcaidlb-auth-token',
     
     // User cookie
-    USER: 'main-gallery-user'
+    USER: 'main-gallery-user',
+    
+    // Access token cookie
+    ACCESS_TOKEN: 'sb-access-token',
+    
+    // Refresh token cookie
+    REFRESH_TOKEN: 'sb-refresh-token'
   }
+};
+
+// Authentication timeouts
+export const AUTH_TIMEOUTS = {
+  // Login timeout (1 minute) 
+  LOGIN_TIMEOUT: 60000,
+  
+  // Session refresh interval (1 hour)
+  SESSION_REFRESH: 3600000,
+  
+  // Token refresh margin (5 minutes before expiry)
+  TOKEN_REFRESH_MARGIN: 300000,
+  
+  // Auth sync interval (30 seconds)
+  AUTH_SYNC_INTERVAL: 30000
 };

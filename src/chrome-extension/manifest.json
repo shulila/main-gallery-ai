@@ -13,6 +13,10 @@
     "cookies"
   ],
   "host_permissions": [
+    "https://*.main-gallery-ai.lovable.app/*",
+    "https://*.preview-main-gallery-ai.lovable.app/*",
+    "https://accounts.google.com/*",
+    "https://www.googleapis.com/*",
     "https://*.midjourney.com/*",
     "https://*.leonardo.ai/*",
     "https://*.openai.com/*",
@@ -46,11 +50,7 @@
     "https://*.neural.love/*",
     "https://*.vidu.com/*",
     "https://*.promeai.pro/*",
-    "https://*.genspark.ai/*",
-    "https://*.main-gallery-ai.lovable.app/*",
-    "https://*.preview-main-gallery-ai.lovable.app/*",
-    "https://accounts.google.com/*",
-    "https://www.googleapis.com/*"
+    "https://*.genspark.ai/*"
   ],
   "background": {
     "service_worker": "background.js",
