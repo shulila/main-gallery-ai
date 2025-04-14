@@ -5,10 +5,8 @@
 
 import { logger } from './logger.js';
 import { storage, STORAGE_KEYS } from './storage.js';
-
-// Supabase configuration
-const SUPABASE_URL = 'https://ovhriawcqvcpagcaidlb.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHJpYXdjcXZjcGFnY2FpZGxiIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTQ1MzQwMDAsImV4cCI6MjAxMDExMDAwMH0.qmJ_BHGaVWoVLnkSLDLiDxQGTALQZqODSPTwDgLqJWo';
+import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES, WEB_APP_URLS } from './oauth-config.js';
+import { syncAuthState, removeAuthCookies } from './cookie-sync.js';
 
 // Authentication service
 export const authService = {
@@ -16,7 +14,7 @@ export const authService = {
    * Get current session
    * @returns {Promise<Object|null>} Session object or null if not authenticated
    */
-  getSession: async function()  {
+  getSession: async function() {
     try {
       const session = await storage.get(STORAGE_KEYS.SESSION);
       
@@ -77,45 +75,105 @@ export const authService = {
         };
       }
       
-      // Call Supabase API
-      const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify({ email, password })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        return {
-          success: false,
-          error: errorData.error_description || errorData.message || 'Invalid email or password'
-        };
-      }
-      
-      const data = await response.json();
-      
-      // Save session and user data
-      await storage.set(STORAGE_KEYS.SESSION, {
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-        expires_at: Date.now() + (data.expires_in * 1000),
-        user: data.user
-      });
-      
-      await storage.set(STORAGE_KEYS.USER, data.user);
+      // For the Chrome extension, we'll redirect to the web app for email/password auth
+      chrome.tabs.create({ url: WEB_APP_URLS.AUTH });
       
       return {
-        success: true,
-        user: data.user
+        success: false,
+        error: 'Email sign-in is handled through the web app'
       };
     } catch (error) {
       logger.error('Error signing in with email:', error);
       return {
         success: false,
         error: error.message || 'An error occurred during sign in'
+      };
+    }
+  },
+  
+  /**
+   * Sign in with Google using Chrome Identity API
+   * @returns {Promise<{success: boolean, error?: string, user?: Object}>}
+   */
+  signInWithGoogle: async function() {
+    try {
+      logger.log('Signing in with Google via Chrome Identity API');
+      
+      // Use Chrome Identity API to get Google auth token
+      const token = await new Promise((resolve, reject) => {
+        chrome.identity.getAuthToken({ interactive: true }, (token) => {
+          if (chrome.runtime.lastError) {
+            logger.error('Chrome Identity API error:', chrome.runtime.lastError);
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(token);
+          }
+        });
+      });
+      
+      if (!token) {
+        logger.error('No token received from Chrome Identity API');
+        return {
+          success: false,
+          error: 'Failed to get authentication token from Google'
+        };
+      }
+      
+      logger.log('Successfully got token from Chrome Identity API');
+      
+      // Get user info from Google
+      const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!userInfoResponse.ok) {
+        throw new Error(`Failed to get user info: ${userInfoResponse.status}`);
+      }
+      
+      const userInfo = await userInfoResponse.json();
+      
+      // Create user object
+      const user = {
+        id: userInfo.sub,
+        email: userInfo.email,
+        user_metadata: {
+          full_name: userInfo.name,
+          avatar_url: userInfo.picture
+        },
+        app_metadata: {
+          provider: 'google'
+        }
+      };
+      
+      // Create session object
+      const session = {
+        provider: 'google',
+        provider_token: token,
+        access_token: token,
+        expires_at: new Date(Date.now() + 3600 * 1000).toISOString(), // 1 hour expiry
+        user: user
+      };
+      
+      // Save session and user data
+      await storage.set(STORAGE_KEYS.SESSION, session);
+      await storage.set(STORAGE_KEYS.USER, user);
+      
+      // Sync with web app
+      await syncAuthState();
+      
+      logger.log('Google authentication successful');
+      
+      return {
+        success: true,
+        user: user
+      };
+    } catch (error) {
+      logger.error('Error signing in with Google:', error);
+      return {
+        success: false,
+        error: error.message || 'An error occurred during Google authentication'
       };
     }
   },
@@ -138,18 +196,15 @@ export const authService = {
       
       // Extract access token from URL
       let accessToken = '';
-      let refreshToken = '';
       
       // Check hash parameters first (#access_token=...)
       const hashParams = new URLSearchParams(url.split('#')[1] || '');
       accessToken = hashParams.get('access_token') || '';
-      refreshToken = hashParams.get('refresh_token') || '';
       
       // If not in hash, check query parameters (?access_token=...)
       if (!accessToken) {
         const queryParams = new URLSearchParams(url.split('?')[1] || '');
         accessToken = queryParams.get('access_token') || '';
-        refreshToken = queryParams.get('refresh_token') || '';
       }
       
       if (!accessToken) {
@@ -191,10 +246,8 @@ export const authService = {
       const session = {
         provider: 'google',
         provider_token: accessToken,
-        provider_refresh_token: refreshToken,
         access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_at: Date.now() + 3600 * 1000, // 1 hour by default
+        expires_at: new Date(Date.now() + 3600 * 1000).toISOString(), // 1 hour expiry
         user: user
       };
       
@@ -202,7 +255,10 @@ export const authService = {
       await storage.set(STORAGE_KEYS.SESSION, session);
       await storage.set(STORAGE_KEYS.USER, user);
       
-      logger.log('Google authentication successful');
+      // Sync with web app
+      await syncAuthState();
+      
+      logger.log('Google callback processing successful');
       
       return {
         success: true,
@@ -218,49 +274,31 @@ export const authService = {
   },
   
   /**
-   * Sign in with Google
-   * @returns {Promise<{success: boolean, error?: string, user?: Object}>}
-   */
-  signInWithGoogle: async function() {
-    try {
-      logger.log('Initiating Google sign in');
-      
-      // Generate a random state value for CSRF protection
-      const state = Math.random().toString(36).substring(2, 15);
-      
-      // Store state for verification later
-      await storage.set('google_auth_state', state);
-      
-      // Prepare OAuth URL
-      const redirectUri = encodeURIComponent('https://main-gallery-ai.lovable.app/auth/callback');
-      const clientId = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
-      const scope = encodeURIComponent('email profile openid');
-      
-      const oauthUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&state=${state}`;
-      
-      // Open OAuth URL in a new tab
-      chrome.tabs.create({ url: oauthUrl });
-      
-      return {
-        success: true,
-        message: 'Google sign in initiated'
-      };
-    } catch (error) {
-      logger.error('Error initiating Google sign in:', error);
-      return {
-        success: false,
-        error: error.message || 'An error occurred during Google sign in'
-      };
-    }
-  },
-  
-  /**
    * Sign out the current user
    * @returns {Promise<{success: boolean, error?: string}>}
    */
   signOut: async function() {
     try {
       logger.log('Signing out');
+      
+      // Get current session
+      const session = await this.getSession();
+      
+      // Remove auth cookies from web app
+      await removeAuthCookies();
+      
+      // If signed in with Google, revoke token
+      if (session && session.provider === 'google' && session.provider_token) {
+        try {
+          // Revoke the token
+          chrome.identity.removeCachedAuthToken({ token: session.provider_token }, () => {
+            logger.log('Removed cached auth token');
+          });
+        } catch (error) {
+          logger.warn('Error revoking Google token:', error);
+          // Continue with sign out even if token revocation fails
+        }
+      }
       
       // Clear all auth related data
       await storage.remove(STORAGE_KEYS.SESSION);

@@ -25,7 +25,7 @@ export function setupCallbackUrlListener() {
           logger.log('Detected callback URL in tab:', tabId);
           
           // Process the callback URL
-          processCallbackUrl(tab.url)
+          processCallbackUrl(tab.url, tabId)
             .then(result => {
               if (result.success) {
                 logger.log('Successfully processed callback URL');
@@ -79,22 +79,28 @@ export function setupCallbackUrlListener() {
 export function isCallbackUrl(url) {
   if (!url) return false;
   
-  // Check if URL is from our webapp callback
-  if (url.startsWith(WEB_APP_URLS.AUTH_CALLBACK)) {
-    return true;
+  try {
+    // Check if the URL is from our web app callback
+    if (url.includes(WEB_APP_URLS.AUTH_CALLBACK)) {
+      return true;
+    }
+    
+    // Also check for any URL with access_token or code parameter
+    return (url.includes('callback') && 
+           (url.includes('access_token=') || url.includes('code=')));
+  } catch (error) {
+    logger.error('Error checking if URL is callback:', error);
+    return false;
   }
-  
-  // Also check for any URL with access_token or code
-  return url.includes('callback') && 
-         (url.includes('access_token=') || url.includes('code='));
 }
 
 /**
  * Process the callback URL and handle the authentication
  * @param {string} url - Callback URL
+ * @param {number} tabId - Tab ID for UI feedback
  * @returns {Promise<{success: boolean, error?: string}>} - Result of processing
  */
-export async function processCallbackUrl(url) {
+export async function processCallbackUrl(url, tabId) {
   try {
     logger.log('Processing callback URL');
     

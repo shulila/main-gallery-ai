@@ -1,3 +1,4 @@
+
 /**
  * OAuth configuration for MainGallery.AI Chrome Extension
  * מגדיר פרמטרים לאימות ב-OAuth
@@ -53,7 +54,10 @@ export const COOKIE_CONFIG = {
     ACCESS_TOKEN: 'sb-access-token',
     
     // Refresh token cookie
-    REFRESH_TOKEN: 'sb-refresh-token'
+    REFRESH_TOKEN: 'sb-refresh-token',
+    
+    // Auth state cookie
+    AUTH_STATE: 'main-gallery-auth-state'
   }
 };
 
@@ -68,6 +72,15 @@ export const AUTH_TIMEOUTS = {
   // Token refresh margin (5 minutes before expiry)
   TOKEN_REFRESH_MARGIN: 300000,
   
-  // Auth sync interval (30 seconds)
-  AUTH_SYNC_INTERVAL: 30000
+  // Auth sync interval (15 seconds - reduced for faster sync)
+  AUTH_SYNC_INTERVAL: 15000
 };
+
+// Google OAuth scopes
+export const GOOGLE_SCOPES = [
+  'openid',
+  'email',
+  'profile',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile'
+];

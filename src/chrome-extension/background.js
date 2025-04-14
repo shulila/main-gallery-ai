@@ -11,16 +11,33 @@ import { syncAuthState } from './utils/cookie-sync.js';
 import { AUTH_TIMEOUTS } from './utils/oauth-config.js';
 
 // Initial setup
-setupCallbackUrlListener();
-
-// Set up periodic auth state sync
-setInterval(async () => {
+async function initialize() {
   try {
+    logger.log('Initializing background service worker');
+    
+    // Set up callback URL listener for Google auth
+    setupCallbackUrlListener();
+    
+    // Perform initial auth state sync
     await syncAuthState();
+    
+    // Set up periodic auth state sync
+    setInterval(async () => {
+      try {
+        await syncAuthState();
+      } catch (error) {
+        logger.error('Error in periodic auth sync:', error);
+      }
+    }, AUTH_TIMEOUTS.AUTH_SYNC_INTERVAL);
+    
+    logger.log('Background service worker initialized successfully');
   } catch (error) {
-    logger.error('Error in periodic auth sync:', error);
+    logger.error('Error initializing background service worker:', error);
   }
-}, AUTH_TIMEOUTS.AUTH_SYNC_INTERVAL);
+}
+
+// Initialize the extension
+initialize();
 
 // Handle messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -30,7 +47,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       logger.error('Error handling message:', error);
       sendResponse({ success: false, error: error.message });
     });
-  return true;
+  return true; // Indicates we'll respond asynchronously
 });
 
 // Handle messages asynchronously

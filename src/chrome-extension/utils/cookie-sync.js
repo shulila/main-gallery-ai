@@ -1,3 +1,4 @@
+
 /**
  * Cookie synchronization utility for MainGallery.AI Chrome Extension
  * Handles synchronization of authentication state between extension and web app
@@ -24,27 +25,45 @@ export async function syncAuthState() {
     // Get session from extension storage
     const session = await storage.get(STORAGE_KEYS.SESSION);
     
-    if (session) {
-      // Extension has a session, set cookies in web app
-      await setAuthCookies(session);
-      logger.log('Auth state synced from extension to web app');
-    } else {
-      // Extension doesn't have a session, check web app
-      const webAppSession = await getSessionFromCookies();
+    // Get auth state from web app cookies
+    const webAppSession = await getSessionFromCookies();
+    
+    // Determine which state is more recent or valid
+    if (session && webAppSession) {
+      // Both have sessions, compare timestamps if available
+      const extensionTimestamp = session.updated_at || session.created_at || 0;
+      const webAppTimestamp = webAppSession.updated_at || webAppSession.created_at || 0;
       
-      if (webAppSession) {
-        // Web app has a session, save it in extension
+      if (extensionTimestamp >= webAppTimestamp) {
+        // Extension session is newer, sync to web app
+        await setAuthCookies(session);
+        logger.log('Auth state synced from extension to web app (extension session is newer)');
+      } else {
+        // Web app session is newer, sync to extension
         await storage.set(STORAGE_KEYS.SESSION, webAppSession);
-        
         if (webAppSession.user) {
           await storage.set(STORAGE_KEYS.USER, webAppSession.user);
         }
-        
-        logger.log('Auth state synced from web app to extension');
-      } else {
-        logger.log('No auth state to sync (both logged out)');
+        logger.log('Auth state synced from web app to extension (web app session is newer)');
       }
+    } else if (session) {
+      // Only extension has session, sync to web app
+      await setAuthCookies(session);
+      logger.log('Auth state synced from extension to web app (web app has no session)');
+    } else if (webAppSession) {
+      // Only web app has session, sync to extension
+      await storage.set(STORAGE_KEYS.SESSION, webAppSession);
+      if (webAppSession.user) {
+        await storage.set(STORAGE_KEYS.USER, webAppSession.user);
+      }
+      logger.log('Auth state synced from web app to extension (extension has no session)');
+    } else {
+      // Neither has session, nothing to sync
+      logger.log('No auth state to sync (both logged out)');
     }
+    
+    // Set a flag to indicate sync was performed
+    await storage.set(STORAGE_KEYS.LAST_SYNC, Date.now());
     
     return true;
   } catch (error) {
@@ -71,7 +90,7 @@ export async function setAuthCookies(session) {
     await chrome.cookies.set({
       url: WEB_APP_URLS.BASE,
       name: COOKIE_CONFIG.NAMES.SESSION,
-      value: JSON.stringify(session),
+      value: typeof session === 'string' ? session : JSON.stringify(session),
       domain: COOKIE_CONFIG.DOMAIN,
       path: '/',
       secure: true,
@@ -95,12 +114,12 @@ export async function setAuthCookies(session) {
       });
     }
     
-    if (session.user) {
-      // Set user cookie
+    if (session.refresh_token) {
+      // Set refresh token cookie
       await chrome.cookies.set({
         url: WEB_APP_URLS.BASE,
-        name: COOKIE_CONFIG.NAMES.USER,
-        value: JSON.stringify(session.user),
+        name: COOKIE_CONFIG.NAMES.REFRESH_TOKEN,
+        value: session.refresh_token,
         domain: COOKIE_CONFIG.DOMAIN,
         path: '/',
         secure: true,
@@ -110,7 +129,46 @@ export async function setAuthCookies(session) {
       });
     }
     
+    if (session.user) {
+      // Set user cookie
+      await chrome.cookies.set({
+        url: WEB_APP_URLS.BASE,
+        name: COOKIE_CONFIG.NAMES.USER,
+        value: typeof session.user === 'string' ? session.user : JSON.stringify(session.user),
+        domain: COOKIE_CONFIG.DOMAIN,
+        path: '/',
+        secure: true,
+        httpOnly: false,
+        sameSite: 'lax',
+        expirationDate: Math.floor(Date.now() / 1000) + expiresInSeconds
+      });
+    }
+    
+    // Set auth state cookie to indicate logged in state
+    await chrome.cookies.set({
+      url: WEB_APP_URLS.BASE,
+      name: COOKIE_CONFIG.NAMES.AUTH_STATE,
+      value: 'authenticated',
+      domain: COOKIE_CONFIG.DOMAIN,
+      path: '/',
+      secure: true,
+      httpOnly: false,
+      sameSite: 'lax',
+      expirationDate: Math.floor(Date.now() / 1000) + expiresInSeconds
+    });
+    
     logger.log('Successfully set auth cookies');
+    
+    // Force refresh web app tabs to apply new auth state
+    try {
+      const tabs = await chrome.tabs.query({ url: `${WEB_APP_URLS.BASE}/*` });
+      for (const tab of tabs) {
+        await chrome.tabs.reload(tab.id);
+      }
+    } catch (error) {
+      logger.warn('Error refreshing web app tabs:', error);
+    }
+    
     return true;
   } catch (error) {
     logger.error('Error setting auth cookies:', error);
@@ -123,17 +181,28 @@ export async function setAuthCookies(session) {
  */
 export async function removeAuthCookies() {
   try {
-    await chrome.cookies.remove({
-      url: WEB_APP_URLS.BASE,
-      name: COOKIE_CONFIG.NAMES.SESSION
-    });
+    // Remove all auth-related cookies
+    const cookieNames = Object.values(COOKIE_CONFIG.NAMES);
     
-    await chrome.cookies.remove({
-      url: WEB_APP_URLS.BASE,
-      name: COOKIE_CONFIG.NAMES.USER
-    });
+    for (const cookieName of cookieNames) {
+      await chrome.cookies.remove({
+        url: WEB_APP_URLS.BASE,
+        name: cookieName
+      });
+    }
     
     logger.log('Auth cookies removed from web app');
+    
+    // Force refresh web app tabs to apply logout
+    try {
+      const tabs = await chrome.tabs.query({ url: `${WEB_APP_URLS.BASE}/*` });
+      for (const tab of tabs) {
+        await chrome.tabs.reload(tab.id);
+      }
+    } catch (error) {
+      logger.warn('Error refreshing web app tabs:', error);
+    }
+    
     return true;
   } catch (error) {
     logger.error('Error removing auth cookies:', error);
@@ -146,23 +215,68 @@ export async function removeAuthCookies() {
  */
 async function getSessionFromCookies() {
   try {
+    // Try to get the session cookie first
     const sessionCookie = await chrome.cookies.get({
       url: WEB_APP_URLS.BASE,
       name: COOKIE_CONFIG.NAMES.SESSION
     });
     
-    if (!sessionCookie?.value) return null;
+    if (!sessionCookie?.value) {
+      // No session cookie found
+      return null;
+    }
     
-    const session = JSON.parse(sessionCookie.value);
+    // Parse session data
+    let session;
+    try {
+      session = JSON.parse(sessionCookie.value);
+    } catch (e) {
+      // If not JSON, use as string
+      session = {
+        access_token: sessionCookie.value
+      };
+    }
     
+    // Get access token if not in session
+    if (!session.access_token) {
+      const accessTokenCookie = await chrome.cookies.get({
+        url: WEB_APP_URLS.BASE,
+        name: COOKIE_CONFIG.NAMES.ACCESS_TOKEN
+      });
+      
+      if (accessTokenCookie?.value) {
+        session.access_token = accessTokenCookie.value;
+      }
+    }
+    
+    // Get refresh token if not in session
+    if (!session.refresh_token) {
+      const refreshTokenCookie = await chrome.cookies.get({
+        url: WEB_APP_URLS.BASE,
+        name: COOKIE_CONFIG.NAMES.REFRESH_TOKEN
+      });
+      
+      if (refreshTokenCookie?.value) {
+        session.refresh_token = refreshTokenCookie.value;
+      }
+    }
+    
+    // Get user data
     const userCookie = await chrome.cookies.get({
       url: WEB_APP_URLS.BASE,
       name: COOKIE_CONFIG.NAMES.USER
     });
     
     if (userCookie?.value) {
-      session.user = JSON.parse(userCookie.value);
+      try {
+        session.user = JSON.parse(userCookie.value);
+      } catch (e) {
+        logger.error('Error parsing user cookie:', e);
+      }
     }
+    
+    // Add timestamp for comparison
+    session.updated_at = Date.now();
     
     return session;
   } catch (error) {
@@ -176,12 +290,23 @@ async function getSessionFromCookies() {
  */
 export async function hasAuthCookies() {
   try {
+    // Check for session cookie
     const sessionCookie = await chrome.cookies.get({
       url: WEB_APP_URLS.BASE,
       name: COOKIE_CONFIG.NAMES.SESSION
     });
     
-    return !!sessionCookie && !!sessionCookie.value;
+    if (sessionCookie?.value) {
+      return true;
+    }
+    
+    // Check for auth state cookie as fallback
+    const authStateCookie = await chrome.cookies.get({
+      url: WEB_APP_URLS.BASE,
+      name: COOKIE_CONFIG.NAMES.AUTH_STATE
+    });
+    
+    return !!authStateCookie && authStateCookie.value === 'authenticated';
   } catch (error) {
     logger.error('Error checking auth cookies:', error);
     return false;
