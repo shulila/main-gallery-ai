@@ -4,6 +4,7 @@
  */
 
 import { logger } from './utils/logger.js';
+import { storage, STORAGE_KEYS } from './utils/storage.js';
 import { authService } from './utils/auth-service.js';
 import { setupCallbackUrlListener } from './utils/callback-handler.js';
 import { syncAuthState } from './utils/cookie-sync.js';
