@@ -1,4 +1,8 @@
 
+/**
+ * Google authentication for MainGallery.AI Chrome Extension
+ */
+
 import { logger } from '../logger.js';
 import { storage, STORAGE_KEYS } from '../storage.js';
 import { syncAuthState } from '../cookie-sync.js';
@@ -22,7 +26,7 @@ async function getUserInfo(accessToken: string) {
 /**
  * Sign in with Google using chrome.identity API
  */
-export async function signInWithGoogle() {
+export async function signInWithGoogle(): Promise<{success: boolean, error?: string, user?: any}> {
   try {
     logger.log('Initiating Google sign in with chrome.identity');
 
@@ -75,7 +79,7 @@ export async function signInWithGoogle() {
             success: true,
             user
           });
-        } catch (error) {
+        } catch (error: any) {
           logger.error('Error processing Google auth token:', error);
           return resolve({
             success: false,
@@ -84,7 +88,7 @@ export async function signInWithGoogle() {
         }
       });
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Error in signInWithGoogle:', error);
     return {
       success: false,
@@ -96,7 +100,7 @@ export async function signInWithGoogle() {
 /**
  * Process Google callback URL
  */
-export async function processGoogleCallback(url: string) {
+export async function processGoogleCallback(url: string): Promise<{success: boolean, error?: string, user?: any}> {
   try {
     if (!url) {
       return { success: false, error: 'No callback URL provided' };
@@ -139,9 +143,8 @@ export async function processGoogleCallback(url: string) {
     await syncAuthState();
 
     return { success: true, user };
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Error processing Google callback:', error);
     return { success: false, error: error.message };
   }
 }
-
