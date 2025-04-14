@@ -2,20 +2,7 @@
 import { logger } from '../logger.js';
 import { storage, STORAGE_KEYS } from '../storage.js';
 import { syncAuthState } from '../cookie-sync.js';
-import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES, WEB_APP_URLS } from '../oauth-config.js';
-
-interface AuthResult {
-  success: boolean;
-  error?: string;
-  user?: any;
-}
-
-interface UserInfo {
-  sub: string;
-  email: string;
-  name: string;
-  picture: string;
-}
+import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from '../oauth-config.js';
 
 /**
  * Get user info from Google API
@@ -71,7 +58,7 @@ export async function signInWithGoogle(): Promise<AuthResult> {
             }
           };
 
-          const session = {
+          const session: AuthSession = {
             provider: 'google',
             provider_token: token,
             access_token: token,
@@ -134,11 +121,11 @@ export async function processGoogleCallback(url: string): Promise<AuthResult> {
         avatar_url: userInfo.picture
       },
       app_metadata: {
-        provider: 'google' 
+        provider: 'google'
       }
     };
 
-    const session = {
+    const session: AuthSession = {
       provider: 'google',
       provider_token: accessToken,
       access_token: accessToken,
