@@ -17,7 +17,8 @@ export const STORAGE_KEYS = {
 export const storage = {
   get: async function(key, defaultValue) {
     try {
-      const result = await chrome.storage.local.get(key);
+      // Using array syntax for key to be consistent with TypeScript implementation
+      const result = await chrome.storage.local.get([key]);
       return result[key] !== undefined ? result[key] : (defaultValue ?? null);
     } catch (error) {
       logger.error(`Error getting ${key} from storage:`, error);

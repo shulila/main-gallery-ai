@@ -11,7 +11,9 @@ export const STORAGE_KEYS = {
 export const storage = {
   get: async <T = any>(key: string, defaultValue?: T): Promise<T | null> => {
     try {
-      const result = await chrome.storage.local.get(key);
+      // The chrome.storage.local.get method actually expects either a string, array of strings, or an object
+      // We're using a string key, so this should work properly
+      const result = await chrome.storage.local.get([key]);
       return result[key] !== undefined ? result[key] : (defaultValue ?? null);
     } catch (error) {
       logger.error('Storage get error:', error);
