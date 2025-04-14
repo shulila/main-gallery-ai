@@ -1,86 +1,126 @@
 
 import { logger } from '../logger.js';
 import { storage, STORAGE_KEYS } from '../storage.js';
-import { syncAuthState, removeAuthCookies } from '../cookie-sync.js';
-import { signInWithGoogle, processGoogleCallback } from './google-auth.js';
+import { COOKIE_CONFIG, WEB_APP_URLS } from '../oauth-config.js';
+import { syncAuthToCookies } from '../cookie-sync.js';
 
-interface AuthResult {
-  success: boolean;
-  error?: string;
-  user?: any;
-  message?: string;
-}
-
-export const authService = {
-  getSession: async () => {
+class AuthService {
+  async isAuthenticated(): Promise<boolean> {
     try {
-      const session = await storage.get(STORAGE_KEYS.SESSION);
-      if (!session) return null;
-
+      const session = await storage.get(STORAGE_KEYS.SESSION) as AuthSession | null;
+      
+      if (!session) return false;
+      
       if (session.expires_at && new Date(session.expires_at) < new Date()) {
-        await authService.signOut();
-        return null;
+        logger.log('Session expired');
+        await this.signOut();
+        return false;
       }
-
-      return session;
+      
+      return true;
     } catch (error) {
-      logger.error('Error getting session:', error);
-      return null;
+      logger.error('Error checking authentication:', error);
+      return false;
     }
-  },
+  }
 
-  getUser: async () => {
+  async getUser(): Promise<AuthUser | null> {
     try {
-      return await storage.get(STORAGE_KEYS.USER);
+      return await storage.get(STORAGE_KEYS.USER) as AuthUser | null;
     } catch (error) {
       logger.error('Error getting user:', error);
       return null;
     }
-  },
+  }
 
-  isAuthenticated: async () => {
+  async signInWithGoogle(): Promise<AuthResult> {
     try {
-      const session = await authService.getSession();
-      return Boolean(session);
-    } catch (error) {
-      logger.error('Error checking auth:', error);
-      return false;
-    }
-  },
-
-  signInWithGoogle,
-  processGoogleCallback,
-
-  signOut: async (): Promise<AuthResult> => {
-    try {
-      const session = await authService.getSession();
+      logger.log('Starting Google sign-in');
       
-      await storage.remove(STORAGE_KEYS.SESSION);
-      await storage.remove(STORAGE_KEYS.USER);
-      await removeAuthCookies();
+      const token = await new Promise<string>((resolve, reject) => {
+        chrome.identity.getAuthToken({ interactive: true }, (token) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(token || '');
+          }
+        });
+      });
 
-      if (session?.provider === 'google' && session.provider_token) {
+      if (!token) {
+        return {
+          success: false,
+          error: 'Failed to get authentication token from Google'
+        };
+      }
+
+      const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!userInfoResponse.ok) {
+        throw new Error(`Failed to get user info: ${userInfoResponse.status}`);
+      }
+
+      const userInfo = await userInfoResponse.json();
+
+      const user: AuthUser = {
+        id: userInfo.sub,
+        email: userInfo.email,
+        name: userInfo.name,
+        picture: userInfo.picture,
+        provider: 'google'
+      };
+
+      const session: AuthSession = {
+        provider: 'google',
+        token: token,
+        expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+        created_at: new Date().toISOString()
+      };
+
+      await storage.set(STORAGE_KEYS.SESSION, session);
+      await storage.set(STORAGE_KEYS.USER, user);
+      await syncAuthToCookies();
+
+      return { success: true, user };
+    } catch (error) {
+      logger.error('Error signing in with Google:', error instanceof Error ? error.message : 'Unknown error');
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'An error occurred during Google authentication'
+      };
+    }
+  }
+
+  async signOut(): Promise<AuthResult> {
+    try {
+      const session = await storage.get(STORAGE_KEYS.SESSION) as AuthSession | null;
+
+      if (session?.provider === 'google' && session.token) {
         try {
-          await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${session.provider_token}`);
-          logger.log('Google token revoked');
+          await new Promise<void>((resolve) => {
+            chrome.identity.removeCachedAuthToken({ token: session.token }, resolve);
+          });
+          logger.log('Removed cached auth token');
         } catch (error) {
           logger.warn('Error revoking Google token:', error);
         }
       }
 
+      await storage.remove(STORAGE_KEYS.SESSION);
+      await storage.remove(STORAGE_KEYS.USER);
+      await syncAuthToCookies(true);
+
       return { success: true };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Error signing out:', error);
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'An error occurred during sign out'
+      };
     }
   }
-};
-
-export async function initAuthService() {
-  try {
-    logger.log('Initializing auth service');
-    await syncAuthState();
-  } catch (error) {
-    logger.error('Error initializing auth service:', error);
-  }
 }
+
+export const authService = new AuthService();
