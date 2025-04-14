@@ -18,9 +18,13 @@ export const storage = {
   get: async function(key, defaultValue) {
     try {
       // Using Promise-based wrapper around the callback API
-      const result = await new Promise((resolve) => {
+      const result = await new Promise((resolve, reject) => {
         chrome.storage.local.get([key], (items) => {
-          resolve(items);
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve(items);
+          }
         });
       });
       return result[key] !== undefined ? result[key] : (defaultValue ?? null);
@@ -32,9 +36,13 @@ export const storage = {
   
   set: async function(key, value) {
     try {
-      await new Promise((resolve) => {
+      await new Promise((resolve, reject) => {
         chrome.storage.local.set({ [key]: value }, () => {
-          resolve();
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve();
+          }
         });
       });
       return true;
@@ -46,9 +54,13 @@ export const storage = {
   
   remove: async function(key) {
     try {
-      await new Promise((resolve) => {
+      await new Promise((resolve, reject) => {
         chrome.storage.local.remove(key, () => {
-          resolve();
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve();
+          }
         });
       });
       return true;
@@ -60,9 +72,13 @@ export const storage = {
   
   clear: async function() {
     try {
-      await new Promise((resolve) => {
+      await new Promise((resolve, reject) => {
         chrome.storage.local.clear(() => {
-          resolve();
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve();
+          }
         });
       });
       return true;

@@ -13,9 +13,13 @@ export const storage = {
     try {
       // The chrome.storage.local.get method expects a callback as second argument
       // We need to wrap it in a Promise to use await
-      const result = await new Promise<Record<string, any>>((resolve) => {
+      const result = await new Promise<Record<string, any>>((resolve, reject) => {
         chrome.storage.local.get([key], (items) => {
-          resolve(items);
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve(items);
+          }
         });
       });
       return result[key] !== undefined ? result[key] : (defaultValue ?? null);
@@ -27,9 +31,13 @@ export const storage = {
 
   set: async <T>(key: string, value: T): Promise<boolean> => {
     try {
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         chrome.storage.local.set({ [key]: value }, () => {
-          resolve();
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve();
+          }
         });
       });
       return true;
@@ -41,9 +49,13 @@ export const storage = {
 
   remove: async (key: string): Promise<boolean> => {
     try {
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         chrome.storage.local.remove(key, () => {
-          resolve();
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve();
+          }
         });
       });
       return true;
@@ -55,9 +67,13 @@ export const storage = {
 
   clear: async (): Promise<boolean> => {
     try {
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         chrome.storage.local.clear(() => {
-          resolve();
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve();
+          }
         });
       });
       return true;
