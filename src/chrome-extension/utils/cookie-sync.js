@@ -1,3 +1,4 @@
+
 /**
  * Cookie synchronization utility for MainGallery.AI Chrome Extension
  * Handles synchronization of authentication state between extension and web app
@@ -129,100 +130,98 @@ export async function syncAuthState() {
 }
 
 /**
- * Set auth cookies in web app from session data
+ * Get session from web app cookies
  */
-export async function setAuthCookies(session) {
+async function getSessionFromCookies() {
+  try {
+    // Get auth cookies from the web app domain
+    const cookies = await new Promise((resolve, reject) => {
+      chrome.cookies.getAll({ domain: COOKIE_CONFIG.DOMAIN }, (cookies) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(cookies);
+        }
+      });
+    });
+    
+    // Extract session data from cookies
+    const sessionCookie = cookies.find(cookie => cookie.name === COOKIE_CONFIG.SESSION_COOKIE_NAME);
+    
+    if (!sessionCookie || !sessionCookie.value) {
+      return null;
+    }
+    
+    try {
+      // Session cookie is usually JSON encoded and URL encoded
+      const decodedValue = decodeURIComponent(sessionCookie.value);
+      return JSON.parse(decodedValue);
+    } catch (parseError) {
+      logger.error('Error parsing session cookie:', parseError);
+      return null;
+    }
+  } catch (error) {
+    logger.error('Error getting session from cookies:', error);
+    return null;
+  }
+}
+
+/**
+ * Set auth cookies on the web app domain
+ */
+async function setAuthCookies(session) {
   try {
     if (!session) {
-      logger.warn('No session data provided, cannot set auth cookies');
+      logger.warn('No session provided to set cookies');
       return false;
     }
     
-    const expiresInSeconds = session.expires_at 
-      ? Math.floor((new Date(session.expires_at).getTime() - Date.now()) / 1000)
-      : 3600;
+    // Convert session object to a cookie-friendly string
+    const sessionValue = encodeURIComponent(JSON.stringify(session));
     
-    // Set session cookie
-    await chrome.cookies.set({
-      url: WEB_APP_URLS.BASE,
-      name: COOKIE_CONFIG.NAMES.SESSION,
-      value: typeof session === 'string' ? session : JSON.stringify(session),
-      domain: COOKIE_CONFIG.DOMAIN,
-      path: '/',
-      secure: true,
-      httpOnly: false,
-      sameSite: 'lax',
-      expirationDate: Math.floor(Date.now() / 1000) + expiresInSeconds
+    // Set the session cookie
+    await new Promise((resolve, reject) => {
+      chrome.cookies.set({
+        url: WEB_APP_URLS.BASE,
+        domain: COOKIE_CONFIG.DOMAIN,
+        name: COOKIE_CONFIG.SESSION_COOKIE_NAME,
+        value: sessionValue,
+        path: '/',
+        secure: true,
+        httpOnly: false,
+        sameSite: 'lax',
+        expirationDate: Math.floor(Date.now() / 1000) + 86400 * 7 // 7 days
+      }, (cookie) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(cookie);
+        }
+      });
     });
     
-    if (session.access_token) {
-      // Set access token cookie
-      await chrome.cookies.set({
-        url: WEB_APP_URLS.BASE,
-        name: COOKIE_CONFIG.NAMES.ACCESS_TOKEN,
-        value: session.access_token,
-        domain: COOKIE_CONFIG.DOMAIN,
-        path: '/',
-        secure: true,
-        httpOnly: false,
-        sameSite: 'lax',
-        expirationDate: Math.floor(Date.now() / 1000) + expiresInSeconds
-      });
-    }
-    
-    if (session.refresh_token) {
-      // Set refresh token cookie
-      await chrome.cookies.set({
-        url: WEB_APP_URLS.BASE,
-        name: COOKIE_CONFIG.NAMES.REFRESH_TOKEN,
-        value: session.refresh_token,
-        domain: COOKIE_CONFIG.DOMAIN,
-        path: '/',
-        secure: true,
-        httpOnly: false,
-        sameSite: 'lax',
-        expirationDate: Math.floor(Date.now() / 1000) + expiresInSeconds
-      });
-    }
-    
+    // Set additional cookies if needed
     if (session.user) {
-      // Set user cookie
-      await chrome.cookies.set({
-        url: WEB_APP_URLS.BASE,
-        name: COOKIE_CONFIG.NAMES.USER,
-        value: typeof session.user === 'string' ? session.user : JSON.stringify(session.user),
-        domain: COOKIE_CONFIG.DOMAIN,
-        path: '/',
-        secure: true,
-        httpOnly: false,
-        sameSite: 'lax',
-        expirationDate: Math.floor(Date.now() / 1000) + expiresInSeconds
+      const userValue = encodeURIComponent(JSON.stringify(session.user));
+      await new Promise((resolve, reject) => {
+        chrome.cookies.set({
+          url: WEB_APP_URLS.BASE,
+          domain: COOKIE_CONFIG.DOMAIN,
+          name: COOKIE_CONFIG.USER_COOKIE_NAME,
+          value: userValue,
+          path: '/',
+          secure: true,
+          httpOnly: false,
+          sameSite: 'lax',
+          expirationDate: Math.floor(Date.now() / 1000) + 86400 * 7 // 7 days
+        }, (cookie) => {
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve(cookie);
+          }
+        });
       });
-    }
-    
-    // Set auth state cookie to indicate logged in state
-    await chrome.cookies.set({
-      url: WEB_APP_URLS.BASE,
-      name: COOKIE_CONFIG.NAMES.AUTH_STATE,
-      value: 'authenticated',
-      domain: COOKIE_CONFIG.DOMAIN,
-      path: '/',
-      secure: true,
-      httpOnly: false,
-      sameSite: 'lax',
-      expirationDate: Math.floor(Date.now() / 1000) + expiresInSeconds
-    });
-    
-    logger.log('Successfully set auth cookies');
-    
-    // Force refresh web app tabs to apply new auth state
-    try {
-      const tabs = await chrome.tabs.query({ url: `${WEB_APP_URLS.BASE}/*` });
-      for (const tab of tabs) {
-        await chrome.tabs.reload(tab.id);
-      }
-    } catch (error) {
-      logger.warn('Error refreshing web app tabs:', error);
     }
     
     return true;
@@ -233,138 +232,41 @@ export async function setAuthCookies(session) {
 }
 
 /**
- * Remove auth cookies from web app
+ * Remove auth cookies from the web app domain
  */
 export async function removeAuthCookies() {
   try {
-    // Remove all auth-related cookies
-    const cookieNames = Object.values(COOKIE_CONFIG.NAMES);
-    
-    for (const cookieName of cookieNames) {
-      await chrome.cookies.remove({
+    // Remove session cookie
+    await new Promise((resolve, reject) => {
+      chrome.cookies.remove({
         url: WEB_APP_URLS.BASE,
-        name: cookieName
+        name: COOKIE_CONFIG.SESSION_COOKIE_NAME
+      }, (result) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(result);
+        }
       });
-    }
+    });
     
-    logger.log('Auth cookies removed from web app');
-    
-    // Force refresh web app tabs to apply logout
-    try {
-      const tabs = await chrome.tabs.query({ url: `${WEB_APP_URLS.BASE}/*` });
-      for (const tab of tabs) {
-        await chrome.tabs.reload(tab.id);
-      }
-    } catch (error) {
-      logger.warn('Error refreshing web app tabs:', error);
-    }
+    // Remove user cookie
+    await new Promise((resolve, reject) => {
+      chrome.cookies.remove({
+        url: WEB_APP_URLS.BASE,
+        name: COOKIE_CONFIG.USER_COOKIE_NAME
+      }, (result) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(result);
+        }
+      });
+    });
     
     return true;
   } catch (error) {
     logger.error('Error removing auth cookies:', error);
-    return false;
-  }
-}
-
-/**
- * Get session data from web app cookies
- */
-async function getSessionFromCookies() {
-  try {
-    // Try to get the session cookie first
-    const sessionCookie = await chrome.cookies.get({
-      url: WEB_APP_URLS.BASE,
-      name: COOKIE_CONFIG.NAMES.SESSION
-    });
-    
-    if (!sessionCookie?.value) {
-      // No session cookie found
-      return null;
-    }
-    
-    // Parse session data
-    let session;
-    try {
-      session = JSON.parse(sessionCookie.value);
-    } catch (e) {
-      // If not JSON, use as string
-      session = {
-        access_token: sessionCookie.value
-      };
-    }
-    
-    // Get access token if not in session
-    if (!session.access_token) {
-      const accessTokenCookie = await chrome.cookies.get({
-        url: WEB_APP_URLS.BASE,
-        name: COOKIE_CONFIG.NAMES.ACCESS_TOKEN
-      });
-      
-      if (accessTokenCookie?.value) {
-        session.access_token = accessTokenCookie.value;
-      }
-    }
-    
-    // Get refresh token if not in session
-    if (!session.refresh_token) {
-      const refreshTokenCookie = await chrome.cookies.get({
-        url: WEB_APP_URLS.BASE,
-        name: COOKIE_CONFIG.NAMES.REFRESH_TOKEN
-      });
-      
-      if (refreshTokenCookie?.value) {
-        session.refresh_token = refreshTokenCookie.value;
-      }
-    }
-    
-    // Get user data
-    const userCookie = await chrome.cookies.get({
-      url: WEB_APP_URLS.BASE,
-      name: COOKIE_CONFIG.NAMES.USER
-    });
-    
-    if (userCookie?.value) {
-      try {
-        session.user = JSON.parse(userCookie.value);
-      } catch (e) {
-        logger.error('Error parsing user cookie:', e);
-      }
-    }
-    
-    // Add timestamp for comparison
-    session.updated_at = Date.now();
-    
-    return session;
-  } catch (error) {
-    logger.error('Error getting session from cookies:', error);
-    return null;
-  }
-}
-
-/**
- * Check if auth cookies exist in web app
- */
-export async function hasAuthCookies() {
-  try {
-    // Check for session cookie
-    const sessionCookie = await chrome.cookies.get({
-      url: WEB_APP_URLS.BASE,
-      name: COOKIE_CONFIG.NAMES.SESSION
-    });
-    
-    if (sessionCookie?.value) {
-      return true;
-    }
-    
-    // Check for auth state cookie as fallback
-    const authStateCookie = await chrome.cookies.get({
-      url: WEB_APP_URLS.BASE,
-      name: COOKIE_CONFIG.NAMES.AUTH_STATE
-    });
-    
-    return !!authStateCookie && authStateCookie.value === 'authenticated';
-  } catch (error) {
-    logger.error('Error checking auth cookies:', error);
     return false;
   }
 }
