@@ -23,14 +23,20 @@ export const brandConfig = {
     auth: "/auth",
     gallery: "/gallery",
     platforms: "/platforms",
-    howItWorks: "/#how-it-works" // Using a section anchor for now
+    howItWorks: "/#how-it-works"
   },
   
   // UI elements
   ui: {
-    primaryColor: "primary", // Tailwind class name
+    primaryColor: "#8B5CF6", // Updated to purple
     primaryBackground: "bg-primary",
-    primaryText: "text-primary"
+    primaryText: "text-primary",
+    colors: {
+      primary: "#8B5CF6",      // Main purple
+      primaryDark: "#7C3AED",  // Hover states
+      primaryLight: "#A78BFA", // Subtle elements
+      primaryBg: "#F5F3FF"     // Light backgrounds
+    }
   }
 };
 
