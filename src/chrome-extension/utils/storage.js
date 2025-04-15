@@ -16,6 +16,12 @@ export const STORAGE_KEYS = {
 };
 
 export const storage = {
+  /**
+   * Get a value from storage
+   * @param {string} key - Storage key
+   * @param {any} defaultValue - Default value if key not found
+   * @returns {Promise<any>} The value or default value if not found
+   */
   get: async function(key, defaultValue) {
     try {
       // Using Promise-based wrapper around the callback API
@@ -35,6 +41,12 @@ export const storage = {
     }
   },
   
+  /**
+   * Set a value in storage
+   * @param {string} key - Storage key
+   * @param {any} value - Value to store
+   * @returns {Promise<boolean>} Success status
+   */
   set: async function(key, value) {
     try {
       await new Promise((resolve, reject) => {
@@ -53,6 +65,11 @@ export const storage = {
     }
   },
   
+  /**
+   * Remove a value from storage
+   * @param {string} key - Storage key
+   * @returns {Promise<boolean>} Success status
+   */
   remove: async function(key) {
     try {
       await new Promise((resolve, reject) => {
@@ -71,6 +88,10 @@ export const storage = {
     }
   },
   
+  /**
+   * Clear all storage
+   * @returns {Promise<boolean>} Success status
+   */
   clear: async function() {
     try {
       await new Promise((resolve, reject) => {
@@ -89,6 +110,10 @@ export const storage = {
     }
   },
   
+  /**
+   * Get all items from storage
+   * @returns {Promise<Object>} All storage items
+   */
   getAll: async function() {
     try {
       return await new Promise((resolve, reject) => {
@@ -104,7 +129,28 @@ export const storage = {
       logger.error('Error getting all storage data:', error);
       return {};
     }
+  },
+  
+  /**
+   * Get multiple items from storage
+   * @param {Array<string>} keys - Keys to retrieve
+   * @returns {Promise<Object>} Object with key-value pairs
+   */
+  getItems: async function(keys) {
+    try {
+      return await new Promise((resolve, reject) => {
+        chrome.storage.local.get(keys, (items) => {
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve(items);
+          }
+        });
+      });
+    } catch (error) {
+      logger.error('Error getting multiple storage items:', error);
+      return {};
+    }
   }
 };
 
-logger.log('Storage utility initialized');

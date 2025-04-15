@@ -60,11 +60,12 @@ export function handleAuthError(context, error) {
  * Generic error handler
  * @param {string} context - Where the error occurred
  * @param {Error|any} error - The error object
+ * @returns {Object} Structured error response
  */
 export function handleError(context, error) {
   logger.error(`Error in ${context}:`, error);
   
-  // Return if called directly
+  // Return structured error for display to user
   if (error instanceof Error) {
     return {
       success: false,
@@ -77,5 +78,32 @@ export function handleError(context, error) {
     success: false,
     error: 'An error occurred',
     context
+  };
+}
+
+/**
+ * Create an async function wrapper with timeout
+ * @param {Function} asyncFn - Async function to wrap
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @param {string} errorMessage - Error message if timeout occurs
+ * @returns {Function} Wrapped function with timeout
+ */
+export function withTimeout(asyncFn, timeoutMs = 10000, errorMessage = 'Operation timed out') {
+  return async (...args) => {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error(errorMessage));
+      }, timeoutMs);
+      
+      asyncFn(...args)
+        .then(result => {
+          clearTimeout(timeoutId);
+          resolve(result);
+        })
+        .catch(err => {
+          clearTimeout(timeoutId);
+          reject(err);
+        });
+    });
   };
 }
