@@ -6,7 +6,7 @@
 import { logger } from '../logger.js';
 import { storage, STORAGE_KEYS } from '../storage.js';
 import { syncAuthState } from '../cookie-sync.js';
-import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from '../oauth-config.js';
+import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES, WEB_APP_URLS, AUTH_TIMEOUTS } from '../oauth-config.js';
 import { validateGoogleToken } from './token-validator.js';
 
 /**
@@ -46,20 +46,54 @@ import { validateGoogleToken } from './token-validator.js';
  */
 
 /**
- * Get user info from Google API
+ * Get user info from Google API with better error handling
  * @param {string} accessToken - Google access token
  * @returns {Promise<UserInfo>} User information
  */
 async function getUserInfo(accessToken) {
-  const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: { 'Authorization': `Bearer ${accessToken}` }
-  });
+  try {
+    if (!accessToken) {
+      logger.error('Attempted to get user info with no access token');
+      return createDefaultUserInfo();
+    }
 
-  if (!response.ok) {
-    throw new Error(`Failed to get user info: ${response.status}`);
+    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!response.ok) {
+      logger.error(`Failed to get user info: ${response.status}`);
+      return createDefaultUserInfo();
+    }
+
+    const data = await response.json();
+    
+    // Validate the user info and provide defaults
+    return {
+      sub: data.sub || 'unknown',
+      email: data.email || '',
+      name: data.name || data.given_name || 'Unknown User',
+      picture: data.picture || '',
+      email_verified: !!data.email_verified
+    };
+  } catch (error) {
+    logger.error('Error getting user info:', error);
+    return createDefaultUserInfo();
   }
+}
 
-  return response.json();
+/**
+ * Create default user info for fallback
+ * @returns {UserInfo} Default user info
+ */
+function createDefaultUserInfo() {
+  return {
+    sub: 'unknown',
+    email: '',
+    name: 'Unknown User',
+    picture: '',
+    email_verified: false
+  };
 }
 
 /**
@@ -114,14 +148,14 @@ export async function signInWithGoogle() {
           const userInfo = await getUserInfo(token);
           
           const user = {
-            id: userInfo.sub,
-            email: userInfo.email,
-            name: userInfo.name,
-            picture: userInfo.picture,
+            id: userInfo.sub || 'unknown',
+            email: userInfo.email || '',
+            name: userInfo.name || 'Unknown User',
+            picture: userInfo.picture || '',
             provider: 'google',
             user_metadata: {
-              full_name: userInfo.name,
-              avatar_url: userInfo.picture
+              full_name: userInfo.name || 'Unknown User',
+              avatar_url: userInfo.picture || ''
             },
             app_metadata: {
               provider: 'google'
@@ -149,7 +183,7 @@ export async function signInWithGoogle() {
           logger.error('Error processing Google auth token:', error);
           return resolve({
             success: false,
-            error: error.message
+            error: error instanceof Error ? error.message : 'Unknown error during authentication'
           });
         }
       });
@@ -158,13 +192,13 @@ export async function signInWithGoogle() {
     logger.error('Error in signInWithGoogle:', error);
     return {
       success: false,
-      error: error.message
+      error: error instanceof Error ? error.message : 'Unknown error during authentication'
     };
   }
 }
 
 /**
- * Process Google callback URL
+ * Process Google callback URL with improved error handling
  * @param {string} url - Callback URL
  * @returns {Promise<AuthResult>} Authentication result
  */
@@ -174,10 +208,29 @@ export async function processGoogleCallback(url) {
       return { success: false, error: 'No callback URL provided' };
     }
 
-    const hashParams = new URLSearchParams(url.split('#')[1] || '');
-    const queryParams = new URLSearchParams(url.split('?')[1] || '');
+    // Extract parameters from URL with better parsing
+    let accessToken = '';
+    let expiresIn = 3600; // Default 1 hour
     
-    const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
+    try {
+      // Try to extract from hash fragment first
+      if (url.includes('#')) {
+        const hashParams = new URLSearchParams(url.split('#')[1] || '');
+        accessToken = hashParams.get('access_token') || '';
+        const expParam = hashParams.get('expires_in');
+        if (expParam) expiresIn = parseInt(expParam, 10);
+      }
+      
+      // If not found, try query parameters
+      if (!accessToken && url.includes('?')) {
+        const queryParams = new URLSearchParams(url.split('?')[1] || '');
+        accessToken = queryParams.get('access_token') || '';
+        const expParam = queryParams.get('expires_in');
+        if (expParam) expiresIn = parseInt(expParam, 10);
+      }
+    } catch (error) {
+      logger.error('Error parsing URL parameters:', error);
+    }
     
     if (!accessToken) {
       return { success: false, error: 'No access token found in callback URL' };
@@ -193,17 +246,22 @@ export async function processGoogleCallback(url) {
       };
     }
 
+    // Get user info with better error handling
     const userInfo = await getUserInfo(accessToken);
+    
+    if (!userInfo || !userInfo.sub) {
+      return { success: false, error: 'Failed to get valid user information' };
+    }
 
     const user = {
       id: userInfo.sub,
-      email: userInfo.email,
-      name: userInfo.name,
-      picture: userInfo.picture,
+      email: userInfo.email || '',
+      name: userInfo.name || 'Unknown User',
+      picture: userInfo.picture || '',
       provider: 'google',
       user_metadata: {
-        full_name: userInfo.name,
-        avatar_url: userInfo.picture
+        full_name: userInfo.name || 'Unknown User',
+        avatar_url: userInfo.picture || ''
       },
       app_metadata: {
         provider: 'google'
@@ -214,7 +272,7 @@ export async function processGoogleCallback(url) {
       provider: 'google',
       provider_token: accessToken,
       access_token: accessToken,
-      expires_at: Date.now() + 3600 * 1000,
+      expires_at: Date.now() + (expiresIn * 1000),
       created_at: Date.now(),
       user
     };
@@ -226,6 +284,9 @@ export async function processGoogleCallback(url) {
     return { success: true, user };
   } catch (error) {
     logger.error('Error processing Google callback:', error);
-    return { success: false, error: error.message };
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error during authentication'
+    };
   }
 }

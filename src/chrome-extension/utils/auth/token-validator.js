@@ -14,7 +14,7 @@ import { GOOGLE_CLIENT_ID } from '../oauth-config.js';
  */
 
 /**
- * Validate a Google OAuth token
+ * Validate a Google OAuth token with improved error handling
  * @param {string} token - Google OAuth token
  * @returns {Promise<TokenValidationResult>} Validation result
  */
@@ -25,7 +25,16 @@ export async function validateGoogleToken(token) {
     }
     
     // Verify token with Google
-    const response = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`);
+    let response;
+    try {
+      response = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`);
+    } catch (error) {
+      return { 
+        valid: false, 
+        reason: `Network error validating token: ${error.message || 'Unknown error'}`,
+        details: { errorType: 'network' }
+      };
+    }
     
     if (!response.ok) {
       return { 
@@ -35,7 +44,16 @@ export async function validateGoogleToken(token) {
       };
     }
     
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (error) {
+      return { 
+        valid: false, 
+        reason: `Error parsing token validation response: ${error.message || 'Unknown error'}`,
+        details: { errorType: 'parsing' }
+      };
+    }
     
     // Check if token is for the correct client
     if (data.aud && GOOGLE_CLIENT_ID && data.aud !== GOOGLE_CLIENT_ID) {
@@ -67,29 +85,54 @@ export async function validateGoogleToken(token) {
 }
 
 /**
- * Validate a session object
+ * Validate a session object with improved null checking
  * @param {any} session - Session object to validate
  * @returns {Promise<boolean>} Whether the session is valid
  */
 export async function validateSession(session) {
-  if (!session) return false;
-  
-  if (!session.access_token) return false;
-  
-  if (session.expires_at) {
-    const expiryDate = new Date(session.expires_at);
-    if (expiryDate < new Date()) return false;
-  }
-  
-  if (session.provider === 'google' && session.provider_token) {
-    try {
-      const validation = await validateGoogleToken(session.provider_token);
-      return validation.valid;
-    } catch (error) {
-      logger.error('Error validating Google token:', error);
+  try {
+    if (!session) {
+      logger.warn('Session is null or undefined');
       return false;
     }
+    
+    if (!session.access_token) {
+      logger.warn('Session has no access token');
+      return false;
+    }
+    
+    if (session.expires_at) {
+      const expiresAt = typeof session.expires_at === 'string' 
+        ? new Date(session.expires_at).getTime()
+        : session.expires_at;
+        
+      if (isNaN(expiresAt) || expiresAt < Date.now()) {
+        logger.warn('Session is expired');
+        return false;
+      }
+    }
+    
+    if (!session.user || !session.user.id) {
+      logger.warn('Session has no user information');
+      return false;
+    }
+    
+    if (session.provider === 'google' && session.provider_token) {
+      try {
+        const validation = await validateGoogleToken(session.provider_token);
+        if (!validation.valid) {
+          logger.warn('Google token validation failed:', validation.reason);
+          return false;
+        }
+      } catch (error) {
+        logger.error('Error validating Google token:', error);
+        return false;
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    logger.error('Error validating session:', error);
+    return false;
   }
-  
-  return true;
 }
