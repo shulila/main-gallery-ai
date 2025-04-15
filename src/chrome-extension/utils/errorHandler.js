@@ -6,40 +6,39 @@
 import { logger } from './logger.js';
 
 /**
- * Handle authentication errors
- * @param {string} operation - The operation that failed
- * @param {Error|any} error - The error that occurred
- * @returns {Object} Error response object
+ * Handle auth error and format a standardized response
+ * @param {string} operation - The authentication operation that failed
+ * @param {Error} error - The error object
+ * @returns {Object} Standardized error response
  */
 export function handleAuthError(operation, error) {
-  logger.error(`Error in ${operation}:`, error);
-  
-  // Format the error message
-  let errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-  
-  // Categorize common errors for better user feedback
-  if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-    errorMessage = 'Network error. Please check your internet connection.';
-  } else if (errorMessage.includes('token') && errorMessage.includes('expire')) {
-    errorMessage = 'Your session has expired. Please sign in again.';
-  } else if (errorMessage.includes('permission') || errorMessage.includes('access')) {
-    errorMessage = 'Permission denied. Please check your account permissions.';
-  }
+  logger.error(`Auth error in ${operation}:`, error);
   
   return {
     success: false,
-    error: errorMessage,
+    error: error instanceof Error ? error.message : String(error),
     operation
   };
 }
 
 /**
- * Handle general errors
- * @param {string} context - Error context
- * @param {Error|any} error - The error that occurred
- * @returns {string} Formatted error message
+ * General error handler for extension operations
+ * @param {string} context - The context where the error occurred
+ * @param {Error} error - The error object
+ * @param {Object} options - Additional options
+ * @returns {Object} Error information and status
  */
-export function formatError(context, error) {
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  return `[${context}] ${errorMessage}`;
+export function handleError(context, error, options = {}) {
+  const { silent = false, returnValue = null } = options;
+  
+  if (!silent) {
+    logger.error(`Error in ${context}:`, error);
+  }
+  
+  return {
+    error: error instanceof Error ? error.message : String(error),
+    context,
+    success: false,
+    value: returnValue
+  };
 }

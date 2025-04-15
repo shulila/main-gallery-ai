@@ -4,14 +4,31 @@
   "name": "MainGallery.AI",
   "version": "1.1.0",
   "description": "Collect and organize your AI-generated images across platforms",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "permissions": [
     "storage",
+    "tabs",
+    "cookies",
     "activeTab",
     "scripting",
-    "tabs",
-    "notifications",
     "identity",
-    "cookies"
+    "notifications"
   ],
   "host_permissions": [
     "https://*.main-gallery-ai.lovable.app/*",
@@ -28,42 +45,8 @@
     "https://*.fluxlabs.ai/*",
     "https://*.hailuoai.video/*",
     "https://*.app.ltx.studio/*",
-    "https://*.firefly.adobe.com/*",
-    "https://*.studio.d-id.com/*",
-    "https://*.app.heygen.com/*",
-    "https://*.preview.reve.art/*",
-    "https://*.lexica.art/*",
-    "https://*.creator.nightcafe.studio/*",
-    "https://*.looka.com/*",
-    "https://*.reroom.ai/*",
-    "https://*.genmo.ai/*",
-    "https://*.app.botika.io/*",
-    "https://*.playground.com/*",
-    "https://*.dream.ai/*",
-    "https://*.app.pixverse.ai/*",
-    "https://*.starryai.com/*",
-    "https://*.fotor.com/*",
-    "https://*.deviantart.com/*",
-    "https://*.deepai.org/*",
-    "https://*.app.elai.io/*",
-    "https://*.app.rundiffusion.com/*",
-    "https://*.neural.love/*",
-    "https://*.vidu.com/*",
-    "https://*.promeai.pro/*",
-    "https://*.genspark.ai/*"
+    "https://*.firefly.adobe.com/*"
   ],
-  "background": {
-    "service_worker": "background.js",
-    "type": "module"
-  },
-  "action": {
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    },
-    "default_popup": "popup.html"
-  },
   "content_scripts": [
     {
       "matches": [
@@ -78,29 +61,7 @@
         "https://*.fluxlabs.ai/*",
         "https://*.hailuoai.video/*",
         "https://*.app.ltx.studio/*",
-        "https://*.firefly.adobe.com/*",
-        "https://*.studio.d-id.com/*",
-        "https://*.app.heygen.com/*",
-        "https://*.preview.reve.art/*",
-        "https://*.lexica.art/*",
-        "https://*.creator.nightcafe.studio/*",
-        "https://*.looka.com/*",
-        "https://*.reroom.ai/*",
-        "https://*.genmo.ai/*",
-        "https://*.app.botika.io/*",
-        "https://*.playground.com/*",
-        "https://*.dream.ai/*",
-        "https://*.app.pixverse.ai/*",
-        "https://*.starryai.com/*",
-        "https://*.fotor.com/*",
-        "https://*.deviantart.com/*",
-        "https://*.deepai.org/*",
-        "https://*.app.elai.io/*",
-        "https://*.app.rundiffusion.com/*",
-        "https://*.neural.love/*",
-        "https://*.vidu.com/*",
-        "https://*.promeai.pro/*",
-        "https://*.genspark.ai/*"
+        "https://*.firefly.adobe.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
@@ -109,20 +70,14 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "bridge.js", 
-        "content-injection.js", 
+        "icons/*", 
         "utils/*.js", 
-        "utils/auth/*.js"
+        "auth/*.js", 
+        "api/*.js"
       ],
       "matches": ["<all_urls>"]
     }
   ],
-  "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  },
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiXs0SiJsR9jpVL+a6GgXmqgEH/wr6RkUxMTEXi5Ofq3J5UeP19x6NJJ0uyUdEX0dEnrxuevUdZ+bBYnM3gQHr8dQqsVnkzRxJQ5jxUZdkItSrN3yjOcVybosQfQFIOsV7BxB0aDbDJb+K93XfN2H3iFZlV7OfVY2lO/JjRY/TKKzWXKlD+0M3BOH1cjV5mgC5TG6sctiCGnQJwQR0F4SLAodzmKnFBHBPwEzUfSA3LF9y8SBHoDQtKlvofwS6mWwdSZaVRqDyHq1B1EiGhnjUfofgDt9yT2dAzjqz7cQ2YnvBO32SbhkI9w6X6Uq7nU/C4H5pA1jpfbLz/fZEQIDAQAB",
   "oauth2": {
     "client_id": "648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com",
     "scopes": [

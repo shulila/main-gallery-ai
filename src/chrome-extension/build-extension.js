@@ -4,19 +4,11 @@
  * 
  * This script organizes extension files into a proper structure for loading as an unpacked extension.
  * Run with: node build-extension.js
- * For preview build: node build-extension.js --preview
  */
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-
-// Check if this is a preview build
-const isPreviewBuild = process.env.BUILD_ENV === 'preview' || 
-                      process.argv.includes('--preview') || 
-                      process.argv.includes('-p');
-
-console.log(`Building for ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} environment`);
 
 // Configuration
 const OUTPUT_DIR = 'dist-extension';
@@ -32,19 +24,14 @@ if (fs.existsSync(OUTPUT_DIR)) {
 // Create subdirectories
 fs.mkdirSync(`${OUTPUT_DIR}/icons`, { recursive: true });
 fs.mkdirSync(`${OUTPUT_DIR}/utils`, { recursive: true });
-fs.mkdirSync(`${OUTPUT_DIR}/utils/auth`, { recursive: true });
+fs.mkdirSync(`${OUTPUT_DIR}/auth`, { recursive: true });
+fs.mkdirSync(`${OUTPUT_DIR}/api`, { recursive: true });
 
 // Step 2: Copy and modify manifest.json
 console.log('Copying and configuring manifest.json...');
 const manifestPath = path.join(SOURCE_DIR, 'manifest.json');
 const manifestContent = fs.readFileSync(manifestPath, 'utf8');
 const manifest = JSON.parse(manifestContent);
-
-// Update manifest based on environment
-if (isPreviewBuild) {
-  manifest.name = manifest.name + ' (Preview)';
-  manifest.description = manifest.description + ' - PREVIEW BUILD';
-}
 
 // Ensure background is configured correctly
 if (!manifest.background) {
@@ -58,24 +45,6 @@ if (!manifest.background) {
   manifest.background.service_worker = "background.js";
   manifest.background.type = "module";
   console.log('✅ Updated background service worker path in manifest');
-}
-
-// Always use the correct OAuth client ID
-if (manifest.oauth2 && manifest.oauth2.client_id) {
-  manifest.oauth2.client_id = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
-  console.log('Using correct OAuth client ID for the extension:', manifest.oauth2.client_id);
-}
-
-// Make sure web_accessible_resources include utils directory
-if (manifest.web_accessible_resources && manifest.web_accessible_resources.length > 0) {
-  // Update resources to include utils/auth/*.js
-  const resources = manifest.web_accessible_resources[0].resources;
-  
-  // Add auth subdirectory resources if not already there
-  if (!resources.includes("utils/auth/*.js")) {
-    resources.push("utils/auth/*.js");
-    console.log('Added utils/auth/*.js to web_accessible_resources');
-  }
 }
 
 // Write updated manifest
@@ -113,7 +82,7 @@ function processJsFile(sourcePath, destPath) {
   return true;
 }
 
-// Copy background.js - most critical file
+// Copy background.js
 processJsFile(
   path.join(SOURCE_DIR, 'background.js'),
   path.join(OUTPUT_DIR, 'background.js')
@@ -138,50 +107,50 @@ if (fs.existsSync(popupHtmlPath)) {
   console.log('✅ Copied popup.html');
 }
 
-// Step 4: Process utility files
+// Step 4: Process utility files and subdirectories
 console.log('Processing utility files...');
 
-// Copy util files
-function processUtilsDirectory(sourceUtilsDir, destUtilsDir) {
-  if (!fs.existsSync(sourceUtilsDir)) {
-    console.error(`❌ Directory not found: ${sourceUtilsDir}`);
+// Process directories recursively
+function processDirs(sourceDir, destDir, isRoot = false) {
+  if (!fs.existsSync(sourceDir)) {
+    console.warn(`⚠️ Source directory not found: ${sourceDir}`);
     return;
   }
   
-  if (!fs.existsSync(destUtilsDir)) {
-    fs.mkdirSync(destUtilsDir, { recursive: true });
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
   }
   
-  const files = fs.readdirSync(sourceUtilsDir);
+  const entries = fs.readdirSync(sourceDir, { withFileTypes: true });
   
-  files.forEach(file => {
-    const sourcePath = path.join(sourceUtilsDir, file);
-    const stats = fs.statSync(sourcePath);
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const destPath = path.join(destDir, entry.name);
     
-    // If it's a directory, process it recursively
-    if (stats.isDirectory()) {
-      processUtilsDirectory(
-        sourcePath, 
-        path.join(destUtilsDir, file)
-      );
-      return;
+    if (entry.isDirectory()) {
+      // Skip node_modules and hidden directories
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) {
+        continue;
+      }
+      
+      // Process directories recursively
+      processDirs(sourcePath, destPath);
+    } else if (entry.name.endsWith('.js')) {
+      // Process JavaScript files
+      processJsFile(sourcePath, destPath);
+    } else if (isRoot && (entry.name.endsWith('.html') || entry.name.endsWith('.css'))) {
+      // Copy HTML and CSS files from the root
+      fs.copyFileSync(sourcePath, destPath);
+      console.log(`✅ Copied: ${entry.name}`);
     }
-    
-    // Skip non-JavaScript files (including TypeScript)
-    if (!file.endsWith('.js')) {
-      return;
-    }
-    
-    const destPath = path.join(destUtilsDir, file);
-    processJsFile(sourcePath, destPath);
-  });
+  }
 }
 
-// Process main utils directory
-processUtilsDirectory(
-  path.join(SOURCE_DIR, 'utils'),
-  path.join(OUTPUT_DIR, 'utils')
-);
+// Process all subdirectories
+processDirs(path.join(SOURCE_DIR, 'utils'), path.join(OUTPUT_DIR, 'utils'));
+processDirs(path.join(SOURCE_DIR, 'auth'), path.join(OUTPUT_DIR, 'auth'));
+processDirs(path.join(SOURCE_DIR, 'api'), path.join(OUTPUT_DIR, 'api'));
+processDirs(SOURCE_DIR, OUTPUT_DIR, true);
 
 // Step 5: Copy icons
 console.log('Copying icons...');
@@ -198,24 +167,9 @@ if (fs.existsSync(ICONS_DIR)) {
   console.warn('⚠️ Icons directory not found');
 }
 
-// Step 6: Create environment.js with explicit settings
-const environmentJs = `/**
- * Environment configuration - Generated during build
- */
-export const ENVIRONMENT = "${isPreviewBuild ? 'preview' : 'production'}";
-export const BASE_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app' : 'https://main-gallery-ai.lovable.app'}";
-export const API_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/api' : 'https://main-gallery-ai.lovable.app/api'}";
-export const AUTH_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/auth' : 'https://main-gallery-ai.lovable.app/auth'}";
-export const GALLERY_URL = "${isPreviewBuild ? 'https://preview-main-gallery-ai.lovable.app/gallery' : 'https://main-gallery-ai.lovable.app/gallery'}";
-export const OAUTH_CLIENT_ID = "648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com";
-`;
-
-fs.writeFileSync(path.join(OUTPUT_DIR, 'utils', 'environment.js'), environmentJs);
-console.log('✅ Created environment.js with explicit settings');
-
-// Step 7: Final validation and checks
+// Step 6: Final validation and checks
 console.log('\nPerforming final validation checks...');
-const criticalFiles = ['manifest.json', 'background.js', 'popup.html'];
+const criticalFiles = ['manifest.json', 'background.js'];
 const missingFiles = criticalFiles.filter(file => !fs.existsSync(path.join(OUTPUT_DIR, file)));
 
 if (missingFiles.length > 0) {
@@ -260,7 +214,7 @@ if (foundTsImports) {
   console.log('✅ No TypeScript imports found in the build');
 }
 
-console.log(`\n✅ Build completed successfully for ${isPreviewBuild ? 'PREVIEW' : 'PRODUCTION'} environment!`);
+console.log(`\n✅ Build completed successfully!`);
 console.log(`Extension files are ready in the '${OUTPUT_DIR}' directory`);
 
 // Output information on how to load the extension

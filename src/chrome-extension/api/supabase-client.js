@@ -3,8 +3,9 @@
  * Supabase client for MainGallery.AI Chrome Extension
  */
 
-import { logger } from './logger.js';
-import { storage, STORAGE_KEYS } from './storage.js';
+import { logger } from '../utils/logger.js';
+import { storage, STORAGE_KEYS } from '../utils/storage.js';
+import { createError } from '../utils/error-handler.js';
 
 // Create a simple auth client that mimics the Supabase auth interface
 class AuthClient {
@@ -76,6 +77,3 @@ class SupabaseClient {
 
 // Create and export the Supabase client
 export const supabase = new SupabaseClient();
-
-// Log that this module was loaded (useful for debugging)
-logger.log("supabaseClient.js loaded");
