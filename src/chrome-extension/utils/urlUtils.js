@@ -53,6 +53,26 @@ export function getAuthUrl(options = {}) {
 }
 
 /**
+ * Build a URL with query parameters
+ * @param {string} baseUrl - Base URL
+ * @param {string} path - URL path
+ * @param {Object} params - Query parameters
+ * @returns {string} Complete URL
+ */
+export function buildUrl(baseUrl, path, params = {}) {
+  const url = new URL(path, baseUrl);
+  
+  // Add query parameters
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      url.searchParams.append(key, value);
+    }
+  });
+  
+  return url.toString();
+}
+
+/**
  * Check if a URL matches any supported platform
  * @param {string} url - URL to check
  * @returns {boolean} Whether the URL is from a supported platform
@@ -84,26 +104,6 @@ export function isSupportedPlatformUrl(url) {
 }
 
 /**
- * Build a URL with query parameters
- * @param {string} baseUrl - Base URL
- * @param {string} path - URL path
- * @param {Object} params - Query parameters
- * @returns {string} Complete URL
- */
-export function buildUrl(baseUrl, path, params = {}) {
-  const url = new URL(path, baseUrl);
-  
-  // Add query parameters
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      url.searchParams.append(key, value);
-    }
-  });
-  
-  return url.toString();
-}
-
-/**
  * Get API URL
  * @param {string} endpoint - API endpoint
  * @returns {string} API URL
@@ -111,4 +111,3 @@ export function buildUrl(baseUrl, path, params = {}) {
 export function getApiUrl(endpoint) {
   return `${getBaseUrl()}/api${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
 }
-

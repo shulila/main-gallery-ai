@@ -6,25 +6,22 @@
 import { logger } from './logger.js';
 
 export const STORAGE_KEYS = {
-  USER: 'main_gallery_user',
-  SESSION: 'main_gallery_session',
-  AUTH_STATE: 'main_gallery_auth_state',
-  SETTINGS: 'main_gallery_settings',
-  PLATFORMS: 'main_gallery_platforms',
-  LAST_SYNC: 'main_gallery_last_sync',
-  SYNC_IN_PROGRESS: 'main_gallery_sync_in_progress'
+  SESSION: 'mg_session',
+  USER: 'mg_user',
+  AUTH_STATE: 'mg_auth_state',
+  LAST_SYNC: 'mg_last_sync',
+  SYNC_IN_PROGRESS: 'mg_sync_in_progress'
 };
 
 export const storage = {
   /**
    * Get a value from storage
    * @param {string} key - Storage key
-   * @param {any} defaultValue - Default value if key not found
+   * @param {any} [defaultValue] - Default value if key not found
    * @returns {Promise<any>} The value or default value if not found
    */
-  get: async function(key, defaultValue) {
+  get: async function(key, defaultValue = null) {
     try {
-      // Using Promise-based wrapper around the callback API
       const result = await new Promise((resolve, reject) => {
         chrome.storage.local.get([key], (items) => {
           if (chrome.runtime.lastError) {
@@ -34,10 +31,10 @@ export const storage = {
           }
         });
       });
-      return result[key] !== undefined ? result[key] : (defaultValue ?? null);
+      return result[key] !== undefined ? result[key] : defaultValue;
     } catch (error) {
       logger.error(`Error getting ${key} from storage:`, error);
-      return defaultValue ?? null;
+      return defaultValue;
     }
   },
   
@@ -111,27 +108,6 @@ export const storage = {
   },
   
   /**
-   * Get all items from storage
-   * @returns {Promise<Object>} All storage items
-   */
-  getAll: async function() {
-    try {
-      return await new Promise((resolve, reject) => {
-        chrome.storage.local.get(null, (items) => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve(items);
-          }
-        });
-      });
-    } catch (error) {
-      logger.error('Error getting all storage data:', error);
-      return {};
-    }
-  },
-  
-  /**
    * Get multiple items from storage
    * @param {Array<string>} keys - Keys to retrieve
    * @returns {Promise<Object>} Object with key-value pairs
@@ -153,4 +129,3 @@ export const storage = {
     }
   }
 };
-

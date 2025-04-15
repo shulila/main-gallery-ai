@@ -1,4 +1,8 @@
 
+/**
+ * Error handler for MainGallery.AI Chrome Extension
+ */
+
 import { logger } from './logger.js';
 
 /**
@@ -24,67 +28,37 @@ export async function safeFetch(url, options = {}) {
 
 /**
  * Handle auth errors consistently
- * @param {string} context - Where the error occurred
- * @param {Error|any} error - The error object
- * @returns {Object} Structured error response
+ * @param {string} operation - The operation that failed
+ * @param {Error|any} error - The error that occurred
+ * @returns {Object} Error response object
  */
-export function handleAuthError(context, error) {
+export function handleAuthError(operation, error) {
   // Log the error with context
-  logger.error(`Auth error in ${context}:`, error);
+  logger.error(`Error in ${operation}:`, error);
   
-  // Categorize errors for better user feedback
-  let userMessage = 'Authentication failed. Please try again.';
+  // Format the error message
+  let errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
   
-  if (error.message) {
-    if (error.message.includes('canceled') || error.message.includes('cancel')) {
-      userMessage = 'Authentication was canceled.';
-    } else if (error.message.includes('network') || error.message.includes('connection')) {
-      userMessage = 'Network error during authentication. Please check your connection.';
-    } else if (error.message.includes('permission')) {
-      userMessage = 'Permission denied. Please allow the required permissions.';
-    } else if (error.message.includes('token') || error.message.includes('expired')) {
-      userMessage = 'Authentication token is invalid or expired. Please sign in again.';
-    }
-  }
-  
-  // Return structured error object
-  return {
-    success: false,
-    error: userMessage,
-    technical_error: error.message || 'Unknown error',
-    context: context
-  };
-}
-
-/**
- * Generic error handler
- * @param {string} context - Where the error occurred
- * @param {Error|any} error - The error object
- * @returns {Object} Structured error response
- */
-export function handleError(context, error) {
-  logger.error(`Error in ${context}:`, error);
-  
-  // Return structured error for display to user
-  if (error instanceof Error) {
-    return {
-      success: false,
-      error: error.message || 'An error occurred',
-      context
-    };
+  // Categorize common errors for better user feedback
+  if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+    errorMessage = 'Network error. Please check your internet connection.';
+  } else if (errorMessage.includes('token') && errorMessage.includes('expire')) {
+    errorMessage = 'Your session has expired. Please sign in again.';
+  } else if (errorMessage.includes('permission') || errorMessage.includes('access')) {
+    errorMessage = 'Permission denied. Please check your account permissions.';
   }
   
   return {
     success: false,
-    error: 'An error occurred',
-    context
+    error: errorMessage,
+    operation
   };
 }
 
 /**
  * Create an async function wrapper with timeout
  * @param {Function} asyncFn - Async function to wrap
- * @param {number} timeoutMs - Timeout in milliseconds
+ * @param {number} timeoutMs - Timeout in milliseconds 
  * @param {string} errorMessage - Error message if timeout occurs
  * @returns {Function} Wrapped function with timeout
  */

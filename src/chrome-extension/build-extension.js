@@ -244,3 +244,41 @@ main().catch(error => {
   console.error('Build failed:', error);
   process.exit(1);
 });
+
+const processJsFile = (sourcePath, destPath) => {
+  if (!fs.existsSync(sourcePath)) {
+    console.error(`❌ File not found: ${sourcePath}`);
+    return false;
+  }
+  
+  let content = fs.readFileSync(sourcePath, 'utf8');
+  
+  // Fix module imports to ensure .js extensions
+  content = content.replace(/from ['"]\.\/utils\/([^'"]+)['"]/g, (match, p1) => {
+    if (!p1.endsWith('.js')) {
+      return `from './utils/${p1}.js'`;
+    }
+    return match;
+  });
+  
+  // Fix dynamic imports
+  content = content.replace(/import\(['"]\.\/utils\/([^'"]+)['"]\)/g, (match, p1) => {
+    if (!p1.endsWith('.js')) {
+      return `import('./utils/${p1}.js')`;
+    }
+    return match;
+  });
+  
+  // Fix relative paths
+  content = content.replace(/from ['"]\.\.\/([^'"]+)['"]/g, (match, p1) => {
+    if (!p1.endsWith('.js') && !p1.includes('/')) {
+      return `from '../${p1}.js'`;
+    }
+    return match;
+  });
+  
+  // Write the processed file
+  fs.writeFileSync(destPath, content);
+  console.log(`✅ Processed: ${path.basename(destPath)}`);
+  return true;
+};
