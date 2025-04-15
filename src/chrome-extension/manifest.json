@@ -108,7 +108,12 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["bridge.js", "content-injection.js", "utils/*.js"],
+      "resources": [
+        "bridge.js", 
+        "content-injection.js", 
+        "utils/*.js", 
+        "utils/auth/*.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
