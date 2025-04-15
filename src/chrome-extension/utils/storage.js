@@ -11,7 +11,8 @@ export const STORAGE_KEYS = {
   AUTH_STATE: 'main_gallery_auth_state',
   SETTINGS: 'main_gallery_settings',
   PLATFORMS: 'main_gallery_platforms',
-  LAST_SYNC: 'main_gallery_last_sync'
+  LAST_SYNC: 'main_gallery_last_sync',
+  SYNC_IN_PROGRESS: 'main_gallery_sync_in_progress'
 };
 
 export const storage = {
@@ -90,9 +91,13 @@ export const storage = {
   
   getAll: async function() {
     try {
-      return await new Promise((resolve) => {
+      return await new Promise((resolve, reject) => {
         chrome.storage.local.get(null, (items) => {
-          resolve(items);
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve(items);
+          }
         });
       });
     } catch (error) {

@@ -3,6 +3,7 @@ import { logger } from '../logger.js';
 import { storage, STORAGE_KEYS } from '../storage.js';
 import { syncAuthState } from '../cookie-sync.js';
 import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from '../oauth-config.js';
+import { validateGoogleToken } from './token-validator.ts';
 
 // Import types with correct path and extension
 import type { AuthUser, AuthSession, AuthResult, UserInfo } from '../types/auth.d.ts';
@@ -30,12 +31,25 @@ export async function signInWithGoogle(): Promise<AuthResult> {
     logger.log('Initiating Google sign in with chrome.identity');
 
     return new Promise<AuthResult>((resolve) => {
-      chrome.identity.getAuthToken({ interactive: true }, async (token) => {
+      chrome.identity.getAuthToken({ 
+        interactive: true,
+        scopes: GOOGLE_SCOPES
+      }, async (token) => {
         if (chrome.runtime.lastError) {
-          logger.error('Error getting auth token:', chrome.runtime.lastError);
+          const error = chrome.runtime.lastError;
+          logger.error('Error getting auth token:', error);
+          
+          // Categorize errors for better handling
+          let errorMessage = error.message || 'No authentication token received';
+          if (error.message?.includes('canceled')) {
+            errorMessage = 'Authentication was canceled by the user';
+          } else if (error.message?.includes('network')) {
+            errorMessage = 'Network error during authentication. Please check your connection';
+          }
+          
           return resolve({
             success: false,
-            error: chrome.runtime.lastError.message
+            error: errorMessage
           });
         }
 
@@ -47,6 +61,16 @@ export async function signInWithGoogle(): Promise<AuthResult> {
         }
 
         try {
+          // Validate the token first
+          const tokenValidation = await validateGoogleToken(token);
+          if (!tokenValidation.valid) {
+            logger.error('Invalid Google token:', tokenValidation.reason);
+            return resolve({
+              success: false,
+              error: `Authentication failed: ${tokenValidation.reason}`
+            });
+          }
+          
           const userInfo = await getUserInfo(token);
           
           const user: AuthUser = {
@@ -115,6 +139,16 @@ export async function processGoogleCallback(url: string): Promise<AuthResult> {
     
     if (!accessToken) {
       return { success: false, error: 'No access token found in callback URL' };
+    }
+    
+    // Validate the token first
+    const tokenValidation = await validateGoogleToken(accessToken);
+    if (!tokenValidation.valid) {
+      logger.error('Invalid Google token:', tokenValidation.reason);
+      return {
+        success: false,
+        error: `Authentication failed: ${tokenValidation.reason}`
+      };
     }
 
     const userInfo = await getUserInfo(accessToken);

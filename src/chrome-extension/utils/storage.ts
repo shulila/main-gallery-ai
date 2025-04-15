@@ -5,7 +5,8 @@ export const STORAGE_KEYS = {
   SESSION: 'mg_session',
   USER: 'mg_user',
   AUTH_STATE: 'mg_auth_state',
-  LAST_SYNC: 'mg_last_sync'
+  LAST_SYNC: 'mg_last_sync',
+  SYNC_IN_PROGRESS: 'mg_sync_in_progress'
 } as const;
 
 export const storage = {

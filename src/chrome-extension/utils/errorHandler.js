@@ -36,6 +36,40 @@ export function handleError(source, error, options = {}) {
 }
 
 /**
+ * Handle authentication errors with better user feedback
+ * @param {string} context - The context where the error occurred
+ * @param {Error} error - The error object
+ * @returns {Object} Structured error object for response
+ */
+export function handleAuthError(context, error) {
+  // Log the error with context
+  logger.error(`Auth error in ${context}:`, error);
+  
+  // Categorize errors for better user feedback
+  let userMessage = 'Authentication failed. Please try again.';
+  
+  if (error?.message) {
+    if (error.message.includes('canceled') || error.message.includes('cancel')) {
+      userMessage = 'Authentication was canceled.';
+    } else if (error.message.includes('network') || error.message.includes('connection')) {
+      userMessage = 'Network error during authentication. Please check your connection.';
+    } else if (error.message.includes('permission')) {
+      userMessage = 'Permission denied. Please allow the required permissions.';
+    } else if (error.message.includes('token') || error.message.includes('expired')) {
+      userMessage = 'Authentication token is invalid or expired. Please sign in again.';
+    }
+  }
+  
+  // Return structured error object
+  return {
+    success: false,
+    error: userMessage,
+    technical_error: error?.message || 'Unknown error',
+    context: context
+  };
+}
+
+/**
  * Enhanced fetch with retry capability and better error handling
  * @param {string} url - URL to fetch
  * @param {Object} options - Fetch options

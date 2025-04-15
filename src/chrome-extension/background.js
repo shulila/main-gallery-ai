@@ -5,10 +5,11 @@
 
 import { logger } from './utils/logger.js';
 import { storage, STORAGE_KEYS } from './utils/storage.js';
-import { authService } from './utils/auth-service.js';
+import { authService } from './utils/auth/auth-service.ts';
 import { setupCallbackUrlListener } from './utils/callback-handler.js';
 import { syncAuthState } from './utils/cookie-sync.js';
-import { AUTH_TIMEOUTS } from './utils/oauth-config.js';
+import { AUTH_TIMEOUTS, WEB_APP_URLS } from './utils/oauth-config.js';
+import { handleAuthError } from './utils/errorHandler.js';
 
 // Initial setup
 async function initialize() {
@@ -36,6 +37,36 @@ async function initialize() {
   }
 }
 
+// Open gallery in new tab or focus existing tab
+async function openGalleryTab() {
+  return new Promise((resolve, reject) => {
+    try {
+      const galleryUrl = WEB_APP_URLS.GALLERY;
+      
+      // Check if a gallery tab is already open
+      chrome.tabs.query({ url: `${galleryUrl}*` }, (tabs) => {
+        if (tabs.length > 0) {
+          // Focus the existing tab
+          chrome.tabs.update(tabs[0].id, { active: true });
+          chrome.windows.update(tabs[0].windowId, { focused: true });
+          resolve(true);
+        } else {
+          // Open a new tab
+          chrome.tabs.create({ url: galleryUrl }, () => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve(true);
+            }
+          });
+        }
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 // Initialize the extension
 initialize();
 
@@ -53,23 +84,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Handle messages asynchronously
 async function handleMessage(message, sender) {
   try {
-    switch (message.type) {
+    logger.log('Received message:', message.type || message.action);
+    
+    const action = message.type || message.action;
+    
+    switch (action) {
       case 'SIGN_IN_GOOGLE':
-        return await authService.signInWithGoogle();
+      case 'signInWithGoogle':
+        try {
+          return await authService.signInWithGoogle();
+        } catch (error) {
+          return handleAuthError('signInWithGoogle', error);
+        }
         
       case 'SIGN_OUT':
-        return await authService.signOut();
+      case 'signOut':
+        try {
+          return await authService.signOut();
+        } catch (error) {
+          return handleAuthError('signOut', error);
+        }
         
       case 'CHECK_AUTH':
-        const isAuthenticated = await authService.isAuthenticated();
-        const user = isAuthenticated ? await authService.getUser() : null;
-        return { success: true, isAuthenticated, user };
+      case 'checkAuth':
+        try {
+          const isAuthenticated = await authService.isAuthenticated();
+          const user = isAuthenticated ? await authService.getUser() : null;
+          return { success: true, isAuthenticated, user };
+        } catch (error) {
+          return handleAuthError('checkAuth', error);
+        }
         
       case 'SYNC_AUTH':
-        return { success: await syncAuthState() };
+      case 'syncAuth':
+        try {
+          const syncResult = await syncAuthState();
+          return { success: syncResult };
+        } catch (error) {
+          return handleAuthError('syncAuth', error);
+        }
+        
+      case 'openGallery':
+        try {
+          // First check if user is authenticated
+          const isAuthenticated = await authService.isAuthenticated();
+          
+          if (!isAuthenticated) {
+            return { 
+              success: false, 
+              error: 'User is not authenticated',
+              requiresAuth: true
+            };
+          }
+          
+          await openGalleryTab();
+          return { success: true };
+        } catch (error) {
+          return handleAuthError('openGallery', error);
+        }
         
       default:
-        logger.warn('Unknown message type:', message.type);
+        logger.warn('Unknown message type:', action);
         return { success: false, error: 'Unknown message type' };
     }
   } catch (error) {
