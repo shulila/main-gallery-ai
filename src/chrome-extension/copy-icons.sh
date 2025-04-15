@@ -2,19 +2,19 @@
 #!/bin/bash
 
 # Create assets directory if it doesn't exist
-mkdir -p assets/icons
+mkdir -p src/chrome-extension/assets/icons
 
-# Copy all basic icon files
-cp icons/icon16.png assets/icons/
-cp icons/icon48.png assets/icons/
-cp icons/icon128.png assets/icons/
+# Copy all basic icon files to assets directory
+cp src/chrome-extension/icons/icon16.png src/chrome-extension/assets/icons/
+cp src/chrome-extension/icons/icon48.png src/chrome-extension/assets/icons/
+cp src/chrome-extension/icons/icon128.png src/chrome-extension/assets/icons/
 
 # Copy social media icons
-cp icons/facebook-icon.svg assets/icons/
-cp icons/google-icon.svg assets/icons/
+cp src/chrome-extension/icons/facebook-icon.svg src/chrome-extension/assets/icons/
+cp src/chrome-extension/icons/google-icon.svg src/chrome-extension/assets/icons/
 
 # Make script executable
-chmod +x copy-icons.sh
+chmod +x src/chrome-extension/copy-icons.sh
 
 echo "Icons copied successfully to assets/icons directory."
 echo "Please ensure you've updated manifest.json to reference these new paths."
