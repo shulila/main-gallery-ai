@@ -20,7 +20,7 @@ export function setupCallbackUrlListener() {
       // Only process if URL changed and is complete
       if (changeInfo.status === 'complete' && tab && tab.url) {
         try {
-          if (isCallbackUrl(tab.url)) {
+          if (isAuthCallbackUrl(tab.url)) {
             logger.log('Detected callback URL in tab:', tabId);
             
             // Process the callback URL
@@ -81,7 +81,7 @@ export function setupCallbackUrlListener() {
  * @param {string} url - URL to check
  * @returns {boolean} - Whether the URL is a callback URL
  */
-export function isCallbackUrl(url) {
+export function isAuthCallbackUrl(url) {
   if (!url || typeof url !== 'string') return false;
   
   try {
@@ -91,7 +91,7 @@ export function isCallbackUrl(url) {
     }
     
     // Also check for any URL with access_token or code parameter
-    return (url.includes('callback') && 
+    return (url.includes('/auth') && 
            (url.includes('access_token=') || url.includes('code=')));
   } catch (error) {
     logger.error('Error checking if URL is callback:', error);

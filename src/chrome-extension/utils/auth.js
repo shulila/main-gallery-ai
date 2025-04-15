@@ -5,7 +5,7 @@
  */
 
 import { logger } from './logger.js';
-import { authService } from '../auth/auth-service.js';
+import { authService } from './auth/auth-service.js';
 
 /**
  * Check if user is logged in
@@ -58,13 +58,65 @@ export async function openAuthPage(provider = 'google') {
     if (provider === 'google') {
       await authService.signInWithGoogle();
     } else {
-      // Email sign in not implemented in this version
-      logger.warn('Email sign in not implemented');
+      // Email sign in handled elsewhere
+      logger.warn('Email sign in should be handled in popup.js');
     }
     return true;
   } catch (error) {
     logger.error('Error in openAuthPage wrapper:', error);
     return false;
+  }
+}
+
+/**
+ * Handle email and password login 
+ * Implementation was previously missing
+ * @param {string} email - User email
+ * @param {string} password - User password
+ * @returns {Promise<Object>} Login result
+ */
+export async function handleEmailPasswordLogin(email, password) {
+  try {
+    if (!email || !password) {
+      return { success: false, error: 'Email and password are required' };
+    }
+    
+    logger.log('Attempting email login');
+    
+    // Use Supabase client from the app for authentication
+    // This is a basic implementation that can be expanded
+    const { data, error } = await fetch('https://main-gallery-ai.lovable.app/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    }).then(r => r.json());
+    
+    if (error) {
+      logger.error('Email login failed:', error);
+      return { success: false, error: error.message || 'Authentication failed' };
+    }
+    
+    if (!data || !data.user) {
+      return { success: false, error: 'Invalid response from authentication server' };
+    }
+    
+    // Store user data manually since this is outside of authService
+    await authService.setSession({
+      user: data.user,
+      provider: 'email',
+      access_token: data.session?.access_token,
+      refresh_token: data.session?.refresh_token,
+      expires_at: Date.now() + (3600 * 1000), // 1 hour
+      created_at: Date.now()
+    });
+    
+    return { success: true, user: data.user };
+  } catch (error) {
+    logger.error('Error in email/password login:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error during login'
+    };
   }
 }
 
