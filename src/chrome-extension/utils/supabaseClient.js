@@ -12,12 +12,13 @@ import { logger } from './logger.js';
 import { storage, STORAGE_KEYS } from './storage.js';
 import { authService } from './auth-service.js';
 
-// Create a service worker compatible client
+// Create a service worker compatible client with enhanced support for setSession
 const supabaseClient = {
   auth: {
     getSession: async () => {
       try {
-        return await authService.getSession();
+        const session = await authService.getSession();
+        return { data: { session }, error: null };
       } catch (error) {
         logger.error('Error in supabase.auth.getSession:', error);
         return { data: { session: null }, error };
@@ -31,6 +32,32 @@ const supabaseClient = {
       } catch (error) {
         logger.error('Error in supabase.auth.getUser:', error);
         return { data: { user: null }, error };
+      }
+    },
+    
+    // Add setSession functionality that was missing
+    setSession: async (session) => {
+      try {
+        if (!session) {
+          await storage.remove(STORAGE_KEYS.SESSION);
+          await storage.remove(STORAGE_KEYS.USER);
+          return { error: null };
+        }
+        
+        await storage.set(STORAGE_KEYS.SESSION, session);
+        if (session.user) {
+          await storage.set(STORAGE_KEYS.USER, session.user);
+        }
+        
+        // Trigger auth state change event
+        if (authService._triggerAuthStateChange) {
+          await authService._triggerAuthStateChange('SESSION_UPDATED', session.user);
+        }
+        
+        return { data: { session }, error: null };
+      } catch (error) {
+        logger.error('Error in supabase.auth.setSession:', error);
+        return { error };
       }
     },
     
@@ -93,74 +120,6 @@ const supabaseClient = {
       
       // Return a function to remove the listener
       return { data: { subscription: { unsubscribe } } };
-    },
-    
-    // Handle OAuth token (for compatibility with callback-handler.js)
-    handleOAuthToken: async (token, provider) => {
-      try {
-        // If we have a token but no URL, create a mock callback URL
-        if (token && typeof token === 'string') {
-          const url = `https://example.com/callback#access_token=${token}&token_type=bearer&expires_in=3600`;
-          const result = await authService.processGoogleCallback(url);
-          
-          if (result.success) {
-            return { data: { user: result.user, session: await authService.getSession() }, error: null };
-          } else {
-            return { data: null, error: new Error(result.error) };
-          }
-        } else if (typeof token === 'object' && token.access_token) {
-          // Handle token object directly
-          const session = {
-            access_token: token.access_token,
-            refresh_token: token.refresh_token || null,
-            provider: provider || 'google',
-            expires_at: token.expires_at || new Date(Date.now() + 3600 * 1000).toISOString()
-          };
-          
-          // Store the session
-          await storage.set(STORAGE_KEYS.SESSION, session);
-          
-          // Get user info if needed
-          if (!token.user) {
-            try {
-              const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { Authorization: `Bearer ${token.access_token}` }
-              });
-              
-              if (userInfoResponse.ok) {
-                const userInfo = await userInfoResponse.json();
-                const user = {
-                  id: userInfo.sub,
-                  email: userInfo.email,
-                  user_metadata: {
-                    full_name: userInfo.name,
-                    avatar_url: userInfo.picture
-                  }
-                };
-                
-                // Update session with user
-                session.user = user;
-                await storage.set(STORAGE_KEYS.SESSION, session);
-                await storage.set(STORAGE_KEYS.USER, user);
-                
-                // Trigger auth state change
-                await authService._triggerAuthStateChange('SIGNED_IN', user);
-                
-                return { data: { user, session }, error: null };
-              }
-            } catch (error) {
-              logger.error('Error getting user info:', error);
-            }
-          }
-          
-          return { data: { session }, error: null };
-        }
-        
-        return { data: null, error: new Error('Invalid token format') };
-      } catch (error) {
-        logger.error('Error in handleOAuthToken:', error);
-        return { data: null, error };
-      }
     }
   }
 };

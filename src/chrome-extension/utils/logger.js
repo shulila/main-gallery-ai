@@ -66,5 +66,4 @@ export const logger = {
   }
 };
 
-// Export the logger
-export default logger;
+// Export the logger (removed default export)
