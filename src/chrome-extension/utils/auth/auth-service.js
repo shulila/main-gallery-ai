@@ -10,6 +10,33 @@ import { syncAuthState } from '../cookie-sync.js';
 import { signInWithGoogle, processGoogleCallback } from './google-auth.js';
 import { validateSession } from './token-validator.js';
 
+/**
+ * @typedef {Object} AuthUser
+ * @property {string} id - User ID
+ * @property {string} email - User email
+ * @property {string} name - User name
+ * @property {string} picture - User profile picture URL
+ * @property {string} provider - Auth provider (e.g., 'google')
+ * @property {Object} user_metadata - Additional user metadata
+ * @property {Object} app_metadata - Application metadata
+ */
+
+/**
+ * @typedef {Object} AuthSession
+ * @property {string} provider - Auth provider (e.g., 'google')
+ * @property {string} provider_token - Provider-specific token
+ * @property {string} access_token - Access token
+ * @property {number|string} expires_at - Expiration timestamp
+ * @property {AuthUser} [user] - User information
+ */
+
+/**
+ * @typedef {Object} AuthResult
+ * @property {boolean} success - Whether the operation was successful
+ * @property {string} [error] - Error message if operation failed
+ * @property {AuthUser} [user] - User information if operation succeeded
+ */
+
 class AuthService {
   /**
    * Check if user is authenticated
@@ -36,7 +63,7 @@ class AuthService {
 
   /**
    * Get current user
-   * @returns {Promise<Object|null>}
+   * @returns {Promise<AuthUser|null>}
    */
   async getUser() {
     try {
@@ -49,7 +76,7 @@ class AuthService {
 
   /**
    * Sign in with Google
-   * @returns {Promise<{success: boolean, error?: string, user?: Object}>}
+   * @returns {Promise<AuthResult>}
    */
   async signInWithGoogle() {
     return signInWithGoogle();
@@ -57,7 +84,7 @@ class AuthService {
 
   /**
    * Sign out
-   * @returns {Promise<{success: boolean, error?: string}>}
+   * @returns {Promise<AuthResult>}
    */
   async signOut() {
     try {
@@ -91,7 +118,7 @@ class AuthService {
   /**
    * Process Google callback
    * @param {string} url - Callback URL
-   * @returns {Promise<{success: boolean, error?: string, user?: Object}>}
+   * @returns {Promise<AuthResult>}
    */
   async processGoogleCallback(url) {
     return processGoogleCallback(url);

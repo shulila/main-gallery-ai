@@ -5,8 +5,8 @@
 
 import { logger } from './utils/logger.js';
 import { storage, STORAGE_KEYS } from './utils/storage.js';
-import { authService } from './utils/auth/auth-service.ts';
-import { setupCallbackUrlListener } from './utils/callback-handler.js';
+import { authService } from './utils/auth/auth-service.js';
+import { setupCallbackUrlListener } from './utils/auth/callback-handler.js';
 import { syncAuthState } from './utils/cookie-sync.js';
 import { AUTH_TIMEOUTS, WEB_APP_URLS } from './utils/oauth-config.js';
 import { handleAuthError } from './utils/errorHandler.js';

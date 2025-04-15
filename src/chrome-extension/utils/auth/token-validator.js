@@ -7,9 +7,16 @@ import { logger } from '../logger.js';
 import { GOOGLE_CLIENT_ID } from '../oauth-config.js';
 
 /**
+ * @typedef {Object} TokenValidationResult
+ * @property {boolean} valid - Whether the token is valid
+ * @property {string} [reason] - Reason for invalid token
+ * @property {Object} [details] - Additional details
+ */
+
+/**
  * Validate a Google OAuth token
  * @param {string} token - Google OAuth token
- * @returns {Promise<{valid: boolean, reason?: string}>}
+ * @returns {Promise<TokenValidationResult>} Validation result
  */
 export async function validateGoogleToken(token) {
   try {
@@ -23,7 +30,8 @@ export async function validateGoogleToken(token) {
     if (!response.ok) {
       return { 
         valid: false, 
-        reason: `Token validation failed with status: ${response.status}`
+        reason: `Token validation failed with status: ${response.status}`,
+        details: { status: response.status, statusText: response.statusText }
       };
     }
     
@@ -33,7 +41,8 @@ export async function validateGoogleToken(token) {
     if (data.aud && GOOGLE_CLIENT_ID && data.aud !== GOOGLE_CLIENT_ID) {
       return { 
         valid: false, 
-        reason: 'Token is for a different client'
+        reason: 'Token is for a different client',
+        details: { expected: GOOGLE_CLIENT_ID, actual: data.aud }
       };
     }
     
@@ -42,11 +51,12 @@ export async function validateGoogleToken(token) {
     if (data.exp && data.exp < now) {
       return { 
         valid: false, 
-        reason: 'Token is expired'
+        reason: 'Token is expired',
+        details: { expiresAt: data.exp, now }
       };
     }
     
-    return { valid: true };
+    return { valid: true, details: { sub: data.sub, email: data.email } };
   } catch (error) {
     logger.error('Error validating Google token:', error);
     return { 
@@ -59,7 +69,7 @@ export async function validateGoogleToken(token) {
 /**
  * Validate a session object
  * @param {any} session - Session object to validate
- * @returns {Promise<boolean>}
+ * @returns {Promise<boolean>} Whether the session is valid
  */
 export async function validateSession(session) {
   if (!session) return false;
