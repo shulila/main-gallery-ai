@@ -41,3 +41,15 @@ const keepAlive = () => {
   setTimeout(keepAlive, 20 * 60 * 1000); // 20 minutes
 };
 keepAlive();
+
+// Handle unhandled errors
+self.addEventListener('unhandledrejection', event => {
+  console.error("[MainGallery] Unhandled promise rejection:", event.reason);
+});
+
+self.addEventListener('error', event => {
+  console.error("[MainGallery] Uncaught error:", event.error);
+});
+
+// Log successful initialization
+console.log("[MainGallery] Background service worker initialized");

@@ -9,7 +9,7 @@ import { GOOGLE_CLIENT_ID } from '../oauth-config.js';
 /**
  * Validate a Google OAuth token
  * @param {string} token - Google OAuth token
- * @returns {Promise<{valid: boolean, reason?: string}>} Validation result
+ * @returns {Promise<{valid: boolean, reason?: string}>}
  */
 export async function validateGoogleToken(token) {
   try {
@@ -59,21 +59,18 @@ export async function validateGoogleToken(token) {
 /**
  * Validate a session object
  * @param {any} session - Session object to validate
- * @returns {Promise<boolean>} Whether the session is valid
+ * @returns {Promise<boolean>}
  */
 export async function validateSession(session) {
   if (!session) return false;
   
-  // Check if session has required fields
   if (!session.access_token) return false;
   
-  // Check if session is expired
   if (session.expires_at) {
     const expiryDate = new Date(session.expires_at);
     if (expiryDate < new Date()) return false;
   }
   
-  // For Google sessions, validate the token
   if (session.provider === 'google' && session.provider_token) {
     try {
       const validation = await validateGoogleToken(session.provider_token);

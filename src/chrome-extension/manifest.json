@@ -14,7 +14,6 @@
   ],
   "host_permissions": [
     "https://*.main-gallery-ai.lovable.app/*",
-    "https://*.preview-main-gallery-ai.lovable.app/*",
     "https://accounts.google.com/*",
     "https://www.googleapis.com/*",
     "https://*.midjourney.com/*",
