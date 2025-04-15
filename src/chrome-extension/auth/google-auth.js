@@ -5,7 +5,7 @@
 
 import { logger } from '../utils/logger.js';
 import { storage, STORAGE_KEYS } from '../utils/storage.js';
-import { CONFIG } from '../utils/config.js';
+import { getBaseUrl } from '../utils/urlUtils.js';
 import { createError } from '../utils/error-handler.js';
 
 /**
@@ -36,7 +36,7 @@ export async function signInWithGoogle() {
         await storage.remove(STORAGE_KEYS.AUTH_IN_PROGRESS);
         logger.warn('Auth flow timed out');
       }
-    }, CONFIG.AUTH_TIMEOUTS.AUTH_FLOW_TIMEOUT);
+    }, 5 * 60 * 1000); // 5 minutes timeout
     
     return { success: true, message: 'Auth flow started' };
   } catch (error) {
@@ -52,7 +52,8 @@ export async function signInWithGoogle() {
  * @returns {string} Google OAuth URL
  */
 function createGoogleAuthUrl(state) {
-  const redirectUri = encodeURIComponent(CONFIG.WEB_APP_URLS.AUTH_CALLBACK);
+  // Use /auth instead of /auth/callback for redirect
+  const redirectUri = encodeURIComponent(`${getBaseUrl()}/auth`);
   const scope = encodeURIComponent('profile email');
   const responseType = 'token';
   const clientId = chrome.runtime.getManifest().oauth2.client_id;
@@ -203,7 +204,6 @@ async function fetchGoogleUserInfo(accessToken) {
     logger.error('Error fetching Google user info:', error);
     
     // Return a minimal valid user object to prevent undefined errors
-    // This is better than throwing an error which would break the auth flow
     return {
       id: 'unknown',
       email: '',

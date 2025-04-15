@@ -1,123 +1,72 @@
 
 /**
- * Authentication utilities for the extension
- * Wrapper around auth-service.js for backwards compatibility
+ * Authentication utility for MainGallery.AI Chrome Extension
+ * COMPATIBILITY WRAPPER for new file structure
  */
 
 import { logger } from './logger.js';
-import { authService } from './auth-service.js';
-import { isCallbackUrl, processCallbackUrl } from './callback-handler.js';
-import { syncAuthState } from './cookie-sync.js';
-import { WEB_APP_URLS } from './oauth-config.js';
+import { authService } from '../auth/auth-service.js';
 
 /**
- * Check if user is authenticated
- * @returns {Promise<boolean>} Whether user is authenticated
+ * Check if user is logged in
+ * @returns {Promise<boolean>} Authentication status
  */
 export async function isLoggedIn() {
-  // First sync auth state with web app to ensure consistency
-  await syncAuthState();
-  return await authService.isAuthenticated();
-}
-
-/**
- * Get user email
- * @returns {Promise<string|null>} User email or null if not logged in
- */
-export async function getUserEmail() {
-  const user = await authService.getUser();
-  return user?.email || null;
-}
-
-/**
- * Open auth page in new tab
- * @param {string} [provider] Provider to use for authentication
- * @returns {Promise<void>}
- */
-export async function openAuthPage(provider = null) {
-  let authUrl = WEB_APP_URLS.AUTH;
-  
-  if (provider) {
-    authUrl += `?provider=${provider}`;
-  }
-  
-  chrome.tabs.create({ url: authUrl });
-}
-
-/**
- * Log out current user
- * @returns {Promise<boolean>} Whether logout was successful
- */
-export async function logout() {
-  const result = await authService.signOut();
-  return result.success;
-}
-
-/**
- * Reset any auth errors
- * @returns {Promise<void>}
- */
-export async function resetAuthErrors() {
   try {
-    // Clear any auth errors or loading states
-    await chrome.storage.local.remove(['auth_error', 'auth_loading', 'auth_success']);
-    logger.log('Auth errors reset successfully');
+    return await authService.isAuthenticated();
   } catch (error) {
-    logger.error('Error resetting auth errors:', error);
-  }
-}
-
-/**
- * Handle OAuth token received from Google
- * @param {string} token - OAuth token
- * @param {string} [provider='google'] - Auth provider
- * @returns {Promise<boolean>} Success status
- */
-export async function handleAuthToken(token, provider = 'google') {
-  try {
-    const result = await authService.processGoogleCallback(
-      `https://example.com/callback#access_token=${token}&token_type=bearer&expires_in=3600`
-    );
-    
-    // If successful, sync auth state with web app
-    if (result.success) {
-      await syncAuthState();
-    }
-    
-    return result.success;
-  } catch (error) {
-    logger.error('Error handling auth token:', error);
+    logger.error('Error in isLoggedIn wrapper:', error);
     return false;
   }
 }
 
 /**
- * Handle authentication URL
- * @param {string} url - Auth callback URL
- * @returns {Promise<{success: boolean, error?: string}>} Result
+ * Get user email
+ * @returns {Promise<string|null>} User email or null
  */
-export async function handleAuthUrl(url) {
-  if (!url) {
-    return { success: false, error: 'No URL provided' };
+export async function getUserEmail() {
+  try {
+    const user = await authService.getUser();
+    return user?.email || null;
+  } catch (error) {
+    logger.error('Error in getUserEmail wrapper:', error);
+    return null;
   }
-  
-  if (!isCallbackUrl(url)) {
-    return { success: false, error: 'Not a valid callback URL' };
-  }
-  
-  const result = await processCallbackUrl(url);
-  
-  // If successful, sync auth state with web app
-  if (result.success) {
-    await syncAuthState();
-  }
-  
-  return result;
 }
 
-// Export additional functions for backwards compatibility
-export {
-  isCallbackUrl,
-  processCallbackUrl,
-  syncAuthState
-};
+/**
+ * Sign out user
+ * @returns {Promise<boolean>} Success status
+ */
+export async function logout() {
+  try {
+    await authService.signOut();
+    return true;
+  } catch (error) {
+    logger.error('Error in logout wrapper:', error);
+    return false;
+  }
+}
+
+/**
+ * Open auth page for sign in
+ * @param {string} provider - Auth provider (google, email)
+ * @returns {Promise<boolean>} Success status
+ */
+export async function openAuthPage(provider = 'google') {
+  try {
+    if (provider === 'google') {
+      await authService.signInWithGoogle();
+    } else {
+      // Email sign in not implemented in this version
+      logger.warn('Email sign in not implemented');
+    }
+    return true;
+  } catch (error) {
+    logger.error('Error in openAuthPage wrapper:', error);
+    return false;
+  }
+}
+
+// Log that this compatibility module was loaded
+logger.log("auth.js compatibility wrapper loaded");

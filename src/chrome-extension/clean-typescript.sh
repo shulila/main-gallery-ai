@@ -1,26 +1,23 @@
 
 #!/bin/bash
 
-# Script to find and remove all TypeScript files from the chrome extension directory
-# This helps prevent MIME type errors when loading the extension
+# Script to clean up TypeScript files and duplicates from the extension directory
 
-echo "Finding all TypeScript files in src/chrome-extension..."
-TS_FILES=$(find src/chrome-extension -name "*.ts" -o -name "*.tsx" -o -name "*.d.ts")
+echo "Cleaning up TypeScript files from chrome-extension directory..."
 
-if [ -z "$TS_FILES" ]; then
-  echo "No TypeScript files found."
-  exit 0
+# Remove TypeScript files
+find ./src/chrome-extension -name "*.ts" -type f -delete
+
+# Remove duplicate auth-service.js from utils directory
+if [ -f "./src/chrome-extension/utils/auth-service.js" ]; then
+  rm ./src/chrome-extension/utils/auth-service.js
+  echo "Removed duplicate auth-service.js from utils directory"
 fi
 
-echo "Found the following TypeScript files:"
-echo "$TS_FILES"
-
-echo "Would you like to delete these files? [y/N]"
-read -r response
-if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-  find src/chrome-extension -name "*.ts" -o -name "*.tsx" -o -name "*.d.ts" -delete
-  echo "TypeScript files deleted."
-  echo "Make sure to run the build script to generate the extension."
-else
-  echo "Operation cancelled. No files were deleted."
+# Remove duplicate auth-service.js from utils/auth directory
+if [ -f "./src/chrome-extension/utils/auth/auth-service.js" ]; then
+  rm ./src/chrome-extension/utils/auth/auth-service.js
+  echo "Removed duplicate auth-service.js from utils/auth directory"
 fi
+
+echo "Cleanup complete!"

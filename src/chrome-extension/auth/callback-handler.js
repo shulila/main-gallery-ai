@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { CONFIG } from '../utils/config.js';
+import { getBaseUrl } from '../utils/urlUtils.js';
 import { authService } from './auth-service.js';
 
 /**
@@ -35,7 +35,7 @@ export function setupCallbackUrlListener() {
             // Authentication failed, show error in the tab
             const errorMessage = result?.error?.message || 'Authentication failed';
             chrome.tabs.update(tabId, {
-              url: `${CONFIG.WEB_APP_URLS.AUTH_ERROR}?error=${encodeURIComponent(errorMessage)}`
+              url: `${getBaseUrl()}/auth-error?error=${encodeURIComponent(errorMessage)}`
             });
           }
         }
@@ -45,7 +45,7 @@ export function setupCallbackUrlListener() {
         // Show error in the tab
         if (tab && tab.id) {
           chrome.tabs.update(tab.id, {
-            url: `${CONFIG.WEB_APP_URLS.AUTH_ERROR}?error=${encodeURIComponent(error.message || 'Authentication error')}`
+            url: `${getBaseUrl()}/auth-error?error=${encodeURIComponent(error.message || 'Authentication error')}`
           });
         }
       }
@@ -69,8 +69,9 @@ function isAuthCallbackUrl(url) {
       return false;
     }
     
-    // Check if URL contains callback path and access token
-    return url.includes('/auth/callback') && 
+    // Updated to match /auth path (instead of /auth/callback)
+    // and look for access_token in URL
+    return url.includes('/auth') && 
            (url.includes('access_token=') || url.includes('#access_token='));
   } catch (error) {
     logger.error('Error checking auth callback URL:', error);
@@ -83,7 +84,7 @@ function isAuthCallbackUrl(url) {
  */
 async function openGalleryTab() {
   try {
-    const galleryUrl = CONFIG.WEB_APP_URLS.GALLERY;
+    const galleryUrl = `${getBaseUrl()}/gallery`;
     
     // Check if gallery tab is already open
     chrome.tabs.query({ url: `${galleryUrl}*` }, (tabs) => {

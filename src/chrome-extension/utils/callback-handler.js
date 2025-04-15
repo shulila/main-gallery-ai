@@ -5,12 +5,12 @@
  */
 
 import { logger } from './logger.js';
-import { setupCallbackUrlListener, isCallbackUrl, processCallbackUrl } from './auth/callback-handler.js';
+import { setupCallbackUrlListener, isAuthCallbackUrl, processCallbackUrl } from '../auth/callback-handler.js';
 
 // Export the functions for backward compatibility
 export {
   setupCallbackUrlListener,
-  isCallbackUrl,
+  isAuthCallbackUrl,
   processCallbackUrl
 };
 

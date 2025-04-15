@@ -24,6 +24,17 @@ export function getGalleryUrl() {
 }
 
 /**
+ * Check if running in preview environment
+ * @returns {boolean} Whether running in preview environment
+ */
+export function isPreviewEnvironment() {
+  const baseUrl = getBaseUrl();
+  return baseUrl.includes('preview-main-gallery-ai') || 
+         baseUrl.includes('localhost') || 
+         baseUrl.includes('127.0.0.1');
+}
+
+/**
  * Get the auth URL with options
  * @param {Object} options - Options for the auth URL
  * @param {string} [options.from] - The source of the request
