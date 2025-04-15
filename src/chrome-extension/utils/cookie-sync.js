@@ -7,7 +7,7 @@
 import { logger } from './logger.js';
 import { storage, STORAGE_KEYS } from './storage.js';
 import { COOKIE_CONFIG, WEB_APP_URLS } from './oauth-config.js';
-import { validateSession } from './auth/token-validator.ts';
+import { validateSession } from './auth/token-validator.js';
 
 /**
  * Synchronize authentication state between extension and web app
