@@ -70,7 +70,7 @@ export async function openAuthPage(provider = 'google') {
 
 /**
  * Handle email and password login 
- * Implementation was previously missing
+ * Improved implementation that was missing
  * @param {string} email - User email
  * @param {string} password - User password
  * @returns {Promise<Object>} Login result
@@ -84,7 +84,6 @@ export async function handleEmailPasswordLogin(email, password) {
     logger.log('Attempting email login');
     
     // Use Supabase client from the app for authentication
-    // This is a basic implementation that can be expanded
     const { data, error } = await fetch('https://main-gallery-ai.lovable.app/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -42,3 +42,24 @@ export function handleError(context, error, options = {}) {
     value: returnValue
   };
 }
+
+/**
+ * Safely fetch data with error handling
+ * @param {string} url - URL to fetch
+ * @param {Object} options - Fetch options
+ * @returns {Promise<Object>} Response data or error
+ */
+export async function safeFetch(url, options = {}) {
+  try {
+    const response = await fetch(url, options);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    logger.error(`Fetch error for ${url}:`, error);
+    throw error;
+  }
+}

@@ -1,23 +1,22 @@
 
 #!/bin/bash
 
-# Script to clean up TypeScript files and duplicates from the extension directory
-
-echo "Cleaning up TypeScript files from chrome-extension directory..."
-
 # Remove TypeScript files
-find ./src/chrome-extension -name "*.ts" -type f -delete
+echo "Removing TypeScript files..."
+find . -name "*.ts" -not -name "*.d.ts" -delete
+echo "TypeScript files removed."
 
-# Remove duplicate auth-service.js from utils directory
-if [ -f "./src/chrome-extension/utils/auth-service.js" ]; then
-  rm ./src/chrome-extension/utils/auth-service.js
-  echo "Removed duplicate auth-service.js from utils directory"
-fi
+# Create assets directory
+echo "Creating assets directory..."
+mkdir -p assets/icons
+echo "Assets directory created."
 
-# Remove duplicate auth-service.js from utils/auth directory
-if [ -f "./src/chrome-extension/utils/auth/auth-service.js" ]; then
-  rm ./src/chrome-extension/utils/auth/auth-service.js
-  echo "Removed duplicate auth-service.js from utils/auth directory"
-fi
+# Copy existing icons to the new directory
+echo "Copying existing icons..."
+cp -r icons/* assets/icons/
+echo "Icons copied."
 
-echo "Cleanup complete!"
+# Ensure the script is executable
+chmod +x clean-typescript.sh
+
+echo "Cleanup completed. Please build the extension again."

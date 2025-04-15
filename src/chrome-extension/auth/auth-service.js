@@ -5,6 +5,7 @@
 
 import { logger } from '../utils/logger.js';
 import { storage, STORAGE_KEYS } from '../utils/storage.js';
+import { syncAuthState } from '../utils/cookie-sync.js';
 import { signInWithGoogle, processGoogleCallback } from './google-auth.js';
 import { validateSession } from './token-validator.js';
 import { createError } from '../utils/error-handler.js';
@@ -43,6 +44,53 @@ export const authService = {
   },
   
   /**
+   * Sign in with email and password
+   * @param {string} email - User email
+   * @param {string} password - User password
+   * @returns {Promise<Object>} Authentication result
+   */
+  signInWithEmail: async function(email, password) {
+    try {
+      logger.log('Starting email sign-in flow');
+      
+      if (!email || !password) {
+        throw createError('Email and password are required', 'INVALID_CREDENTIALS');
+      }
+      
+      // Make API request to authenticate
+      const response = await fetch(`https://main-gallery-ai.lovable.app/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw createError(errorData.message || 'Authentication failed', 'AUTH_ERROR');
+      }
+      
+      const data = await response.json();
+      
+      if (!data.user || !data.session) {
+        throw createError('Invalid response from server', 'INVALID_RESPONSE');
+      }
+      
+      // Store session and user info
+      await storage.set(STORAGE_KEYS.SESSION, data.session);
+      await storage.set(STORAGE_KEYS.USER, data.user);
+      
+      logger.log('Email authentication successful');
+      
+      return { success: true, user: data.user };
+    } catch (error) {
+      logger.error('Error in signInWithEmail:', error);
+      return { success: false, error: error.message || 'Authentication failed' };
+    }
+  },
+  
+  /**
    * Check if user is authenticated
    * @returns {Promise<boolean>} Authentication status
    */
@@ -71,6 +119,24 @@ export const authService = {
     } catch (error) {
       logger.error('Error getting user:', error);
       return null;
+    }
+  },
+  
+  /**
+   * Set session manually
+   * @param {Object} session - Session object
+   * @returns {Promise<Object>} Result
+   */
+  setSession: async function(session) {
+    try {
+      await storage.set(STORAGE_KEYS.SESSION, session);
+      if (session.user) {
+        await storage.set(STORAGE_KEYS.USER, session.user);
+      }
+      return { success: true };
+    } catch (error) {
+      logger.error('Error setting session:', error);
+      return { success: false, error: error.message };
     }
   },
   

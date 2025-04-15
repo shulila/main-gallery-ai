@@ -5,9 +5,12 @@
 
 import { logger } from '../logger.js';
 import { authService } from './auth-service.js';
+import { syncAuthState } from '../cookie-sync.js';
+import { WEB_APP_URLS } from '../oauth-config.js';
 
-// Let's add a state to track if we're currently processing a callback
+// Track processing state to prevent duplicate processing
 let isProcessingCallback = false;
+let lastProcessedUrl = '';
 
 /**
  * Set up callback URL listener
@@ -18,28 +21,8 @@ export function setupCallbackUrlListener() {
     
     // Listen for tab updates
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-      // Only process if URL changed and is complete
-      if (changeInfo.status === 'complete' && tab && tab.url) {
-        try {
-          if (isAuthCallbackUrl(tab.url)) {
-            logger.log('Detected callback URL in tab:', tabId);
-            
-            // Process the callback URL
-            processCallbackUrl(tab.url)
-              .then(result => {
-                if (result.success) {
-                  logger.log('Successfully processed callback URL');
-                } else {
-                  logger.error('Failed to process callback URL:', result.error);
-                }
-              })
-              .catch(error => {
-                logger.error('Error processing callback URL:', error);
-              });
-          }
-        } catch (error) {
-          logger.error('Error handling tab update:', error);
-        }
+      if (changeInfo.status === 'complete' && tab.url) {
+        handleCallbackUrl(tab.url, tabId);
       }
     });
     
@@ -50,61 +33,85 @@ export function setupCallbackUrlListener() {
 }
 
 /**
- * Process callback URL
- * @param {string} url - Auth callback URL
- * @returns {Promise<Object>} Auth result
+ * Handle detected callback URL
  */
-export async function processCallbackUrl(url) {
-  try {
-    // Prevent duplicate processing
-    if (isProcessingCallback) {
-      logger.log('Already processing a callback, skipping');
-      return { success: false, error: 'Already processing a callback' };
-    }
-    
+async function handleCallbackUrl(url, tabId) {
+  if (isCallbackUrl(url) && !isProcessingCallback && url !== lastProcessedUrl) {
     isProcessingCallback = true;
+    lastProcessedUrl = url;
     
     try {
-      logger.log('Processing callback URL');
+      const result = await processCallbackUrl(url);
       
-      // Use authService to process callback
-      const result = await authService.processGoogleCallback(url);
-      
-      logger.log('Callback URL processed successfully');
-      
-      return result;
+      if (result.success) {
+        await syncAuthState();
+        chrome.tabs.update(tabId, { url: WEB_APP_URLS.GALLERY });
+      } else {
+        await showErrorInTab(tabId, result.error);
+      }
+    } catch (error) {
+      await showErrorInTab(tabId, error.message);
     } finally {
-      // Reset processing state after a delay to prevent immediate reprocessing
       setTimeout(() => {
         isProcessingCallback = false;
       }, 1000);
     }
+  }
+}
+
+/**
+ * Show error message in tab
+ */
+async function showErrorInTab(tabId, errorMessage) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (error) => {
+        document.body.innerHTML = `
+          <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+            <h2>Authentication Error</h2>
+            <p>${error || 'Failed to authenticate'}</p>
+            <button onclick="window.close()" style="padding: 10px 20px; margin-top: 20px; cursor: pointer;">
+              Close
+            </button>
+          </div>
+        `;
+      },
+      args: [errorMessage || 'Authentication failed']
+    });
   } catch (error) {
-    logger.error('Error processing callback URL:', error);
-    isProcessingCallback = false;
-    return { success: false, error: error.message || 'Unknown error' };
+    logger.error('Error showing error in tab:', error);
   }
 }
 
 /**
  * Check if URL is a callback URL
- * @param {string} url - URL to check
- * @returns {boolean} - Whether the URL is a callback URL
  */
-export function isAuthCallbackUrl(url) {
-  if (!url || typeof url !== 'string') return false;
+export function isCallbackUrl(url) {
+  if (!url) return false;
   
   try {
-    // Check if URL contains the callback path
-    if (url.includes('/auth/callback')) {
-      return true;
-    }
-    
-    // Also check for any URL with access_token or code parameter
-    return (url.includes('/auth') && 
-           (url.includes('access_token=') || url.includes('code=')));
+    const urlObj = new URL(url);
+    // Check for both /auth and /auth/callback paths
+    return (urlObj.pathname === '/auth/callback' || urlObj.pathname === '/auth') && 
+           (urlObj.hash && (urlObj.hash.includes('access_token=') || urlObj.hash.includes('code=')));
   } catch (error) {
-    logger.error('Error checking if URL is callback:', error);
+    logger.error('Error checking callback URL:', error);
     return false;
+  }
+}
+
+/**
+ * Process callback URL
+ */
+export async function processCallbackUrl(url) {
+  try {
+    return await authService.processGoogleCallback(url);
+  } catch (error) {
+    logger.error('Error processing callback URL:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to process callback URL'
+    };
   }
 }

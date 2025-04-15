@@ -52,8 +52,8 @@ export async function signInWithGoogle() {
  * @returns {string} Google OAuth URL
  */
 function createGoogleAuthUrl(state) {
-  // Use /auth instead of /auth/callback for redirect
-  const redirectUri = encodeURIComponent(`${getBaseUrl()}/auth`);
+  // Changed from /auth to /auth/callback for redirect
+  const redirectUri = encodeURIComponent(`${getBaseUrl()}/auth/callback`);
   const scope = encodeURIComponent('profile email');
   const responseType = 'token';
   const clientId = chrome.runtime.getManifest().oauth2.client_id;
