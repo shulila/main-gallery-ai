@@ -72,9 +72,9 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "assets/icons/*", 
-        "utils/*.js", 
-        "auth/*.js", 
+        "assets/icons/*",
+        "utils/*.js",
+        "auth/*.js",
         "api/*.js"
       ],
       "matches": ["<all_urls>"]
