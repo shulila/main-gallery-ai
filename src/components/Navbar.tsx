@@ -9,15 +9,12 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   
-  // Handle logo click based on auth state
   const handleLogoClick = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!user) {
-      // When logged out, navigate to homepage and scroll to top
       navigate('/');
       window.scrollTo(0, 0);
     } else {
-      // When logged in, navigate to gallery 
       navigate('/gallery');
     }
   };
@@ -36,9 +33,13 @@ const Navbar = () => {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <Link to={user ? "/gallery" : "/"} onClick={handleLogoClick} className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">M</span>
-            </div>
+            <img 
+              src="/assets/icons/logo-icon-only.svg" 
+              alt="MainGallery.AI Logo" 
+              className="w-8 h-8 rounded-lg"
+              width={32}
+              height={32}
+            />
             <span className="font-semibold text-lg">MainGallery.AI</span>
           </Link>
           
