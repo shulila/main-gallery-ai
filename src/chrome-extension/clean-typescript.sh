@@ -19,4 +19,4 @@ echo "Icons copied."
 # Ensure the script is executable
 chmod +x clean-typescript.sh
 
-echo "Cleanup completed. Please build the extension again."
+echo "Cleanup completed. Please rebuild the extension."
