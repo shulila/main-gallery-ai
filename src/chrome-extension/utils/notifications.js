@@ -1,231 +1,302 @@
 
 /**
- * Create a notification in the extension or browser
- * @param {string} id Unique notification ID
- * @param {string} title Notification title
- * @param {string} message Notification message
- * @param {Object} options Additional notification options
+ * Notification utilities for MainGallery.AI Chrome Extension
+ */
+
+import { logger } from './logger.js';
+import { handleError, ErrorTypes } from './error-handler.js';
+
+/**
+ * Notification types
+ */
+export const NotificationType = {
+  SUCCESS: 'success',
+  INFO: 'info',
+  WARNING: 'warning',
+  ERROR: 'error'
+};
+
+/**
+ * Create a Chrome notification
+ * @param {string} id - Notification ID (optional, will be generated if not provided)
+ * @param {string} title - Notification title
+ * @param {string} message - Notification message
+ * @param {Object} options - Additional notification options
  * @returns {Promise<string>} Notification ID
  */
-export const createNotification = (id, title, message, options = {}) => {
-  return new Promise((resolve, reject) => {
-    try {
-      // If chrome.notifications is available, use it
-      if (typeof chrome !== 'undefined' && chrome.notifications) {
-        chrome.notifications.create(id, {
-          type: 'basic',
-          iconUrl: options.icon || 'icons/icon128.png',
-          title: title,
-          message: message,
-          priority: options.priority || 0,
-          ...options
-        }, (notificationId) => {
-          resolve(notificationId);
-        });
-      } else {
-        // Fallback to browser notifications
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          const notification = new Notification(title, {
-            body: message,
-            icon: options.icon || '/icons/icon128.png',
-          });
-          resolve(notification);
-        } else if (typeof Notification !== 'undefined' && Notification.permission !== 'denied') {
-          Notification.requestPermission().then((permission) => {
-            if (permission === 'granted') {
-              const notification = new Notification(title, {
-                body: message,
-                icon: options.icon || '/icons/icon128.png',
-              });
-              resolve(notification);
-            } else {
-              // Fall back to alert for simplicity
-              alert(`${title}: ${message}`);
-              resolve(id);
-            }
-          });
+export async function createChromeNotification(id, title, message, options = {}) {
+  try {
+    // Generate ID if not provided
+    const notificationId = id || `mg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Create notification
+    return new Promise((resolve, reject) => {
+      chrome.notifications.create(notificationId, {
+        type: 'basic',
+        iconUrl: options.icon || chrome.runtime.getURL('assets/icons/logo-icon-only.svg'),
+        title,
+        message,
+        priority: options.priority || 0,
+        requireInteraction: options.requireInteraction || false,
+        ...options
+      }, (createdId) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
         } else {
-          // Fall back to alert
-          alert(`${title}: ${message}`);
-          resolve(id);
+          resolve(createdId);
         }
-      }
-    } catch (error) {
-      console.error('Error creating notification:', error);
-      // Final fallback
-      try {
-        alert(`${title}: ${message}`);
-      } catch (e) {
-        // Silent failure if even alert fails
-      }
-      reject(error);
-    }
-  });
-};
-
-/**
- * Display a toast notification in-page by injecting an element
- * @param {string} message The message to display
- * @param {string} type The type of toast ('info', 'warning', 'error', 'success')
- * @param {number} duration Duration in ms before auto-hiding
- * @returns {HTMLElement} The created toast element
- */
-export const showInPageToast = (message, type = 'info', duration = 5000) => {
-  // Create toast container if it doesn't exist
-  let toastContainer = document.getElementById('maingallery-toast-container');
-  
-  if (!toastContainer) {
-    toastContainer = document.createElement('div');
-    toastContainer.id = 'maingallery-toast-container';
-    toastContainer.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 9999;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-width: 320px;
-      width: 100%;
-      pointer-events: none;
-    `;
-    document.body.appendChild(toastContainer);
-  }
-  
-  // Create the toast element
-  const toast = document.createElement('div');
-  
-  // Set toast type-specific styles
-  let backgroundColor, textColor, borderColor;
-  let icon = '';
-  
-  switch (type) {
-    case 'success':
-      backgroundColor = 'rgba(34, 197, 94, 0.9)';
-      textColor = 'white';
-      borderColor = 'rgb(34, 197, 94)';
-      icon = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-        </svg>
-      `;
-      break;
-    case 'error':
-      backgroundColor = 'rgba(239, 68, 68, 0.9)';
-      textColor = 'white';
-      borderColor = 'rgb(239, 68, 68)';
-      icon = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
-      `;
-      break;
-    case 'warning':
-      backgroundColor = 'rgba(245, 158, 11, 0.9)';
-      textColor = 'white';
-      borderColor = 'rgb(245, 158, 11)';
-      icon = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-        </svg>
-      `;
-      break;
-    default: // info
-      backgroundColor = 'rgba(59, 130, 246, 0.9)';
-      textColor = 'white';
-      borderColor = 'rgb(59, 130, 246)';
-      icon = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
-      `;
-      break;
-  }
-  
-  // Set toast styling
-  toast.style.cssText = `
-    background-color: ${backgroundColor};
-    color: ${textColor};
-    border-left: 4px solid ${borderColor};
-    padding: 12px 16px;
-    border-radius: 4px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    opacity: 0;
-    transform: translateY(-20px);
-    transition: opacity 0.3s, transform 0.3s;
-    pointer-events: auto;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  `;
-  
-  // Set inner HTML with icon and message
-  toast.innerHTML = `
-    <div class="maingallery-toast-icon">${icon}</div>
-    <div class="maingallery-toast-message" style="flex: 1;">
-      <div style="font-weight: 500; margin-bottom: 2px;">MainGallery.AI</div>
-      <div style="font-size: 14px;">${message}</div>
-    </div>
-    <div class="maingallery-toast-close" style="cursor: pointer; color: ${textColor}; opacity: 0.7;">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-      </svg>
-    </div>
-  `;
-  
-  // Add to container
-  toastContainer.appendChild(toast);
-  
-  // Add event listener to close button
-  const closeBtn = toast.querySelector('.maingallery-toast-close');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      hideToast(toast);
+      });
+    });
+  } catch (error) {
+    return handleError('createChromeNotification', error, { 
+      type: ErrorTypes.UNKNOWN,
+      silent: true,
+      returnValue: id || `mg-${Date.now()}`
     });
   }
-  
-  // Trigger animation and set timeout to remove
-  setTimeout(() => {
-    toast.style.opacity = '1';
-    toast.style.transform = 'translateY(0)';
-  }, 10);
-  
-  // Auto hide after duration
-  setTimeout(() => {
-    hideToast(toast);
-  }, duration);
-  
-  return toast;
-};
+}
 
 /**
- * Hide and remove a toast element
- * @param {HTMLElement} toast The toast element to hide
+ * Show an in-app toast notification
+ * @param {string} message - Notification message
+ * @param {string} type - Notification type (success, info, warning, error)
+ * @param {number} duration - Duration in milliseconds
+ * @returns {HTMLElement} Toast element
  */
-const hideToast = (toast) => {
-  toast.style.opacity = '0';
-  toast.style.transform = 'translateY(-20px)';
-  
-  setTimeout(() => {
-    // Remove the toast
-    if (toast.parentNode) {
-      toast.parentNode.removeChild(toast);
+export function showToast(message, type = NotificationType.INFO, duration = 3000) {
+  try {
+    // Get or create container
+    let container = document.querySelector('.mg-toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'mg-toast-container';
+      container.style.cssText = `
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        max-width: 20rem;
+      `;
+      document.body.appendChild(container);
     }
     
-    // Check if container is empty and can be removed
-    const container = document.getElementById('maingallery-toast-container');
-    if (container && container.children.length === 0) {
-      document.body.removeChild(container);
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `mg-toast mg-toast-${type}`;
+    toast.style.cssText = `
+      padding: 0.75rem 1rem;
+      border-radius: 0.375rem;
+      background-color: var(--toast-bg-${type}, ${getBackgroundColor(type)});
+      color: var(--toast-color-${type}, white);
+      box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+      opacity: 0;
+      transform: translateY(-0.5rem);
+      transition: opacity 0.3s, transform 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    `;
+    
+    // Add icon
+    const icon = document.createElement('span');
+    icon.innerHTML = getIconForType(type);
+    icon.style.cssText = `
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    `;
+    toast.appendChild(icon);
+    
+    // Add message
+    const messageEl = document.createElement('span');
+    messageEl.textContent = message;
+    messageEl.style.cssText = `
+      flex-grow: 1;
+      font-size: 0.875rem;
+    `;
+    toast.appendChild(messageEl);
+    
+    // Add close button
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.style.cssText = `
+      background: transparent;
+      border: none;
+      color: inherit;
+      font-size: 1.25rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+      margin-left: 0.5rem;
+      opacity: 0.7;
+    `;
+    closeBtn.onclick = () => {
+      removeToast(toast);
+    };
+    toast.appendChild(closeBtn);
+    
+    // Add to container
+    container.appendChild(toast);
+    
+    // Trigger animation
+    setTimeout(() => {
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0)';
+    }, 10);
+    
+    // Auto-remove after duration
+    const timeoutId = setTimeout(() => {
+      removeToast(toast);
+    }, duration);
+    
+    toast._timeoutId = timeoutId;
+    
+    logger.debug(`Toast notification shown: ${type}`, { message });
+    
+    return toast;
+  } catch (error) {
+    logger.error('Error showing toast:', error);
+    return null;
+  }
+}
+
+/**
+ * Remove a toast from the DOM
+ * @param {HTMLElement} toast - Toast element to remove
+ */
+function removeToast(toast) {
+  clearTimeout(toast._timeoutId);
+  toast.style.opacity = '0';
+  toast.style.transform = 'translateY(-0.5rem)';
+  
+  setTimeout(() => {
+    toast.remove();
+    
+    // Remove container if empty
+    const container = document.querySelector('.mg-toast-container');
+    if (container && !container.hasChildNodes()) {
+      container.remove();
     }
-  }, 300); // Corresponds to the transition duration
+  }, 300);
+}
+
+/**
+ * Get background color for toast type
+ * @param {string} type - Toast type
+ * @returns {string} Background color
+ */
+function getBackgroundColor(type) {
+  switch (type) {
+    case NotificationType.SUCCESS: return 'rgba(25, 135, 84, 0.95)';
+    case NotificationType.WARNING: return 'rgba(255, 193, 7, 0.95)';
+    case NotificationType.ERROR: return 'rgba(220, 53, 69, 0.95)';
+    case NotificationType.INFO:
+    default: return 'rgba(13, 110, 253, 0.95)';
+  }
+}
+
+/**
+ * Get SVG icon for toast type
+ * @param {string} type - Toast type
+ * @returns {string} SVG icon markup
+ */
+function getIconForType(type) {
+  switch (type) {
+    case NotificationType.SUCCESS:
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+      </svg>`;
+    case NotificationType.WARNING:
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+      </svg>`;
+    case NotificationType.ERROR:
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+        <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+      </svg>`;
+    case NotificationType.INFO:
+    default:
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+      </svg>`;
+  }
+}
+
+/**
+ * Shorthand functions
+ */
+export const toast = {
+  success: (message, duration) => showToast(message, NotificationType.SUCCESS, duration),
+  info: (message, duration) => showToast(message, NotificationType.INFO, duration),
+  warning: (message, duration) => showToast(message, NotificationType.WARNING, duration),
+  error: (message, duration) => showToast(message, NotificationType.ERROR, duration)
 };
 
 /**
- * Show an error toast when on unsupported tabs
- * @param {string} message The message to display
+ * Add toast style sheet to document
  */
-export const showUnsupportedTabToast = (message = "Please switch to a supported AI platform (Midjourney, DALL·E, etc) to use MainGallery.AI") => {
-  showInPageToast(message, 'warning');
-};
+export function injectToastStyles() {
+  try {
+    if (document.getElementById('mg-toast-styles')) {
+      return;
+    }
+    
+    const styleSheet = document.createElement('style');
+    styleSheet.id = 'mg-toast-styles';
+    styleSheet.textContent = `
+      .mg-toast-container {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        max-width: 20rem;
+      }
+      
+      .mg-toast {
+        padding: 0.75rem 1rem;
+        border-radius: 0.375rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        opacity: 0;
+        transform: translateY(-0.5rem);
+        transition: opacity 0.3s, transform 0.3s;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: white;
+      }
+      
+      .mg-toast-success {
+        background-color: rgba(25, 135, 84, 0.95);
+      }
+      
+      .mg-toast-info {
+        background-color: rgba(13, 110, 253, 0.95);
+      }
+      
+      .mg-toast-warning {
+        background-color: rgba(255, 193, 7, 0.95);
+      }
+      
+      .mg-toast-error {
+        background-color: rgba(220, 53, 69, 0.95);
+      }
+    `;
+    
+    document.head.appendChild(styleSheet);
+  } catch (error) {
+    logger.error('Error injecting toast styles:', error);
+  }
+}
+
+// Inject toast styles when this module is imported
+if (typeof document !== 'undefined') {
+  injectToastStyles();
+}
