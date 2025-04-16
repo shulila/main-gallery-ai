@@ -46,6 +46,25 @@ import { validateGoogleToken } from './token-validator.js';
  */
 
 /**
+ * Validate client ID format
+ * @param {string} clientId - Client ID to validate
+ * @returns {boolean} Whether the client ID is valid
+ */
+function validateClientId(clientId) {
+  if (!clientId || typeof clientId !== 'string') {
+    logger.error('Client ID is missing or not a string');
+    return false;
+  }
+  
+  if (!clientId.includes('.apps.googleusercontent.com')) {
+    logger.error('Invalid client ID format:', clientId);
+    return false;
+  }
+  
+  return true;
+}
+
+/**
  * Get user info from Google API with better error handling
  * @param {string} accessToken - Google access token
  * @returns {Promise<UserInfo>} User information
@@ -103,6 +122,18 @@ function createDefaultUserInfo() {
 export async function signInWithGoogle() {
   try {
     logger.log('Initiating Google sign in with chrome.identity');
+    
+    // Get client ID from manifest
+    const manifest = chrome.runtime.getManifest();
+    const clientId = manifest.oauth2?.client_id;
+    
+    // Validate client ID
+    if (!validateClientId(clientId)) {
+      return {
+        success: false,
+        error: 'Invalid Google OAuth client ID'
+      };
+    }
 
     return new Promise((resolve) => {
       chrome.identity.getAuthToken({ 
@@ -119,6 +150,8 @@ export async function signInWithGoogle() {
             errorMessage = 'Authentication was canceled by the user';
           } else if (error.message?.includes('network')) {
             errorMessage = 'Network error during authentication. Please check your connection';
+          } else if (error.message?.includes('bad client id')) {
+            errorMessage = 'Invalid Google OAuth client ID or configuration';
           }
           
           return resolve({
@@ -234,6 +267,14 @@ export async function processGoogleCallback(url) {
     
     if (!accessToken) {
       return { success: false, error: 'No access token found in callback URL' };
+    }
+    
+    // Get client ID from manifest and validate
+    const manifest = chrome.runtime.getManifest();
+    const clientId = manifest.oauth2?.client_id;
+    
+    if (!validateClientId(clientId)) {
+      return { success: false, error: 'Invalid Google OAuth client ID' };
     }
     
     // Validate the token first

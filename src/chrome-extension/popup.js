@@ -104,6 +104,7 @@ import {
   logout,
   openAuthPage
 } from './utils/auth.js';
+import { storage, STORAGE_KEYS } from './utils/storage.js';
 
 // Log environment for debugging
 logger.log('MainGallery.AI popup initialized in', isPreviewEnvironment() ? 'PREVIEW' : 'PRODUCTION', 'environment');
@@ -325,6 +326,16 @@ function initiateGoogleLogin() {
     if (states.loading) showState(states.loading);
     logger.log('Starting Google login flow');
     
+    // Validate client ID before proceeding
+    const manifest = chrome.runtime.getManifest();
+    const clientId = manifest.oauth2?.client_id;
+    
+    if (!clientId || !clientId.includes('.apps.googleusercontent.com')) {
+      showError('Invalid Google client ID configuration');
+      logger.error('Google login failed: Invalid client ID', clientId);
+      return Promise.reject(new Error('Invalid Google OAuth client ID'));
+    }
+    
     // Clear any existing login timeout
     clearLoadingTimeout();
     
@@ -335,16 +346,18 @@ function initiateGoogleLogin() {
     localStorage.setItem('mg_auth_started', Date.now().toString());
     
     // Use the openAuthPage function from auth.js which will send a message to background.js
-    openAuthPage('google')
+    return openAuthPage('google')
       .catch(error => {
         logger.error('Error initiating Google login:', error);
         showError('Could not start login process. Please try again.');
         clearLoadingTimeout();
+        throw error;
       });
   } catch (error) {
     logger.error('Error in Google login handler:', error);
     showError('Could not start login process. Please try again.');
     clearLoadingTimeout();
+    return Promise.reject(error);
   }
 }
 
@@ -560,7 +573,136 @@ function clearLoadingTimeout() {
   }
 }
 
-// Check for auth status immediately when popup opens
+// Handle email/password login
+/**
+ * Handle email/password login
+ * @param {string} email - User email
+ * @param {string} password - User password
+ * @returns {Promise<Object>} Login result
+ */
+async function handleEmailPasswordLogin(email, password) {
+  try {
+    // Validate input
+    if (!email || !password) {
+      throw new Error('Email and password are required');
+    }
+
+    logger.log('Attempting email login for:', email);
+
+    // Prepare request data
+    const data = {
+      email,
+      password
+    };
+
+    // Get base URL from configuration
+    const baseUrl = getBaseUrl();
+    const loginUrl = `${baseUrl}/auth/login`;
+
+    // Make login request
+    const response = await fetch(loginUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data),
+      credentials: 'include'
+    });
+
+    // Parse response
+    const result = await response.json();
+
+    // Check for errors
+    if (!response.ok) {
+      throw new Error(result.message || 'Login failed');
+    }
+
+    // Store session data
+    await storage.set(STORAGE_KEYS.SESSION, result.session);
+    await storage.set(STORAGE_KEYS.USER, result.user);
+
+    return { 
+      success: true, 
+      user: result.user,
+      session: result.session
+    };
+  } catch (error) {
+    logger.error('Email login error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Login failed'
+    };
+  }
+}
+
+/**
+ * Synchronize authentication state with the website
+ */
+async function syncAuthState() {
+  try {
+    logger.log('Syncing auth state with website');
+    
+    // Get current session from storage
+    const currentSession = await storage.get(STORAGE_KEYS.SESSION);
+    
+    // Get base URL
+    const baseUrl = getBaseUrl();
+    
+    // Check auth status from the website
+    const response = await fetch(`${baseUrl}/api/auth/status`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': currentSession ? `Bearer ${currentSession.access_token}` : ''
+      },
+      credentials: 'include'
+    }).catch(error => {
+      logger.warn('Error fetching auth status:', error);
+      return { ok: false };
+    });
+    
+    if (!response.ok) {
+      // If website returns error, user might not be authenticated on website
+      if (currentSession) {
+        logger.log('Could not verify auth status with website, keeping local session');
+      }
+      return;
+    }
+    
+    let result;
+    try {
+      result = await response.json();
+    } catch (error) {
+      logger.warn('Error parsing auth status response:', error);
+      return;
+    }
+    
+    if (result && result.authenticated) {
+      // User is authenticated on website
+      if (!currentSession) {
+        // If we don't have a session but website does, update our session
+        logger.log('User logged in on website, updating extension session');
+        await storage.set(STORAGE_KEYS.SESSION, result.session);
+        await storage.set(STORAGE_KEYS.USER, result.user);
+        showState(states.mainView);
+      }
+    } else {
+      // User is not authenticated on website
+      if (currentSession) {
+        // If we have a session but website doesn't, clear our session
+        logger.log('User logged out on website, clearing extension session');
+        await storage.remove(STORAGE_KEYS.SESSION);
+        await storage.remove(STORAGE_KEYS.USER);
+        showState(states.loginView);
+      }
+    }
+  } catch (error) {
+    logger.error('Error syncing auth state:', error);
+    // On error, don't change current state
+  }
+}
+
+// Set up event listeners for Google login with improved error handling
 document.addEventListener('DOMContentLoaded', () => {
   logger.log('Popup loaded, checking auth status');
   
@@ -571,6 +713,11 @@ document.addEventListener('DOMContentLoaded', () => {
   checkAuthAndRedirect().then(() => {
     // Clear loading timeout once auth check completes
     clearLoadingTimeout();
+    
+    // Sync state with website after initial auth check
+    syncAuthState().catch(error => {
+      logger.warn('Error during initial auth sync:', error);
+    });
   }).catch(error => {
     logger.error('Error during auth check:', error);
     clearLoadingTimeout();
@@ -579,8 +726,24 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Set up event listeners for Google login
   if (googleLoginBtn) {
-    googleLoginBtn.addEventListener('click', initiateGoogleLogin);
-    logger.log('Google login button listener set up');
+    googleLoginBtn.addEventListener('click', async () => {
+      try {
+        await initiateGoogleLogin();
+      } catch (error) {
+        if (error.message && error.message.includes('Invalid Google OAuth client ID')) {
+          showToast('Configuration error: Invalid Google client ID', 'error');
+          logger.error('Google login failed: Invalid client ID');
+        } else if (error.message && error.message.includes('bad client id')) {
+          showToast('Configuration error: Bad client ID', 'error');
+          logger.error('Google login failed: Bad client ID');
+        } else {
+          showToast('Error signing in with Google', 'error');
+          logger.error('Google login error:', error);
+        }
+      }
+    });
+    
+    logger.log('Google login button listener set up with improved error handling');
   }
   
   // Set up event listener for email login

@@ -7,13 +7,17 @@
 export const GOOGLE_CLIENT_ID = '648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com';
 
 // Google OAuth scopes
-export const GOOGLE_SCOPES = ['openid', 'email', 'profile'];
+export const GOOGLE_SCOPES = [
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'openid'
+];
 
 // Web app URLs
 export const WEB_APP_URLS = {
   BASE: 'https://main-gallery-ai.lovable.app',
   AUTH: 'https://main-gallery-ai.lovable.app/auth',
-  AUTH_CALLBACK: 'https://main-gallery-ai.lovable.app/auth', // Changed from /auth/callback to /auth
+  AUTH_CALLBACK: 'https://main-gallery-ai.lovable.app/auth/callback',
   GALLERY: 'https://main-gallery-ai.lovable.app/gallery',
   AUTH_ERROR: 'https://main-gallery-ai.lovable.app/auth-error'
 };

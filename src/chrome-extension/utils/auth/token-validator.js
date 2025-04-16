@@ -37,6 +37,21 @@ export async function validateGoogleToken(token) {
     }
     
     if (!response.ok) {
+      // Handle specific error cases
+      if (response.status === 400) {
+        return { 
+          valid: false, 
+          reason: 'Invalid token format or expired token',
+          details: { status: response.status, errorType: 'invalid_token' }
+        };
+      } else if (response.status === 401) {
+        return { 
+          valid: false, 
+          reason: 'Unauthorized: token might be revoked',
+          details: { status: response.status, errorType: 'unauthorized' }
+        };
+      }
+      
       return { 
         valid: false, 
         reason: `Token validation failed with status: ${response.status}`,
@@ -55,13 +70,23 @@ export async function validateGoogleToken(token) {
       };
     }
     
-    // Check if token is for the correct client
-    if (data.aud && GOOGLE_CLIENT_ID && data.aud !== GOOGLE_CLIENT_ID) {
-      return { 
-        valid: false, 
-        reason: 'Token is for a different client',
-        details: { expected: GOOGLE_CLIENT_ID, actual: data.aud }
-      };
+    // Check if token was issued for our client ID
+    if (data.aud) {
+      // Get client ID from manifest for runtime check
+      const manifest = chrome.runtime.getManifest();
+      const manifestClientId = manifest.oauth2?.client_id;
+      const configClientId = GOOGLE_CLIENT_ID;
+      
+      // Use manifest client ID as first priority, fallback to config
+      const expectedClientId = manifestClientId || configClientId;
+      
+      if (expectedClientId && data.aud !== expectedClientId) {
+        return { 
+          valid: false, 
+          reason: 'Token was issued for a different client',
+          details: { expected: expectedClientId, actual: data.aud }
+        };
+      }
     }
     
     // Check if token is expired
@@ -70,11 +95,18 @@ export async function validateGoogleToken(token) {
       return { 
         valid: false, 
         reason: 'Token is expired',
-        details: { expiresAt: data.exp, now }
+        details: { expiresAt: data.exp, now, expiredFor: now - data.exp }
       };
     }
     
-    return { valid: true, details: { sub: data.sub, email: data.email } };
+    return { 
+      valid: true, 
+      details: { 
+        sub: data.sub, 
+        email: data.email,
+        expires_in: data.exp ? (data.exp - now) : undefined
+      } 
+    };
   } catch (error) {
     logger.error('Error validating Google token:', error);
     return { 

@@ -1,3 +1,4 @@
+
 {
   "manifest_version": 3,
   "name": "MainGallery.AI",
@@ -82,9 +83,9 @@
   "oauth2": {
     "client_id": "648580197357-2v9sfcorca7060e4rdjr1904a4f1qa26.apps.googleusercontent.com",
     "scopes": [
-      "openid",
-      "email",
-      "profile"
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile",
+      "openid"
     ]
   }
 }
