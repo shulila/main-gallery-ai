@@ -1,70 +1,72 @@
 
-/**
- * Storage utility for MainGallery.AI Chrome Extension
- */
+import { logger } from './logger.js';
 
-// Storage keys
+// מפתחות לאחסון נתונים
 export const STORAGE_KEYS = {
-  SESSION: 'mg_session',
-  USER: 'mg_user',
-  AUTH_STATE: 'mg_auth_state',
-  AUTH_IN_PROGRESS: 'mg_auth_in_progress',
-  LAST_SYNC: 'mg_last_sync',
-  SETTINGS: 'mg_settings'
+  AUTH_TOKEN: 'auth_token',
+  USER: 'user',
+  SETTINGS: 'settings'
 };
 
-// Storage utility
+// מעטפת לאחסון Chrome
 export const storage = {
   /**
-   * Get item from storage
-   * @param {string} key - Storage key
-   * @returns {Promise<any>} Stored value or null
+   * שמירת נתונים באחסון
+   * @param {string} key - מפתח
+   * @param {any} value - ערך
+   * @returns {Promise<void>}
    */
-  get: async function(key) {
-    return new Promise((resolve) => {
-      chrome.storage.local.get([key], (result) => {
-        const value = result[key] !== undefined ? result[key] : null;
-        resolve(value);
-      });
-    });
+  async set(key, value) {
+    try {
+      await chrome.storage.local.set({ [key]: value });
+      return true;
+    } catch (error) {
+      logger.error(`Error setting storage key ${key}:`, error);
+      return false;
+    }
   },
   
   /**
-   * Set item in storage
-   * @param {string} key - Storage key
-   * @param {any} value - Value to store
-   * @returns {Promise<boolean>} Success status
+   * קבלת נתונים מהאחסון
+   * @param {string} key - מפתח
+   * @returns {Promise<any>} ערך
    */
-  set: async function(key, value) {
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ [key]: value }, () => {
-        resolve(true);
-      });
-    });
+  async get(key) {
+    try {
+      const result = await chrome.storage.local.get([key]);
+      return result[key];
+    } catch (error) {
+      logger.error(`Error getting storage key ${key}:`, error);
+      return null;
+    }
   },
   
   /**
-   * Remove item from storage
-   * @param {string} key - Storage key
-   * @returns {Promise<boolean>} Success status
+   * הסרת נתונים מהאחסון
+   * @param {string} key - מפתח
+   * @returns {Promise<boolean>} הצלחה/כישלון
    */
-  remove: async function(key) {
-    return new Promise((resolve) => {
-      chrome.storage.local.remove(key, () => {
-        resolve(true);
-      });
-    });
+  async remove(key) {
+    try {
+      await chrome.storage.local.remove([key]);
+      return true;
+    } catch (error) {
+      logger.error(`Error removing storage key ${key}:`, error);
+      return false;
+    }
   },
   
   /**
-   * Clear all storage
-   * @returns {Promise<boolean>} Success status
+   * ניקוי כל האחסון
+   * @returns {Promise<boolean>} הצלחה/כישלון
    */
-  clear: async function() {
-    return new Promise((resolve) => {
-      chrome.storage.local.clear(() => {
-        resolve(true);
-      });
-    });
+  async clear() {
+    try {
+      await chrome.storage.local.clear();
+      return true;
+    } catch (error) {
+      logger.error('Error clearing storage:', error);
+      return false;
+    }
   }
 };

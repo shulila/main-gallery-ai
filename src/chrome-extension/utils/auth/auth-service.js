@@ -1,128 +1,221 @@
 
-/**
- * Authentication service for MainGallery.AI Chrome Extension
- */
-
 import { logger } from '../logger.js';
 import { storage, STORAGE_KEYS } from '../storage.js';
-import { COOKIE_CONFIG, WEB_APP_URLS } from '../oauth-config.js';
-import { syncAuthState } from '../cookie-sync.js';
-import { signInWithGoogle, processGoogleCallback } from './google-auth.js';
-import { validateSession } from './token-validator.js';
+import { getGoogleClientId } from './google-auth.js';
 
-/**
- * @typedef {Object} AuthUser
- * @property {string} id - User ID
- * @property {string} email - User email
- * @property {string} name - User name
- * @property {string} picture - User profile picture URL
- * @property {string} provider - Auth provider (e.g., 'google')
- * @property {Object} user_metadata - Additional user metadata
- * @property {Object} app_metadata - Application metadata
- */
+// מפתחות לאחסון נתוני אימות
+const AUTH_STORAGE_KEYS = {
+  SESSION: 'auth_session',
+  STATE: 'auth_state'
+};
 
-/**
- * @typedef {Object} AuthSession
- * @property {string} provider - Auth provider (e.g., 'google')
- * @property {string} provider_token - Provider-specific token
- * @property {string} access_token - Access token
- * @property {number|string} expires_at - Expiration timestamp
- * @property {AuthUser} [user] - User information
- */
-
-/**
- * @typedef {Object} AuthResult
- * @property {boolean} success - Whether the operation was successful
- * @property {string} [error] - Error message if operation failed
- * @property {AuthUser} [user] - User information if operation succeeded
- */
-
-class AuthService {
+export const authService = {
   /**
-   * Check if user is authenticated
-   * @returns {Promise<boolean>}
+   * קבלת סשן האימות הנוכחי
+   * @returns {Promise<Object|null>} נתוני הסשן או null
+   */
+  async getSession() {
+    try {
+      const session = await storage.get(AUTH_STORAGE_KEYS.SESSION);
+      
+      if (!session) {
+        return null;
+      }
+      
+      // בדיקה אם הסשן פג תוקף
+      if (session.expires_at && session.expires_at < Date.now()) {
+        logger.warn('Session expired');
+        return null;
+      }
+      
+      return session;
+    } catch (error) {
+      logger.error('Error getting session:', error);
+      return null;
+    }
+  },
+  
+  /**
+   * שמירת סשן אימות
+   * @param {Object} session - נתוני הסשן
+   * @returns {Promise<boolean>} הצלחה/כישלון
+   */
+  async setSession(session) {
+    try {
+      await storage.set(AUTH_STORAGE_KEYS.SESSION, session);
+      return true;
+    } catch (error) {
+      logger.error('Error setting session:', error);
+      return false;
+    }
+  },
+  
+  /**
+   * ניקוי סשן האימות
+   * @returns {Promise<boolean>} הצלחה/כישלון
+   */
+  async clearSession() {
+    try {
+      await storage.remove(AUTH_STORAGE_KEYS.SESSION);
+      return true;
+    } catch (error) {
+      logger.error('Error clearing session:', error);
+      return false;
+    }
+  },
+  
+  /**
+   * בדיקה אם המשתמש מחובר
+   * @returns {Promise<boolean>} מצב האימות
    */
   async isAuthenticated() {
     try {
-      const session = await storage.get(STORAGE_KEYS.SESSION);
-      
-      if (!session) return false;
-      
-      if (!await validateSession(session)) {
-        logger.log('Session is invalid');
-        await this.signOut();
-        return false;
-      }
-      
-      return true;
+      const session = await this.getSession();
+      return !!session && !!session.user;
     } catch (error) {
       logger.error('Error checking authentication:', error);
       return false;
     }
-  }
-
+  },
+  
   /**
-   * Get current user
-   * @returns {Promise<AuthUser|null>}
+   * קבלת פרטי המשתמש
+   * @returns {Promise<Object|null>} פרטי המשתמש או null
    */
   async getUser() {
     try {
-      return await storage.get(STORAGE_KEYS.USER);
+      const session = await this.getSession();
+      return session?.user || null;
     } catch (error) {
       logger.error('Error getting user:', error);
       return null;
     }
-  }
-
+  },
+  
   /**
-   * Sign in with Google
-   * @returns {Promise<AuthResult>}
+   * כניסה באמצעות Google
+   * @returns {Promise<boolean>} הצלחה/כישלון
    */
   async signInWithGoogle() {
-    return signInWithGoogle();
-  }
-
-  /**
-   * Sign out
-   * @returns {Promise<AuthResult>}
-   */
-  async signOut() {
     try {
-      const session = await storage.get(STORAGE_KEYS.SESSION);
+      // וידוא שמזהה הלקוח תקין לפני התחלת תהליך האימות
+      const clientId = await getGoogleClientId();
       
-      if (session?.provider === 'google' && session.provider_token) {
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { action: 'initiateGoogleAuth', clientId },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              logger.error('Error initiating Google auth:', chrome.runtime.lastError);
+              reject(chrome.runtime.lastError);
+            } else if (response && response.error) {
+              logger.error('Google auth error:', response.error);
+              reject(new Error(response.error));
+            } else {
+              logger.log('Google auth initiated successfully');
+              resolve(true);
+            }
+          }
+        );
+      });
+    } catch (error) {
+      logger.error('Error in signInWithGoogle:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * כניסה באמצעות מייל וסיסמה
+   * @param {string} email - כתובת מייל
+   * @param {string} password - סיסמה
+   * @returns {Promise<Object>} תוצאת הכניסה
+   */
+  async signInWithEmailPassword(email, password) {
+    try {
+      if (!email || !password) {
+        return { success: false, error: 'Email and password are required' };
+      }
+      
+      logger.log('Attempting email login');
+      
+      const response = await fetch('https://main-gallery-ai.lovable.app/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      // בדיקה אם התשובה היא תקינה
+      if (!response.ok) {
+        logger.error(`HTTP error ${response.status}: ${response.statusText}`);
+        
+        // ניסיון לקרוא את גוף התשובה
         try {
-          chrome.identity.removeCachedAuthToken(
-            { token: session.provider_token },
-            () => logger.log('Removed cached auth token')
-          );
-        } catch (error) {
-          logger.warn('Error revoking Google token:', error);
+          const contentType = response.headers.get('content-type');
+          
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            return { success: false, error: errorData.message || 'Authentication failed' };
+          } else {
+            const errorText = await response.text();
+            return { success: false, error: errorText || 'Authentication failed' };
+          }
+        } catch (parseError) {
+          logger.error('Error parsing error response:', parseError);
+          return { success: false, error: response.statusText || 'Authentication failed' };
         }
       }
       
-      await storage.remove(STORAGE_KEYS.SESSION);
-      await storage.remove(STORAGE_KEYS.USER);
-      await syncAuthState();
-      
-      return { success: true };
+      // בדיקה שהתשובה היא JSON תקין
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          const data = await response.json();
+          
+          if (!data || !data.user) {
+            return { success: false, error: 'Invalid response from authentication server' };
+          }
+          
+          // שמירת פרטי המשתמש
+          await this.setSession({
+            user: data.user,
+            provider: 'email',
+            access_token: data.session?.access_token,
+            refresh_token: data.session?.refresh_token,
+            expires_at: Date.now() + (3600 * 1000), // שעה אחת
+            created_at: Date.now()
+          });
+          
+          return { success: true, user: data.user };
+        } catch (error) {
+          logger.error('Error parsing JSON:', error);
+          return { success: false, error: 'Invalid JSON response' };
+        }
+      } else {
+        // אם התשובה אינה JSON, נחזיר שגיאה
+        const text = await response.text();
+        logger.error('Non-JSON response:', text);
+        return { success: false, error: 'Invalid response format from server' };
+      }
     } catch (error) {
-      logger.error('Error signing out:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'An error occurred during sign out'
+      logger.error('Error in email/password login:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error during login'
       };
     }
-  }
-
+  },
+  
   /**
-   * Process Google callback
-   * @param {string} url - Callback URL
-   * @returns {Promise<AuthResult>}
+   * יציאה מהמערכת
+   * @returns {Promise<boolean>} הצלחה/כישלון
    */
-  async processGoogleCallback(url) {
-    return processGoogleCallback(url);
+  async signOut() {
+    try {
+      await this.clearSession();
+      return true;
+    } catch (error) {
+      logger.error('Error signing out:', error);
+      return false;
+    }
   }
-}
-
-export const authService = new AuthService();
+};

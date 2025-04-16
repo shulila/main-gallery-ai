@@ -73,7 +73,9 @@
     {
       "resources": [
         "assets/icons/*",
+        "icons/*",
         "utils/*.js",
+        "utils/auth/*.js",
         "auth/*.js",
         "api/*.js"
       ],

@@ -1,67 +1,74 @@
 
-/**
- * Logger utility for MainGallery.AI Chrome Extension
- */
-
-// Log levels
-const LOG_LEVELS = {
-  ERROR: 0,
-  WARN: 1,
-  INFO: 2,
-  DEBUG: 3
+// רמות לוג
+export const LOG_LEVELS = {
+  ERROR: 3,
+  WARN: 2,
+  INFO: 1,
+  DEBUG: 0,
 };
 
-// Current log level - can be adjusted based on environment
-const CURRENT_LOG_LEVEL = LOG_LEVELS.INFO;
+// רמת הלוג הנוכחית - ניתן לשנות בהתאם לסביבה
+export const CURRENT_LOG_LEVEL = LOG_LEVELS.INFO;
 
-// Get timestamp for logs
-function getTimestamp() {
-  return new Date().toISOString();
-}
-
-// Format log message
-function formatLogMessage(level, message, data) {
-  const timestamp = getTimestamp();
-  let formattedMessage = `[MainGallery] [${timestamp}] [${level}] ${message}`;
-  
-  if (data !== undefined) {
-    try {
-      if (typeof data === 'object') {
-        formattedMessage += ` ${JSON.stringify(data)}`;
-      } else {
-        formattedMessage += ` ${data}`;
-      }
-    } catch (error) {
-      formattedMessage += ` [Error stringifying data: ${error.message}]`;
-    }
-  }
-  
-  return formattedMessage;
-}
-
-// Logger object
+// אובייקט הלוגר
 export const logger = {
+  /**
+   * רישום שגיאה
+   * @param {string} message - הודעה
+   * @param {any} data - נתונים נוספים
+   */
   error: function(message, data) {
     if (CURRENT_LOG_LEVEL >= LOG_LEVELS.ERROR) {
-      console.error(formatLogMessage('ERROR', message, data));
+      try {
+        console.error(`[MainGallery] [ERROR] ${message}`, data || '');
+      } catch (e) {
+        console.error('Logger error:', e);
+      }
     }
   },
   
+  /**
+   * רישום אזהרה
+   * @param {string} message - הודעה
+   * @param {any} data - נתונים נוספים
+   */
   warn: function(message, data) {
     if (CURRENT_LOG_LEVEL >= LOG_LEVELS.WARN) {
-      console.warn(formatLogMessage('WARN', message, data));
+      try {
+        console.warn(`[MainGallery] [WARN] ${message}`, data || '');
+      } catch (e) {
+        console.error('Logger error:', e);
+      }
     }
   },
   
+  /**
+   * רישום מידע
+   * @param {string} message - הודעה
+   * @param {any} data - נתונים נוספים
+   */
   log: function(message, data) {
     if (CURRENT_LOG_LEVEL >= LOG_LEVELS.INFO) {
-      console.log(formatLogMessage('INFO', message, data));
+      try {
+        console.log(`[MainGallery] [INFO] ${message}`, data || '');
+      } catch (e) {
+        console.error('Logger error:', e);
+      }
     }
   },
   
+  /**
+   * רישום מידע לניפוי באגים
+   * @param {string} message - הודעה
+   * @param {any} data - נתונים נוספים
+   */
   debug: function(message, data) {
     if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
-      console.log(formatLogMessage('DEBUG', message, data));
+      try {
+        console.debug(`[MainGallery] [DEBUG] ${message}`, data || '');
+      } catch (e) {
+        console.error('Logger error:', e);
+      }
     }
   }
 };
