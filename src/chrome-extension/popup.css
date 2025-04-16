@@ -303,6 +303,62 @@ header h1 {
   margin-bottom: 1rem;
 }
 
+img.error {
+  border: 1px solid var(--error-color);
+  opacity: 0.5;
+}
+
+img.fallback {
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-timeout {
+  color: var(--warning-color);
+  font-size: 0.875rem;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.loading-retry {
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.loading-retry:hover {
+  background-color: var(--bg-primary);
+}
+
+.critical-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--error-color);
+  color: var(--error-color);
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  margin: 1rem 0;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.input-error {
+  border-color: var(--error-color) !important;
+}
+
+.error-message {
+  font-size: 0.75rem;
+  color: var(--error-color);
+  margin-top: 0.25rem;
+}
+
 footer {
   margin-top: auto;
   padding-top: 0.75rem;
